@@ -1,0 +1,6 @@
+{
+  "name": "VEXEA",
+  "description": "A high-performance PvE Drone Survival Shooter with a Gemini 3.5 Flash server-side AI commander, running on Three.js TSL and authoritative physics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

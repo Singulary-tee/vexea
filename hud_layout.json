@@ -1,0 +1,102 @@
+{
+  "squad-container": {
+    "left": "12.3611px",
+    "top": "8.06111px",
+    "scale": 1.2
+  },
+  "hud-timer-container": {
+    "left": "360px",
+    "top": "20px",
+    "scale": 0.8
+  },
+  "minimap-container": {
+    "left": "715px",
+    "top": "15px",
+    "scale": 0.9
+  },
+  "minimap-label": {
+    "left": "715px",
+    "top": "105px",
+    "scale": 1
+  },
+  "btn-settings": {
+    "left": "680px",
+    "top": "10px",
+    "scale": 0.7
+  },
+  "btn-mic": {
+    "left": "680px",
+    "top": "70px",
+    "scale": 0.7
+  },
+  "btn-chat": {
+    "left": "680px",
+    "top": "40px",
+    "scale": 0.7
+  },
+  "joystick-boundary": {
+    "left": "85px",
+    "top": "240px",
+    "scale": 0.6
+  },
+  "btn-fire-left": {
+    "left": "20px",
+    "top": "160px",
+    "scale": 1.2
+  },
+  "weapon-slots-wrap": {
+    "left": "375px",
+    "top": "310px",
+    "scale": 0.8
+  },
+  "btn-walkie": {
+    "left": "290px",
+    "top": "285px",
+    "scale": 1.3
+  },
+  "btn-medkit": {
+    "left": "585px",
+    "top": "320px",
+    "scale": 0.6
+  },
+  "auto-label": {
+    "left": "410px",
+    "top": "275px",
+    "scale": 1
+  },
+  "health-bar": {
+    "left": "330px",
+    "top": "360px",
+    "scale": 0.7
+  },
+  "health-plus-sq-wrap": {
+    "left": "215px",
+    "top": "345px",
+    "scale": 3.5
+  },
+  "btn-fire-right": {
+    "left": "715px",
+    "top": "235px",
+    "scale": 0.6
+  },
+  "btn-ads": {
+    "left": "750px",
+    "top": "180px",
+    "scale": 0.7
+  },
+  "btn-reload": {
+    "left": "670px",
+    "top": "280px",
+    "scale": 0.9
+  },
+  "btn-jump": {
+    "left": "685px",
+    "top": "330px",
+    "scale": 0.6
+  },
+  "btn-crouch": {
+    "left": "730px",
+    "top": "325px",
+    "scale": 0.9
+  }
+}

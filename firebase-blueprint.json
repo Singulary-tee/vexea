@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "MatchInProgress": {
+      "title": "Match In Progress Lock",
+      "description": "Prevents combat logging by tracking currently active match sessions",
+      "type": "object",
+      "properties": {
+        "playerId": {
+          "type": "string",
+          "description": "ID of the player in progress"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the match commenced"
+        }
+      },
+      "required": ["playerId", "createdAt"]
+    },
+    "PlayerStats": {
+      "title": "Player Statistics",
+      "description": "Persistent stats and battlepass progression metrics of a player",
+      "type": "object",
+      "properties": {
+        "playedCount": {
+          "type": "integer",
+          "description": "Total matches played"
+        },
+        "highScore": {
+          "type": "integer",
+          "description": "All time high score"
+        },
+        "xp": {
+          "type": "integer",
+          "description": "Accumulated experience points"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp"
+        }
+      },
+      "required": ["playedCount", "highScore", "xp", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/matches_in_progress/{matchId}": {
+      "schema": "MatchInProgress",
+      "description": "Locks active match sessions to identify combat loggers"
+    },
+    "/player_stats/{playerId}": {
+      "schema": "PlayerStats",
+      "description": "Contains persistent player score and level metrics"
+    }
+  }
+}

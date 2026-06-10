@@ -1,0 +1,11 @@
+import fs from 'fs';
+let code = fs.readFileSync('server/index.ts', 'utf-8');
+code = code.replace(/DroneState\.INACTIVE/g, 'DroneState.DEAD');
+code = code.replace(/DroneState\.DESTROYED/g, 'DroneState.DEAD');
+code = code.replace(/DroneState\.SPAWNING/g, 'DroneState.IDLE');
+code = code.replace(/DroneState\.CHASING/g, 'DroneState.PURSUING');
+code = code.replace(/DroneState\.RETREATING/g, 'DroneState.REPOSITIONING');
+code = code.replace(/DroneType\.GROUND/g, 'DroneType.WHEELED');
+code = code.replace(/DroneType\.AIR/g, 'DroneType.ROTARY_SHOOTER');
+fs.writeFileSync('server/index.ts', code);
+console.log('patched');

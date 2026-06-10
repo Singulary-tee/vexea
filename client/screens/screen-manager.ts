@@ -1,0 +1,60 @@
+import { DS } from "../design-system";
+
+const screens = ['splash-screen', 'main-menu-screen', 'lobby-screen'];
+let transitionTimers: number[] = [];
+
+export function hideAll() {
+  transitionTimers.forEach(clearTimeout);
+  transitionTimers = [];
+  
+  screens.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.opacity = '0';
+      transitionTimers.push(window.setTimeout(() => {
+        el.style.display = 'none';
+      }, 300));
+    }
+  });
+}
+
+function showScreen(id: string, durationMs: number, immediate: boolean) {
+  if (immediate) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.display = 'flex';
+      el.style.transition = `opacity ${durationMs}ms`;
+      void el.offsetWidth;
+      el.style.opacity = '1';
+    }
+  } else {
+    hideAll();
+    transitionTimers.push(window.setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.transition = 'none';
+        el.style.opacity = '0';
+        el.style.display = 'flex';
+        void el.offsetWidth;
+        el.style.transition = `opacity ${durationMs}ms`;
+        el.style.opacity = '1';
+      }
+    }, 300));
+  }
+}
+
+export function showSplash() {
+  showScreen('splash-screen', 0, true);
+}
+
+export function showMainMenu() {
+  showScreen('main-menu-screen', 500, false);
+}
+
+export function showLobby() {
+  showScreen('lobby-screen', 500, false);
+}
+
+export function showGame() {
+  hideAll();
+}

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VEXEA Diagnostics</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600&family=Barlow+Condensed:wght@400;700&display=swap" rel="stylesheet">
+    
+    
+  </head>
+  <body class="bg-black text-white overflow-hidden select-none overscroll-none" style="touch-action: none; font-family: 'Barlow Condensed', sans-serif; background: #0A0A0A; text-transform: uppercase;">
+    <div id="portrait-lock" style="
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0A0A0A;
+      z-index: 99999;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 24px;
+      letter-spacing: 8px;
+      color: #C8882A;
+      text-transform: uppercase;
+    ">ROTATE DEVICE</div>
+    <script>
+      (function() {
+        const lock = document.getElementById('portrait-lock');
+        function checkOrientation() {
+          const isPortrait = window.innerHeight > window.innerWidth;
+          lock.style.display = isPortrait ? 'flex' : 'none';
+        }
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+        checkOrientation();
+      })();
+    </script>
+    <div id="root" class="fixed inset-0 w-full h-full"></div>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
