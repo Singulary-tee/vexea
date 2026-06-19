@@ -1,16 +1,56 @@
 import * as screenManager from "./screen-manager";
+import { getCachedOrFetchUrl } from "../asset-cache";
+
+const SOUNDS_TO_PRELOAD = [
+  'click.mp3', 'vexea_theme.mp3'
+];
+
+const TEXTURES_TO_PRELOAD: string[] = [
+];
+
+const VIDEOS_TO_PRELOAD = [
+  'Mainvideo1.mp4', 'Mainvideo2.mp4', 'Mainvideo3.mp4'
+];
+
+// The rest of the game assets
+export const EXTENDED_SOUNDS = [
+  'bass_scratch.mp3', 'concrete_run.mp3', 'concrete_walk.mp3',
+  'error.mp3', 'iron_march.mp3', 'metal_ricochet.mp3', 'pistol_fire.mp3',
+  'pistol_reload.mp3', 'rifle_fire.mp3', 'rifle_reload.mp3',
+  'wood_walk.mp3'
+];
+
+export const EXTENDED_TEXTURES = [
+  'asphalt_02_diff_1k.jpg', 'asphalt_02_nor_gl_1k.jpg', 'asphalt_02_arm_1k.jpg',
+  'concrete_tiles_02_diff_1k.jpg', 'concrete_tiles_02_nor_gl_1k.jpg', 'concrete_tiles_02_arm_1k.jpg',
+  'red_brick_03_diff_1k.jpg', 'red_brick_03_nor_gl_1k.jpg', 'red_brick_03_arm_1k.jpg',
+  'rocks_ground_01_diff_1k.jpg', 'rocks_ground_01_nor_gl_1k.jpg', 'rocks_ground_01_arm_1k.jpg',
+  'rocky_trail_diff_1k.jpg', 'rocky_trail_nor_gl_1k.jpg', 'rocky_trail_arm_1k.jpg'
+];
 
 export function initSplash() {
   let el = document.getElementById('splash-screen');
   if (!el) {
     el = document.createElement('div');
     el.id = 'splash-screen';
+    document.body.appendChild(el);
+  }
+
+  Object.assign(el.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '1000',
+    backgroundImage: "url('/splash_screen.png')",
+    backgroundSize: 'cover',
+    backgroundPosition: 'center center'
+  });
+
+  if (el.children.length === 0) {
     Object.assign(el.style, {
-      position: 'fixed', inset: '0', zIndex: '1000', display: 'flex', flexDirection: 'column',
+      display: 'flex', flexDirection: 'column',
       width: '100vw', height: '100vh',
       alignItems: 'center', justifyContent: 'center',
-      backgroundImage: "url('/splash_screen.png')", backgroundSize: 'cover', backgroundPosition: 'center center',
-      backgroundColor: 'radial-gradient(ellipse at center, #1A1208 0%, #0A0A0A 100%)' // fallback
+      backgroundColor: '#0A0A0A' // fallback
     });
 
     const vignette = document.createElement('div');
@@ -23,7 +63,7 @@ export function initSplash() {
     const contentWrapper = document.createElement('div');
     Object.assign(contentWrapper.style, {
       position: 'absolute', top: '66%', left: '50%', transform: 'translate(-50%, -50%)',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0', zIndex: '2'
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', zIndex: '2'
     });
     
     const loadingBarWrapper = document.createElement('div');
@@ -33,15 +73,15 @@ export function initSplash() {
 
     const loadingBarInner = document.createElement('div');
     Object.assign(loadingBarInner.style, {
-      height: '100%', width: '0', background: '#C8882A', transition: 'width 2000ms ease-in-out'
+      height: '100%', width: '0', background: '#C8882A'
     });
     loadingBarWrapper.appendChild(loadingBarInner);
 
     const initText = document.createElement('div');
-    initText.textContent = 'CLICK TO INITIALIZE';
+    initText.textContent = 'CHARGING SYSTEM CACHE... 0%';
     Object.assign(initText.style, {
-      fontFamily: "'Barlow Condensed', sans-serif", fontSize: '14px', letterSpacing: '6px',
-      color: '#E8E8E8', textTransform: 'uppercase', opacity: '0', marginTop: '0', height: '0', overflow: 'hidden'
+      fontFamily: "'Barlow Condensed', sans-serif", fontSize: '13px', letterSpacing: '4px',
+      color: '#E8E8E8', textTransform: 'uppercase', opacity: '1', marginTop: '0', height: 'auto'
     });
 
     contentWrapper.appendChild(loadingBarWrapper);
@@ -49,27 +89,58 @@ export function initSplash() {
     el.appendChild(contentWrapper);
     document.body.appendChild(el);
 
-    // Sequence on mount
-    setTimeout(() => {
-      loadingBarInner.style.width = '120px'; // 1. After 100ms
-    }, 100);
+    const preloadAll = async () => {
+      const allFiles = [
+        ...SOUNDS_TO_PRELOAD.map(f => ({ name: f, cat: 'Sound' as const })),
+        ...TEXTURES_TO_PRELOAD.map(f => ({ name: f, cat: 'Asset' as const })),
+        ...VIDEOS_TO_PRELOAD.map(f => ({ name: f, cat: 'Video' as const }))
+      ];
+      const total = allFiles.length;
+      let completed = 0;
 
-    setTimeout(() => {
-      loadingBarWrapper.style.transition = 'opacity 200ms';
-      loadingBarWrapper.style.opacity = '0'; // 2. After 2100ms
-    }, 2100);
+      const processItem = async (item: typeof allFiles[0]) => {
+        try {
+          await getCachedOrFetchUrl(item.name, item.cat);
+        } catch (e) {
+          console.warn("[Preload] Failed item:", item.name);
+        }
+        completed++;
+        const percent = Math.floor((completed / total) * 100);
+        loadingBarInner.style.transition = 'width 100ms ease-out';
+        loadingBarInner.style.width = `${Math.floor((completed / total) * 120)}px`;
+        initText.textContent = `CHARGING SYSTEM CACHE... ${percent}%`;
+      };
 
-    setTimeout(() => {
-      initText.style.height = 'auto';
-      initText.style.transition = 'opacity 500ms';
-      initText.style.opacity = '1'; // 3. After 2300ms
-    }, 2300);
+      const queue = [...allFiles];
+      const workerCount = 4;
+      const workers = Array(workerCount).fill(null).map(async () => {
+        while (queue.length > 0) {
+          const item = queue.shift();
+          if (item) {
+            await processItem(item);
+          }
+        }
+      });
+
+      await Promise.all(workers);
+
+      loadingBarInner.style.width = '120px';
+
+      setTimeout(() => {
+        loadingBarWrapper.style.transition = 'opacity 200ms';
+        loadingBarWrapper.style.opacity = '0';
+      }, 500);
+
+      setTimeout(() => {
+        initText.textContent = 'CLICK TO INITIALIZE';
+        startInteractions();
+      }, 1000);
+    };
 
     let breathingInterval: number;
     let interactionProcessed = false;
 
-    setTimeout(() => {
-      // 4. After 2800ms begin breathing
+    const startInteractions = () => {
       let breathHigh = false;
       breathingInterval = window.setInterval(() => {
         initText.style.transition = 'opacity 2000ms ease-in-out';
@@ -77,22 +148,21 @@ export function initSplash() {
         breathHigh = !breathHigh;
       }, 2000);
 
-      // 5. Add event listeners
       const attemptFullscreenAndGlitch = () => {
         if (interactionProcessed) return;
         interactionProcessed = true;
         clearInterval(breathingInterval);
         
-        try {
-          document.documentElement.requestFullscreen();
-        } catch(e) {}
+        const docEl = document.documentElement as any;
+        if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+            if (docEl.requestFullscreen) docEl.requestFullscreen();
+            else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+        }
 
         document.removeEventListener('keydown', attemptFullscreenAndGlitch);
-        document.removeEventListener('mousedown', attemptFullscreenAndGlitch);
-        document.removeEventListener('touchstart', attemptFullscreenAndGlitch);
+        document.removeEventListener('click', attemptFullscreenAndGlitch);
+        document.removeEventListener('touchend', attemptFullscreenAndGlitch);
 
-        // Glitch sequence
-        // Toggle opacity 4 times, 80ms each: 1->0->1->0->1
         let toggles = 0;
         const glitchFn = () => {
           toggles++;
@@ -118,18 +188,19 @@ export function initSplash() {
            top: '0', zIndex: '9999', transition: 'top 320ms linear'
         });
         document.body.appendChild(scanline);
-        void scanline.offsetWidth; // flush CSS
+        void scanline.offsetWidth;
         scanline.style.top = '100vh';
         setTimeout(() => {
            scanline.remove();
         }, 320);
-
       };
 
       document.addEventListener('keydown', attemptFullscreenAndGlitch);
-      document.addEventListener('mousedown', attemptFullscreenAndGlitch);
-      document.addEventListener('touchstart', attemptFullscreenAndGlitch);
+      document.addEventListener('click', attemptFullscreenAndGlitch);
+      document.addEventListener('touchend', attemptFullscreenAndGlitch);
+    };
 
-    }, 2800);
+    preloadAll();
   }
 }
+

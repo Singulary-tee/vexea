@@ -41,6 +41,50 @@
         }
       },
       "required": ["playedCount", "highScore", "xp", "updatedAt"]
+    },
+    "Feedback": {
+      "title": "Feedback Submission",
+      "description": "Feedback messages and ratings submitted by players",
+      "type": "object",
+      "properties": {
+        "rating": {
+          "type": "integer",
+          "description": "Rating out of 5 stars"
+        },
+        "text": {
+          "type": "string",
+          "description": "Feedback comments"
+        },
+        "timestamp": {
+          "type": "object",
+          "description": "Server timestamp of submission"
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID of the player writing feedback"
+        }
+      },
+      "required": ["rating", "text", "timestamp", "userId"]
+    },
+    "Users": {
+      "title": "User Game Outcomes",
+      "description": "Stored kills, scores, and battle pass rank progression updated authoritatively from Server",
+      "type": "object",
+      "properties": {
+        "kills": {
+          "type": "integer",
+          "description": "Total kills accumulated"
+        },
+        "score": {
+          "type": "integer",
+          "description": "Total score points accumulated"
+        },
+        "battlePass": {
+          "type": "integer",
+          "description": "Battle pass tier / progression value"
+        }
+      },
+      "required": ["kills", "score", "battlePass"]
     }
   },
   "firestore": {
@@ -51,6 +95,18 @@
     "/player_stats/{playerId}": {
       "schema": "PlayerStats",
       "description": "Contains persistent player score and level metrics"
+    },
+    "/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "User feedback messages securely submitted from client"
+    },
+    "/Users/{playerId}": {
+      "schema": "Users",
+      "description": "Full-game stats synchronized and certified by server authoritative loops"
+    },
+    "/MatchInProgress/{playerId}": {
+      "schema": "MatchInProgress",
+      "description": "Server-side match status used to detect combat logging"
     }
   }
 }

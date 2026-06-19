@@ -118,6 +118,12 @@ export interface DroneNetworkData {
   stateId: DroneState;
 }
 
+import { DETAILED_WEAPONS } from "./weapons";
+import type { WeaponPerformance } from "./weapons";
+
+export { DETAILED_WEAPONS };
+export type { WeaponPerformance };
+
 // Player weapon types and characteristics
 export interface WeaponStats {
   name: string;
@@ -127,8 +133,8 @@ export interface WeaponStats {
 }
 
 export const WEAPONS: Record<string, WeaponStats> = {
-  rifle: { name: "Rifle", fireRateHz: 10, damage: 20, capacity: 40 },
-  pistol: { name: "Pistol", fireRateHz: 5, damage: 25, capacity: 35 }
+  rifle: DETAILED_WEAPONS.rifle,
+  pistol: DETAILED_WEAPONS.pistol
 };
 
 // Combat & Health sync structure

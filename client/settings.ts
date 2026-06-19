@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DS } from './design-system';
 
 export interface VexeaSettingsData {
     joySens: number;
@@ -19,6 +20,7 @@ export interface VexeaSettingsData {
     lodBillboard: number;
     fov: number;
     fullscreen: boolean;
+    serverUrl: string;
 }
 
 const DEFAULT_SETTINGS: VexeaSettingsData = {
@@ -39,7 +41,8 @@ const DEFAULT_SETTINGS: VexeaSettingsData = {
     lodLow: 30,
     lodBillboard: 60,
     fov: 75,
-    fullscreen: false
+    fullscreen: false,
+    serverUrl: ""
 };
 
 export const getSettings = (): VexeaSettingsData => {
@@ -151,23 +154,24 @@ function bind(el: HTMLElement, type: string, fn: any) {
 
 function createOverlayHTML() {
     return `
-    <div id="vexea-settings-overlay" style="position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.95); display:flex; flex-direction:row; font-family:'Rajdhani', sans-serif; color:white; pointer-events:auto;" class="flex-col md:flex-row">
+    <div id="vexea-settings-overlay" style="position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.85); backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; display:flex; flex-direction:row; font-family:${DS.typography.fontFamily}; color:white; pointer-events:auto;" class="flex-col md:flex-row">
         <!-- Sidebar -->
-        <div id="settings-sidebar" style="background:rgba(20,20,20,0.9); border-right:1px solid #444; overflow-x:auto; display:flex;" class="w-full md:w-64 flex-row md:flex-col shrink-0 p-4 gap-2">
-            <h2 class="text-2xl font-bold mb-4 hidden md:block">SETTINGS</h2>
+        <div id="settings-sidebar" style="background:${DS.glass.background}; backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; border-right:${DS.glass.border}; overflow-x:auto; display:flex;" class="w-full md:w-64 flex-row md:flex-col shrink-0 p-4 gap-2">
+            <h2 class="text-2xl font-bold mb-4 hidden md:block" style="color:${DS.colors.accent}; letter-spacing: 2px;">SETTINGS</h2>
             <button class="settings-tab active" data-tab="CONTROLS">CONTROLS</button>
             <button class="settings-tab" data-tab="GRAPHICS">GRAPHICS</button>
             <button class="settings-tab" data-tab="FRAME RATE">FRAME RATE</button>
             <button class="settings-tab" data-tab="ANTI-ALIASING">ANTI-ALIASING</button>
             <button class="settings-tab" data-tab="AUDIO">AUDIO</button>
             <button class="settings-tab" data-tab="ACCESSIBILITY">ACCESSIBILITY</button>
+            <button class="settings-tab" data-tab="SERVER">SERVER</button>
             <button class="settings-tab" data-tab="LEGAL">LEGAL</button>
             <div class="flex-1"></div>
-            <button id="btn-close-settings-overlay" style="background:#500; font-weight:bold; padding:10px; border-radius:4px; margin-top:20px;">CLOSE</button>
+            <button id="btn-close-settings-overlay" style="background:${DS.colors.danger}; font-family:${DS.typography.fontFamily}; font-weight:bold; letter-spacing:2px; font-size:14px; padding:10px 20px; border-radius:4px; margin-top:20px; cursor:pointer; color:white; border:${DS.glass.border}; box-shadow:${DS.glass.glowInner}; transition: background 150ms ease;">CLOSE</button>
         </div>
         
         <!-- Content -->
-        <div id="settings-content" style="flex:1; overflow-y:auto; padding:20px; font-size:16px;">
+        <div id="settings-content" style="flex:1; overflow-y:auto; padding:30px; font-size:16px; background:rgba(10,10,10,0.4); backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; border-left:${DS.glass.border};">
             
             <div id="tab-CONTROLS" class="settings-page active">
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">CONTROLS</h3>
@@ -269,6 +273,20 @@ function createOverlayHTML() {
                 </div>
             </div>
             
+            <div id="tab-SERVER" class="settings-page hidden">
+                <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">SERVER CONNECTION</h3>
+                <div class="mb-4">
+                    <label class="block mb-1">Authoritative Server Address</label>
+                    <input type="text" id="inp-serverUrl" placeholder="e.g. http://159.203.111.222:3000" style="width:100%; max-width:400px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.15); padding:10px; border-radius:4px; color:white; font-family:inherit; font-size:15px; outline:none; transition: border-color 0.15s ease;">
+                    <p class="mt-2 text-xs text-gray-400">Specify your DigitalOcean droplet IP and port (e.g. http://YOUR_DROPLET_IP:3000). Leave blank to leverage the standard client hosting origin.</p>
+                </div>
+                <div class="mb-6 flex flex-col gap-2">
+                    <p class="text-xs text-gray-500">Currently configured server: <span id="span-activeServer" class="font-mono text-gray-300"></span></p>
+                    <p class="text-xs text-gray-500" style="color: ${DS.colors.accent};">Note: Reconnecting will trigger a full page reload to safely establish WebSocket & RTC sockets.</p>
+                </div>
+                <button id="btn-save-server" class="preset-btn p-3 border border-gray-500 rounded bg-gray-800" style="padding: 10px 20px; font-weight: bold; width: 100%; max-width: 300px; border-color: ${DS.colors.accent} !important; color: ${DS.colors.accent} !important;">APPLY & RECONNECT</button>
+            </div>
+            
             <div id="tab-LEGAL" class="settings-page hidden">
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">LEGAL & ATTRIBUTION</h3>
                 <div class="text-sm text-gray-300">
@@ -286,8 +304,103 @@ function createOverlayHTML() {
         </div>
         <style>
             #settings-sidebar::-webkit-scrollbar { display:none; }
-            .settings-tab { text-align: left; padding: 10px; opacity: 0.6; width: 100%; white-space: nowrap; }
-            .settings-tab.active { opacity: 1; background: #333; font-weight: bold; }
+            .settings-tab {
+                text-align: left;
+                padding: 12px 16px;
+                opacity: 0.65;
+                width: 100%;
+                white-space: nowrap;
+                background: transparent;
+                border: 1px solid transparent;
+                color: #E8E8E8;
+                font-family: ${DS.typography.fontFamily};
+                font-size: 16px;
+                letter-spacing: 1px;
+                cursor: pointer;
+                transition: background 150ms ease, opacity 150ms ease, border-left 150ms ease;
+            }
+            .settings-tab.active {
+                opacity: 1;
+                background: rgba(200, 136, 42, 0.1) !important;
+                border-left: 3px solid ${DS.colors.accent} !important;
+                border-color: rgba(255,255,255,0.02);
+                font-weight: bold;
+                color: #FFFFFF;
+            }
+            .settings-tab:hover {
+                background: rgba(255,255,255,0.03);
+                opacity: 1;
+            }
+            #btn-close-settings-overlay:hover {
+                background: #EE4444 !important;
+            }
+            .settings-page {
+                max-width: 600px;
+                font-family: ${DS.typography.fontFamily};
+                letter-spacing: 1px;
+            }
+            .settings-page h3 {
+                color: ${DS.colors.accent};
+                border-bottom: 2px solid ${DS.colors.border};
+                padding-bottom: 8px;
+                margin-bottom: 24px;
+                font-size: 20px;
+                letter-spacing: 2px;
+            }
+            .settings-page label {
+                font-family: ${DS.typography.fontFamily};
+                font-size: 15px;
+                letter-spacing: 1px;
+                color: #CCCCCC;
+            }
+            input[type="range"] {
+                -webkit-appearance: none;
+                appearance: none;
+                background: ${DS.colors.border};
+                height: 6px;
+                border-radius: 3px;
+                outline: none;
+                vertical-align: middle;
+            }
+            input[type="range"]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background: ${DS.colors.accent};
+                cursor: pointer;
+                box-shadow: ${DS.glass.glowOuter};
+            }
+            input[type="checkbox"] {
+                accent-color: ${DS.colors.accent};
+                width: 18px;
+                height: 18px;
+                cursor: pointer;
+            }
+            .preset-btn, #btn-fullscreen, #btn-edit-hud {
+                border: ${DS.glass.border} !important;
+                background: rgba(255,255,255,0.03) !important;
+                color: #FFF !important;
+                font-family: ${DS.typography.fontFamily};
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                transition: background 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+                cursor: pointer;
+            }
+            .preset-btn:hover, #btn-fullscreen:hover, #btn-edit-hud:hover {
+                border-color: ${DS.colors.accent} !important;
+                background: rgba(200, 136, 42, 0.1) !important;
+            }
+            .bg-blue-600 {
+                background-color: rgba(200, 136, 42, 0.2) !important;
+                border-color: ${DS.colors.accent} !important;
+                box-shadow: 0 0 8px rgba(200, 136, 42, 0.25) !important;
+            }
+            .bg-gray-800 {
+                background-color: rgba(255, 255, 255, 0.03) !important;
+                border-color: rgba(255, 255, 255, 0.08) !important;
+            }
             @media(max-width:768px) {
                 .settings-tab { text-align: center; width: auto; }
             }
@@ -296,7 +409,11 @@ function createOverlayHTML() {
     `;
 }
 
+let settingsModalOpen = false;
+
 export function openSettings() {
+    if (settingsModalOpen) return;
+    settingsModalOpen = true;
     if (overlayEl) return;
     
     let container = document.createElement("div");
@@ -350,6 +467,24 @@ export function openSettings() {
     radios.forEach(r => {
         if ((r as HTMLInputElement).value == s.fpsCap.toString()) (r as HTMLInputElement).checked = true;
     });
+
+    const serverInput = document.getElementById('inp-serverUrl') as HTMLInputElement;
+    const activeServerSpan = document.getElementById('span-activeServer') as HTMLSpanElement;
+    const saveServerBtn = document.getElementById('btn-save-server') as HTMLButtonElement;
+
+    if (serverInput) {
+        serverInput.value = s.serverUrl || "";
+    }
+    if (activeServerSpan) {
+        activeServerSpan.innerText = s.serverUrl || `${window.location.origin} (Default Client Origin)`;
+    }
+    if (saveServerBtn) {
+        bind(saveServerBtn, 'click', () => {
+            s.serverUrl = serverInput.value.trim();
+            saveSettings(s);
+            window.location.reload();
+        });
+    }
 
     const triggerApply = () => {
         s.joySens = parseFloat(joySens.value);
@@ -442,10 +577,16 @@ export function openSettings() {
         bind(fsBtn, 'click', () => {
             const docEl = document.documentElement as any;
             if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-                if (docEl.requestFullscreen) docEl.requestFullscreen();
+                if (docEl.requestFullscreen) {
+                    const p = docEl.requestFullscreen();
+                    if (p && typeof p.catch === 'function') p.catch(() => {});
+                }
                 else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
             } else {
-                if (document.exitFullscreen) document.exitFullscreen();
+                if (document.exitFullscreen) {
+                    const p = document.exitFullscreen();
+                    if (p && typeof p.catch === 'function') p.catch(() => {});
+                }
                 else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
             }
         });
@@ -462,6 +603,10 @@ export function openSettings() {
         });
     }
 
+    if (matchActiveInSettings) {
+        _injectMatchTabDOM();
+    }
+
     triggerApply(); 
 
     const closeBtn = document.getElementById('btn-close-settings-overlay');
@@ -469,6 +614,7 @@ export function openSettings() {
 }
 
 export function closeSettings() {
+    settingsModalOpen = false;
     if (!overlayEl) return;
     boundListeners.forEach(l => {
         l.el.removeEventListener(l.type, l.fn);
@@ -476,4 +622,132 @@ export function closeSettings() {
     boundListeners = [];
     overlayEl.remove();
     overlayEl = null;
+}
+
+export let matchActiveInSettings = false;
+
+function _injectMatchTabDOM() {
+    const sidebar = document.getElementById('settings-sidebar');
+    const content = document.getElementById('settings-content');
+    if (!sidebar || !content) return;
+
+    // MATCH button
+    const btn = document.createElement('button');
+    btn.className = 'settings-tab';
+    btn.setAttribute('data-tab', 'MATCH');
+    btn.innerText = 'MATCH';
+    // Insert after "SETTINGS" header (index 1)
+    sidebar.insertBefore(btn, sidebar.children[1]);
+
+    const page = document.createElement('div');
+    page.id = 'tab-MATCH';
+    page.className = 'settings-page hidden';
+    page.innerHTML = `
+        <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">MATCH</h3>
+        <button id="btn-quit-match" style="height: 48px; background: transparent; border: 1px solid #CC3333; color: #CC3333; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: bold; text-transform: uppercase; border-radius: 0; width: 100%; cursor: pointer;">QUIT MATCH</button>
+    `;
+    // Insert at beginning of content
+    content.insertBefore(page, content.firstChild);
+
+    // Reattach tab logic since we added a new tab
+    bind(btn, 'click', () => {
+        const tabs = document.querySelectorAll('.settings-tab');
+        const pages = document.querySelectorAll('.settings-page');
+        tabs.forEach(tt => tt.classList.remove('active'));
+        pages.forEach(p => p.classList.add('hidden'));
+        btn.classList.add('active');
+        document.getElementById('tab-MATCH')?.classList.remove('hidden');
+    });
+
+    const quitMatchBtn = document.getElementById('btn-quit-match');
+    if (quitMatchBtn) {
+        bind(quitMatchBtn, 'click', () => {
+            const modal = document.createElement('div');
+            Object.assign(modal.style, {
+                position: 'fixed', inset: '0', zIndex: '2001',
+                background: 'rgba(0,0,0,0.9)', display: 'flex',
+                alignItems: 'center', justifyContent: 'center'
+            });
+            
+            const card = document.createElement('div');
+            Object.assign(card.style, {
+                width: '400px', background: '#111111', border: '1px solid #CC3333',
+                padding: '32px', borderRadius: '0'
+            });
+            
+            const title = document.createElement('div');
+            title.innerText = 'ABANDON MISSION';
+            Object.assign(title.style, {
+                fontFamily: "'Barlow Condensed', sans-serif", fontSize: '24px',
+                color: '#E8E8E8', textTransform: 'uppercase', marginBottom: '8px'
+            });
+            
+            const body = document.createElement('div');
+            body.innerText = 'You will be removed from the match. The mission continues without you.';
+            Object.assign(body.style, {
+                fontFamily: "'Barlow Condensed', sans-serif", fontSize: '14px',
+                color: '#888888', marginBottom: '24px'
+            });
+            
+            const btnWrap = document.createElement('div');
+            Object.assign(btnWrap.style, { display: 'flex', gap: '16px' });
+            
+            const confBtn = document.createElement('button');
+            confBtn.innerText = 'CONFIRM';
+            Object.assign(confBtn.style, {
+                background: '#CC3333', color: '#0A0A0A',
+                fontFamily: "'Barlow Condensed', sans-serif", fontSize: '18px',
+                fontWeight: 'bold', textTransform: 'uppercase', borderRadius: '0',
+                padding: '8px 16px', border: 'none', cursor: 'pointer'
+            });
+            
+            const cancBtn = document.createElement('button');
+            cancBtn.innerText = 'CANCEL';
+            Object.assign(cancBtn.style, {
+                background: 'transparent', border: '1px solid #2A2A2A',
+                color: '#888888', padding: '8px 16px', cursor: 'pointer'
+            });
+            
+            confBtn.onclick = () => {
+                document.dispatchEvent(new CustomEvent("VEXEA_PLAYER_QUIT"));
+                modal.remove();
+                closeSettings();
+            };
+            
+            cancBtn.onclick = () => modal.remove();
+            
+            btnWrap.appendChild(confBtn);
+            btnWrap.appendChild(cancBtn);
+            card.appendChild(title);
+            card.appendChild(body);
+            card.appendChild(btnWrap);
+            modal.appendChild(card);
+            document.body.appendChild(modal);
+        });
+    }
+}
+
+export function injectMatchTab(): void {
+    if (!matchActiveInSettings) {
+        matchActiveInSettings = true;
+        if (overlayEl) {
+            _injectMatchTabDOM();
+        }
+    }
+}
+
+export function removeMatchTab(): void {
+    matchActiveInSettings = false;
+    if (overlayEl) {
+        const btn = document.querySelector('.settings-tab[data-tab="MATCH"]');
+        const page = document.getElementById('tab-MATCH');
+        if (btn) btn.remove();
+        if (page) page.remove();
+
+        // if we removed the active tab, switch back to controls
+        if (btn?.classList.contains('active')) {
+            const controlsBtn = document.querySelector('.settings-tab[data-tab="CONTROLS"]') as HTMLElement;
+            if (controlsBtn) controlsBtn.click();
+        }
+    }
 }

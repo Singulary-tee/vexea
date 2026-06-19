@@ -28,7 +28,30 @@ class GeckosClientAdapter implements ClientTransport {
     private eventCallbacks: Map<string, ((data: any) => void)[]> = new Map();
 
     connect(url: string, port: number): void {
-        this.channel = geckos({ port });
+        let connectionUrl = url;
+        let usePort = port;
+        if (url && url.trim().length > 0) {
+            if (!url.includes("://")) {
+                connectionUrl = `http://${url}`;
+            }
+            try {
+                const u = new URL(connectionUrl);
+                connectionUrl = `${u.protocol}//${u.hostname}`;
+                if (u.port) {
+                    usePort = parseInt(u.port);
+                } else if (u.protocol === "https:") {
+                    usePort = 443;
+                } else if (u.protocol === "http:") {
+                    usePort = 80;
+                }
+            } catch (e) {
+                console.warn("[TRANSPORT] URL parsing failed, fallback:", url, e);
+            }
+        } else {
+            connectionUrl = `${window.location.protocol}//${window.location.hostname}`;
+        }
+        console.log(`[TRANSPORT] Geckos connecting to url: "${connectionUrl}" on port: ${usePort}`);
+        this.channel = geckos({ url: connectionUrl, port: usePort });
         this.channel.onConnect((error) => {
             if (error) {
                 console.error(error);
@@ -98,9 +121,16 @@ class SocketIOClientAdapter implements ClientTransport {
     private eventCallbacks: Map<string, ((data: any) => void)[]> = new Map();
 
     connect(url: string, port: number): void {
-        // AI Studio usually runs clients connected to the same domain.
-        // We'll let socket.io figure out the window.location or use the specified url.
-        this.socket = socketio(url);
+        let connectionUrl = url;
+        if (url && url.trim().length > 0) {
+            if (!url.includes("://")) {
+                connectionUrl = `http://${url}`;
+            }
+        } else {
+            connectionUrl = window.location.origin;
+        }
+        console.log(`[TRANSPORT] SocketIO connecting directly to URL: "${connectionUrl}"`);
+        this.socket = socketio(connectionUrl);
         
         this.socket.on("connect", () => {
             console.log(`[TRANSPORT] Connected to server via socketio`);

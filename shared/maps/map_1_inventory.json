@@ -1,0 +1,364 @@
+[
+  {
+    "filename": "single_arm.glb",
+    "originalFile": "StreetLightPoles.glb",
+    "boundingBox": {
+      "x": 1.1572506427764893,
+      "y": -2.384185791015625e-7,
+      "z": -0.2371196448802948,
+      "width": 2.056152820587158,
+      "height": 6.936251163482666,
+      "depth": 0.4742392897605896
+    },
+    "triangleCount": 4069,
+    "hasAnimations": false,
+    "meshNames": [
+      "Single_arm"
+    ]
+  },
+  {
+    "filename": "double_arm.glb",
+    "originalFile": "StreetLightPoles.glb",
+    "boundingBox": {
+      "x": -3.93436598777771,
+      "y": 2.384185791015625e-7,
+      "z": -0.2378532588481903,
+      "width": 3.498077869415283,
+      "height": 6.930860996246338,
+      "depth": 0.4757065176963806
+    },
+    "triangleCount": 6806,
+    "hasAnimations": false,
+    "meshNames": [
+      "Double_arm"
+    ]
+  },
+  {
+    "filename": "single_arm_1.glb",
+    "originalFile": "StreetLightPoles.gltf",
+    "boundingBox": {
+      "x": 1.1572506427764893,
+      "y": -2.384185791015625e-7,
+      "z": -0.2371196448802948,
+      "width": 2.056152820587158,
+      "height": 6.936250925064087,
+      "depth": 0.4742392897605896
+    },
+    "triangleCount": 12207,
+    "hasAnimations": false,
+    "meshNames": [
+      "Mesh0"
+    ]
+  },
+  {
+    "filename": "double_arm_1.glb",
+    "originalFile": "StreetLightPoles.gltf",
+    "boundingBox": {
+      "x": -3.93436598777771,
+      "y": 2.384185791015625e-7,
+      "z": -0.2378532588481903,
+      "width": 3.498077869415283,
+      "height": 6.930861234664917,
+      "depth": 0.4757065176963806
+    },
+    "triangleCount": 20418,
+    "hasAnimations": false,
+    "meshNames": [
+      "Mesh0"
+    ]
+  },
+  {
+    "filename": "animated_drone.glb",
+    "originalFile": "animated_drone.glb",
+    "boundingBox": {
+      "x": -0.12674179747532754,
+      "y": 0.00013278318272270592,
+      "z": -0.09468361642918843,
+      "width": 0.2534835949506551,
+      "height": 0.06648187177668795,
+      "depth": 0.1942792372194102
+    },
+    "triangleCount": 83712,
+    "hasAnimations": true,
+    "meshNames": [
+      "Object_0",
+      "Object_1",
+      "Object_2",
+      "Object_3",
+      "Object_4",
+      "Object_5",
+      "Object_6",
+      "Object_7",
+      "Object_8",
+      "Object_9",
+      "Object_10",
+      "Object_11",
+      "Object_12",
+      "Object_13",
+      "Object_14",
+      "Object_15",
+      "Object_16",
+      "Object_17",
+      "Object_18",
+      "Object_19",
+      "Object_20",
+      "Object_21",
+      "Object_22",
+      "Object_23",
+      "Object_24",
+      "Object_25",
+      "Object_26",
+      "Object_27",
+      "Object_28",
+      "Object_29",
+      "Object_30",
+      "Object_31",
+      "Object_32",
+      "Object_33",
+      "Object_34",
+      "Object_35",
+      "Object_36",
+      "Object_37",
+      "Object_38",
+      "Object_39",
+      "Object_40",
+      "Object_41",
+      "Object_42",
+      "Object_43",
+      "Object_44",
+      "Object_45",
+      "Object_46",
+      "Object_47",
+      "Object_48",
+      "Object_49",
+      "Object_50",
+      "Object_51",
+      "Object_52",
+      "Object_53",
+      "Object_54",
+      "Object_55",
+      "Object_56",
+      "Object_57",
+      "Object_58",
+      "Object_59",
+      "Object_60",
+      "Object_61",
+      "Object_62",
+      "Object_63",
+      "Object_64",
+      "Object_65",
+      "Object_66",
+      "Object_67",
+      "Object_68",
+      "Object_69",
+      "Object_70",
+      "Object_71",
+      "Object_72",
+      "Object_73",
+      "Object_74",
+      "Object_75",
+      "Object_76"
+    ]
+  },
+  {
+    "filename": "animated_recon_fixed-wing.glb",
+    "originalFile": "animated_recon_fixed-wing.glb",
+    "boundingBox": {
+      "x": -68.29408836364746,
+      "y": 0,
+      "z": -65.14820861816406,
+      "width": 162.518798828125,
+      "height": 36.927692408751085,
+      "depth": 162.518798828125
+    },
+    "triangleCount": 11902,
+    "hasAnimations": true,
+    "meshNames": [
+      "Plane.001",
+      "Cube",
+      "Cylinder.006",
+      "Cylinder.010",
+      "Plane",
+      "Cube.001",
+      "Cylinder.001",
+      "Cylinder.002",
+      "Plane.002"
+    ]
+  },
+  {
+    "filename": "base_basic_pbr.glb",
+    "originalFile": "base_basic_pbr.glb",
+    "boundingBox": {
+      "x": -0.55247563123703,
+      "y": 0,
+      "z": -0.7094568014144897,
+      "width": 1.1041420698165894,
+      "height": 1.9012343883514404,
+      "depth": 1.4203911423683167
+    },
+    "triangleCount": 120000,
+    "hasAnimations": false,
+    "meshNames": [
+      "model"
+    ]
+  },
+  {
+    "filename": "bpre_rifleman.glb",
+    "originalFile": "bpre_rifleman.glb",
+    "boundingBox": {
+      "x": -11.65300178527832,
+      "y": 0.024913141503930092,
+      "z": -4.281867504119873,
+      "width": 23.306015968322754,
+      "height": 32.46148746274412,
+      "depth": 7.211564779281616
+    },
+    "triangleCount": 48637,
+    "hasAnimations": false,
+    "meshNames": [
+      "rifle_man_rifle_man_0",
+      "mag_3_mag_0",
+      "mag_2_mag_0",
+      "mag_1_mag_0",
+      "Cable_tie_Cable_tie_low_0",
+      "chem_light_Chemlight_0",
+      "knife_knife_0"
+    ]
+  },
+  {
+    "filename": "asphalt_02_1k.glb",
+    "originalFile": "asphalt_02_1k.gltf",
+    "boundingBox": {
+      "x": -1.5069290399551392,
+      "y": -1.5185885429382324,
+      "z": -1.510888695716858,
+      "width": 3.013858675956726,
+      "height": 3.036712646484375,
+      "depth": 3.021783947944641
+    },
+    "triangleCount": 107390,
+    "hasAnimations": false,
+    "meshNames": [
+      "Sphere.001"
+    ]
+  },
+  {
+    "filename": "concrete_tiles_02_1k.glb",
+    "originalFile": "concrete_tiles_02_1k.gltf",
+    "boundingBox": {
+      "x": -0.9222022294998169,
+      "y": -0.9219768047332764,
+      "z": -0.9219952821731567,
+      "width": 1.8443641066551208,
+      "height": 1.8440992832183838,
+      "depth": 1.843993067741394
+    },
+    "triangleCount": 107390,
+    "hasAnimations": false,
+    "meshNames": [
+      "Sphere.001"
+    ]
+  },
+  {
+    "filename": "red_brick_03_1k.glb",
+    "originalFile": "red_brick_03_1k.gltf",
+    "boundingBox": {
+      "x": -0.5138037204742432,
+      "y": -0.5105189681053162,
+      "z": -0.5082902908325195,
+      "width": 1.0276073217391968,
+      "height": 1.0171603560447693,
+      "depth": 1.0165776014328003
+    },
+    "triangleCount": 107390,
+    "hasAnimations": false,
+    "meshNames": [
+      "Sphere.001"
+    ]
+  },
+  {
+    "filename": "rocks_ground_01_1k.glb",
+    "originalFile": "rocks_ground_01_1k.gltf",
+    "boundingBox": {
+      "x": -1.0127055644989014,
+      "y": -1.0311801433563232,
+      "z": -1.0036433935165405,
+      "width": 2.025433897972107,
+      "height": 2.053025007247925,
+      "depth": 2.007395386695862
+    },
+    "triangleCount": 107390,
+    "hasAnimations": false,
+    "meshNames": [
+      "Sphere.001"
+    ]
+  },
+  {
+    "filename": "rocky_trail_1k.glb",
+    "originalFile": "rocky_trail_1k.gltf",
+    "boundingBox": {
+      "x": -1.007501482963562,
+      "y": -1.014905571937561,
+      "z": -1.000001072883606,
+      "width": 2.015002965927124,
+      "height": 2.0240964889526367,
+      "depth": 2.0000100135803223
+    },
+    "triangleCount": 107390,
+    "hasAnimations": false,
+    "meshNames": [
+      "Sphere.001"
+    ]
+  },
+  {
+    "filename": "defaultmaterial.glb",
+    "originalFile": "concrete_block_low_poly.glb",
+    "boundingBox": {
+      "x": -0.029999300837516785,
+      "y": -0.228984996676445,
+      "z": -1,
+      "width": 0.05999860167503357,
+      "height": 0.6121260076761246,
+      "depth": 2
+    },
+    "triangleCount": 112,
+    "hasAnimations": false,
+    "meshNames": [
+      "defaultMaterial"
+    ]
+  },
+  {
+    "filename": "defaultmaterial_1.glb",
+    "originalFile": "concrete_block_low_poly.glb",
+    "boundingBox": {
+      "x": -0.029999300837516785,
+      "y": -0.228984996676445,
+      "z": -1,
+      "width": 0.05999860167503357,
+      "height": 0.6121260076761246,
+      "depth": 2
+    },
+    "triangleCount": 112,
+    "hasAnimations": false,
+    "meshNames": [
+      "defaultMaterial"
+    ]
+  },
+  {
+    "filename": "concrete_fence_low-poly.glb",
+    "originalFile": "concrete_fence_low-poly.glb",
+    "boundingBox": {
+      "x": -26.10108256340027,
+      "y": -95.50169331389462,
+      "z": -123.3256854022008,
+      "width": 52.20215320587158,
+      "height": 195.50171340620494,
+      "depth": 246.65140304710783
+    },
+    "triangleCount": 462,
+    "hasAnimations": false,
+    "meshNames": [
+      "Fence1_Material.005_0"
+    ]
+  }
+]

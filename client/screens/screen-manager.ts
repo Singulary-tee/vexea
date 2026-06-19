@@ -1,4 +1,5 @@
 import { DS } from "../design-system";
+import { audioManager } from "../audio";
 
 const screens = ['splash-screen', 'main-menu-screen', 'lobby-screen'];
 let transitionTimers: number[] = [];
@@ -19,6 +20,7 @@ export function hideAll() {
 }
 
 function showScreen(id: string, durationMs: number, immediate: boolean) {
+  audioManager.setMatchState(false);
   if (immediate) {
     const el = document.getElementById(id);
     if (el) {
@@ -56,5 +58,6 @@ export function showLobby() {
 }
 
 export function showGame() {
+  audioManager.setMatchState(true);
   hideAll();
 }

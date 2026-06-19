@@ -1,265 +1,781 @@
 import * as screenManager from "./screen-manager";
-import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { DS } from "../design-system";
+import { getDevMap, getDefaultMap, MAP_REGISTRY } from "../../shared/maps/map-registry";
+import { hasCachedBlob, getCachedOrFetchUrl, ensureAssetsDownloaded } from "../asset-cache";
+import { EXTENDED_SOUNDS, EXTENDED_TEXTURES } from "./splash";
+import { setupAreaCorridors } from "../stage";
+
+let styleInjected = false;
+let activeCardId: string | null = null;
+let currentRightPanelMode: 'DEFAULT' | 'MULTIPLAYER' | 'FACTION' | 'STATISTICS' | 'FEEDBACK' | 'STORE' | 'PROFILE' | 'MAP_EDITOR' = 'DEFAULT';
+let userFaction: string | null = null;
+
+const preloadImages = [
+    '/multiplayer_card.png',
+    '/vibeCo_card.png',
+    '/slopInc_card.png',
+    '/statistics_card.png',
+    '/store_card.png',
+    '/feedback_card.png'
+];
+
+// Element References
+let rightPanelContent: HTMLElement;
+let leftColumn: HTMLElement;
+let multiplayerCard: HTMLElement;
+let devQuickstartBtn: HTMLElement | null = null;
+let profileRankBadge: HTMLElement;
+let profileNameText: HTMLElement;
+
 
 export function initMainMenu() {
+  preloadImages.forEach(src => {
+    const img = new Image();
+    img.src = src;
+  });
+
+  const auth = getAuth();
+  if (auth.currentUser && !auth.currentUser.isAnonymous) {
+      const db = getFirestore();
+      getDoc(doc(db, 'users', auth.currentUser.uid)).then(d => {
+          if (d.exists()) {
+              userFaction = d.data()?.faction || null;
+          }
+      }).catch(() => {});
+  }
+
   let el = document.getElementById('main-menu-screen');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'main-menu-screen';
-    Object.assign(el.style, {
-      position: 'fixed', inset: '0', zIndex: '900', display: 'none', width: '100vw', height: '100vh',
-      backgroundImage: "url('/splash_screen.png')", backgroundSize: 'cover', backgroundPosition: 'center center',
-      backgroundColor: '#0A0A0A'
+  if (el) el.remove();
+
+  if (!styleInjected) {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      #main-menu-screen * {
+        box-sizing: border-box;
+      }
+      .mm-glass {
+        background: ${DS.glass.background};
+        backdrop-filter: ${DS.glass.blur};
+        -webkit-backdrop-filter: ${DS.glass.blur};
+        border: ${DS.glass.border};
+      }
+      .mm-left-col { width: clamp(200px, 25vw, 320px); }
+      .mm-right-col { width: clamp(280px, 30vw, 400px); right: clamp(16px, 3vw, 32px); }
+      .mm-bot-banner { width: 40vw; max-width: 500px; min-width: 280px; }
+      .mm-wordmark { font-size: clamp(24px, 4vw, 48px); }
+      .mm-card-text { font-size: clamp(16px, 2vw, 24px); }
+      .mm-card {
+        transition: flex 320ms cubic-bezier(0.4,0,0.2,1), min-height 320ms cubic-bezier(0.4,0,0.2,1), max-height 320ms cubic-bezier(0.4,0,0.2,1), background-color 320ms cubic-bezier(0.4,0,0.2,1), border 320ms cubic-bezier(0.4,0,0.2,1), transform 320ms cubic-bezier(0.4,0,0.2,1);
+        flex: 1 1 0px;
+        min-height: clamp(32px, 6vh, 48px);
+        max-height: clamp(60px, 12vh, 80px);
+        overflow: hidden;
+      }
+      .mm-card-expanded {
+        flex: 4 1 0px !important;
+        min-height: clamp(140px, 20vh, 220px) !important;
+        max-height: clamp(200px, 30vh, 320px) !important;
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+      }
+      .mm-card[data-id="MULTIPLAYER"].mm-card-expanded { background-image: url('/multiplayer_card.png') !important; }
+      .mm-card[data-id="STATISTICS"].mm-card-expanded { background-image: url('/statistics_card.png') !important; }
+      .mm-card[data-id="STORE"].mm-card-expanded { background-image: url('/store_card.png') !important; }
+      .mm-card[data-id="FEEDBACK"].mm-card-expanded { background-image: url('/feedback_card.png') !important; }
+      .mm-card.faction-vibe.mm-card-expanded { background-image: url('/vibeCo_card.png') !important; }
+      .mm-card.faction-slop.mm-card-expanded { background-image: url('/slopInc_card.png') !important; }
+      .mm-card-dimmed {
+        opacity: 0.3 !important;
+      }
+      .mm-right-panel-content {
+        transition: opacity ${DS.transitions.panel};
+      }
+      
+      .mm-loop-bg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        z-index: 1;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 500ms ease-in-out;
+      }
+      .mm-fisheye-wrap {
+        position: absolute;
+        inset: 0;
+        transform: scale(0.97) perspective(1200px) rotateX(2.5deg);
+        transform-style: preserve-3d;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .mm-fisheye-wrap > * {
+        pointer-events: auto;
+      }
+      .mm-vignette {
+        display: none;
+      }
+      #settings-sidebar::-webkit-scrollbar { display:none; }
+      .mm-left-col { overflow-y: auto; overflow-x: hidden; }
+         .mm-left-col { width: 320px; }
+         .mm-bot-banner { width: 50vw; }
+         .mm-wordmark { font-size: 32px !important; }
+         .mm-profile-rank { display: none !important; }
+         .mm-glass { backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important; }
+         .mm-card-text { font-size: clamp(14px, 2vw, 18px) !important; }
+      }
+    `;
+    document.head.appendChild(style);
+    styleInjected = true;
+  }
+
+  el = document.createElement('div');
+  el.id = 'main-menu-screen';
+  Object.assign(el.style, {
+    position: 'fixed', inset: '0', zIndex: '900', display: 'none',
+    backgroundColor: '#000',
+    backgroundImage: "url('/splash_screen.png')",
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    opacity: '0', transition: 'opacity 500ms ease-out',
+    overflow: 'hidden'
+  });
+
+  const loopBg = document.createElement('video');
+  loopBg.className = 'mm-loop-bg';
+  loopBg.muted = true;
+  loopBg.autoplay = true;
+  loopBg.playsInline = true;
+  loopBg.setAttribute('playsinline', 'true');
+  loopBg.setAttribute('muted', 'true');
+  el.appendChild(loopBg);
+
+  const menuVideos = ['Mainvideo1.mp4', 'Mainvideo2.mp4', 'Mainvideo3.mp4'];
+  const videoUrls: string[] = [];
+  let currentVideoIndex = -1;
+
+  async function playRandomVideo() {
+    if (videoUrls.length === 0) return;
+    let nextIdx = 0;
+    if (videoUrls.length > 1) {
+      do {
+        nextIdx = Math.floor(Math.random() * videoUrls.length);
+      } while (nextIdx === currentVideoIndex);
+    }
+    currentVideoIndex = nextIdx;
+    loopBg.src = videoUrls[currentVideoIndex];
+    loopBg.load();
+    try {
+      await loopBg.play();
+    } catch (err) {
+      console.warn("[Menu Video] Playback blocked or failed:", err);
+    }
+  }
+
+  loopBg.addEventListener('playing', () => {
+    loopBg.style.opacity = '1';
+  });
+
+  loopBg.addEventListener('ended', () => {
+    loopBg.style.opacity = '0';
+    setTimeout(() => {
+      playRandomVideo();
+    }, 500);
+  });
+
+  Promise.all(menuVideos.map(v => getCachedOrFetchUrl(v, 'Video'))).then(urls => {
+    videoUrls.push(...urls);
+    playRandomVideo();
+  }).catch(e => {
+    console.warn("[Menu Video] Error reading cached videos:", e);
+  });
+
+  const fisheyeWrap = document.createElement('div');
+  fisheyeWrap.className = 'mm-fisheye-wrap';
+  el.appendChild(fisheyeWrap);
+
+  const vignette = document.createElement('div');
+  vignette.className = 'mm-vignette';
+  el.appendChild(vignette);
+
+  // Region 1 & 2 — Top Row: VEXEA Wordmark and Profile Mode
+  const topRow = document.createElement('div');
+  Object.assign(topRow.style, {
+    position: 'absolute', top: 'clamp(12px, 2vh, 24px)', left: 'clamp(16px, 3vw, 32px)', right: 'clamp(16px, 3vw, 32px)', zIndex: '2',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'
+  });
+  
+  const wordmark = document.createElement('div');
+  wordmark.className = 'mm-wordmark';
+  wordmark.textContent = 'VEXEA';
+  Object.assign(wordmark.style, {
+    fontFamily: DS.typography.fontFamily, color: DS.colors.accent, letterSpacing: '4px',
+    textTransform: 'uppercase', fontWeight: DS.typography.weightBold
+  });
+  topRow.appendChild(wordmark);
+
+  const profileBox = document.createElement('div');
+  profileBox.className = 'mm-glass';
+  Object.assign(profileBox.style, {
+    padding: 'clamp(4px, 1vh, 8px) clamp(6px, 1vw, 12px)', display: 'flex', alignItems: 'center', gap: 'clamp(6px, 1vw, 12px)'
+  });
+
+  const pIcon = document.createElement('div');
+  pIcon.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
+  pIcon.style.color = '#888888';
+  profileBox.appendChild(pIcon);
+
+  profileNameText = document.createElement('div');
+  Object.assign(profileNameText.style, {
+    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', color: '#E8E8E8', uppercase: 'true', letterSpacing: '2px'
+  });
+  profileBox.appendChild(profileNameText);
+
+  profileRankBadge = document.createElement('div');
+  profileRankBadge.className = 'mm-profile-rank';
+  Object.assign(profileRankBadge.style, {
+    background: DS.colors.accent, padding: 'clamp(2px, 0.5vh, 4px) clamp(5px, 1vw, 10px)',
+    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', fontWeight: DS.typography.weightBold, color: '#0A0A0A'
+  });
+  profileBox.appendChild(profileRankBadge);
+
+  const divider = document.createElement('div');
+  Object.assign(divider.style, { width: '1px', height: 'clamp(14px, 2vh, 20px)', background: '#2A2A2A' });
+  profileBox.appendChild(divider);
+
+  const pGear = document.createElement('div');
+  pGear.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>`;
+  pGear.style.color = '#888888';
+  pGear.style.cursor = 'pointer';
+  pGear.onclick = () => { import("../settings").then(({ openSettings }) => openSettings()); };
+  profileBox.appendChild(pGear);
+  topRow.appendChild(profileBox);
+  
+  fisheyeWrap.appendChild(topRow);
+  updateProfileBox();
+
+  // Region 4 — Right Column: Contextual Info Panel (Done before left column to exist for handlers)
+  const rightColumn = document.createElement('div');
+  rightColumn.className = 'mm-glass mm-right-col';
+  rightColumn.id = 'mm-right-col';
+  Object.assign(rightColumn.style, {
+    position: 'absolute', top: 'clamp(64px, 12vh, 96px)', bottom: 'clamp(64px, 12vh, 96px)', width: 'clamp(280px, 30vw, 400px)', right: 'clamp(16px, 3vw, 32px)', zIndex: '2',
+    padding: 'clamp(16px, 4vh, 48px)', display: 'flex', flexDirection: 'column', gap: '0', overflowX: 'hidden', overflowY: 'auto'
+  });
+
+  rightPanelContent = document.createElement('div');
+  rightPanelContent.className = 'mm-right-panel-content';
+  Object.assign(rightPanelContent.style, {
+    display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '800px', margin: '0 auto', gap: 'clamp(8px, 2vh, 16px)'
+  });
+  rightColumn.appendChild(rightPanelContent);
+  fisheyeWrap.appendChild(rightColumn);
+
+  // Region 3 — Left Column: Navigation Cards
+  leftColumn = document.createElement('div');
+  leftColumn.className = 'mm-glass mm-left-col';
+  Object.assign(leftColumn.style, {
+    position: 'absolute', top: 'clamp(64px, 12vh, 96px)', bottom: 'clamp(64px, 12vh, 96px)', left: 'clamp(16px, 3vw, 32px)', width: 'clamp(200px, 25vw, 320px)', zIndex: '2',
+    display: 'flex', flexDirection: 'column', gap: 'clamp(4px, 1vh, 8px)', overflowY: 'auto'
+  });
+
+  const createNavCard = (id: string, text: string, isDisabled: boolean = false) => {
+    const card = document.createElement('div');
+    card.className = 'mm-card';
+    card.dataset.id = id;
+    Object.assign(card.style, {
+      borderLeft: `3px solid ${DS.colors.accent}`, padding: 'clamp(10px, 2vh, 20px) clamp(12px, 2vw, 24px)', cursor: isDisabled ? 'default' : 'pointer',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start', position: 'relative'
     });
 
-    const vignette = document.createElement('div');
-    Object.assign(vignette.style, {
-      position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '1',
-      background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.85) 100%)'
+    if (isDisabled) {
+      card.style.opacity = '0.4';
+      card.style.pointerEvents = 'none';
+      card.style.borderLeft = `3px solid ${DS.colors.border}`;
+    }
+
+    const tEl = document.createElement('div');
+    tEl.className = 'mm-card-text';
+    tEl.textContent = text;
+    Object.assign(tEl.style, {
+      fontFamily: DS.typography.fontFamily, fontWeight: DS.typography.weightBold, textTransform: 'uppercase',
+      color: 'rgba(232,232,232,0.7)', letterSpacing: '2px', position: 'relative', zIndex: '2'
     });
-    el.appendChild(vignette);
+    card.appendChild(tEl);
 
-    // Top Bar
-    const topBar = document.createElement('div');
-    Object.assign(topBar.style, {
-      height: '80px', padding: '0 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      position: 'relative', zIndex: '2'
+    if (!isDisabled) {
+      const applyHover = () => {
+        card.style.border = DS.glass.borderAccentFull;
+        card.style.borderLeft = `3px solid ${DS.colors.accent}`;
+        card.style.background = 'rgba(200, 136, 42, 0.06)';
+        card.style.boxShadow = `${DS.glass.glowOuter}, ${DS.glass.glowInner}`;
+        tEl.style.color = '#E8E8E8';
+        card.style.transform = 'scaleX(1.02)';
+      };
+      const removeHover = () => {
+        if (activeCardId === id) return; // Keep hover styles if active
+        card.style.border = '1px solid transparent';
+        card.style.borderBottom = '1px solid rgba(255,255,255,0.02)';
+        card.style.borderLeft = `3px solid ${DS.colors.accent}`;
+        card.style.background = 'transparent';
+        card.style.boxShadow = 'none';
+        tEl.style.color = 'rgba(232,232,232,0.7)';
+        card.style.transform = 'scaleX(1)';
+      };
+
+      card.addEventListener('mouseenter', () => {
+        setActiveCard(id); 
+        applyHover(); 
+      });
+      card.addEventListener('mouseleave', () => {
+        if (activeCardId !== id) removeHover();
+      });
+      card.addEventListener('click', () => {
+        setActiveCard(id);
+      });
+    }
+
+    return { card, tEl };
+  };
+
+  const mpCard = createNavCard('MULTIPLAYER', 'MULTIPLAYER');
+  multiplayerCard = mpCard.card;
+  
+  leftColumn.appendChild(multiplayerCard);
+  leftColumn.appendChild(createNavCard('FACTION', 'FACTION').card);
+  leftColumn.appendChild(createNavCard('STORE', 'STORE').card);
+  leftColumn.appendChild(createNavCard('STATISTICS', 'STATISTICS').card);
+  leftColumn.appendChild(createNavCard('FEEDBACK', 'FEEDBACK').card);
+
+  if ((import.meta as any).env?.DEV) {
+    const devBtn = createNavCard('DEV_QUICKSTART', 'DEV QUICK START').card;
+    Object.assign(devBtn.style, {
+      background: 'rgba(255,0,100,0.15)', border: '1px solid rgba(255,0,100,0.4)',
+      borderLeft: '3px solid #FF0064'
     });
-    
-    // Left: VEXEA
-    const logo = document.createElement('div');
-    logo.textContent = 'VEXEA';
-    Object.assign(logo.style, {
-      fontFamily: "'Barlow Condensed', sans-serif", fontSize: '48px', color: '#C8882A', letterSpacing: '4px'
+    (devBtn.firstChild as HTMLElement).style.color = '#FF0064';
+    devBtn.addEventListener('click', () => {
+       const mapId = getDevMap().id;
+       ensureAssetsDownloaded(() => {
+           try {
+               const docEl = document.documentElement as any;
+               if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+                   if (docEl.requestFullscreen) docEl.requestFullscreen();
+                   else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+               }
+           } catch (err) {}
+
+           // Direct dispatch bypassing screens
+           window.dispatchEvent(new CustomEvent('start-match', { detail: { mode: 'STANDARD', class: 'ASSAULT', solo: true, map: getDevMap() }}));
+           screenManager.showGame();
+       }, mapId);
     });
-    
-    // Center: Player Identifier
-    const playerIdentifier = document.createElement('div');
-    Object.assign(playerIdentifier.style, {
-      fontFamily: "'Barlow Condensed', sans-serif", fontSize: '14px', color: '#888888'
+    devQuickstartBtn = devBtn;
+    leftColumn.appendChild(devBtn);
+
+    const mapEditorBtn = createNavCard('MAP_EDITOR', 'MAP EDITOR').card;
+    Object.assign(mapEditorBtn.style, {
+      background: 'rgba(255,0,100,0.15)', border: '1px solid rgba(255,0,100,0.4)',
+      borderLeft: '3px solid #FF0064'
     });
-    const updatePlayerIdentifier = () => {
-       try {
-           const auth = getAuth();
-           if (auth.currentUser && !auth.currentUser.isAnonymous) {
-               playerIdentifier.textContent = `${auth.currentUser.displayName || 'PLAYER'} — UNAFFILIATED`;
-               playerIdentifier.style.color = '#E8E8E8';
-           } else {
-               playerIdentifier.textContent = `GUEST — ${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-               playerIdentifier.style.color = '#888888';
-           }
-       } catch(e) {
-           playerIdentifier.textContent = `GUEST — ${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-           playerIdentifier.style.color = '#888888';
-       }
-    };
-    updatePlayerIdentifier();
+    (mapEditorBtn.firstChild as HTMLElement).style.color = '#FF0064';
+    leftColumn.appendChild(mapEditorBtn);
+  }
 
-    // Right: Settings Gear
-    const settingsBtn = document.createElement('div');
-    settingsBtn.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>`;
-    Object.assign(settingsBtn.style, {
-      color: '#888888', cursor: 'pointer'
-    });
-    settingsBtn.addEventListener('click', () => {
-      // The settings modal should be handled separately. For now just standard overlay
-      const sm = document.getElementById('settings-modal');
-      if (sm) sm.style.display = 'flex';
-    });
+  const backBtn = document.createElement('div');
+  backBtn.className = 'mm-back-btn';
+  backBtn.innerHTML = '&#8592; BACK';
+  Object.assign(backBtn.style, {
+    display: 'none',
+    position: 'absolute',
+    bottom: 'clamp(12px, 2vh, 24px)',
+    left: 'clamp(16px, 3vw, 32px)',
+    width: 'clamp(200px, 25vw, 320px)',
+    zIndex: '10',
+    padding: 'clamp(8px, 1.5vh, 16px)',
+    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', textTransform: 'uppercase',
+    color: '#E8E8E8', letterSpacing: '3px', cursor: 'pointer', textAlign: 'center', background: 'rgba(10,10,10,0.85)',
+    backdropFilter: DS.glass.blur, webkitBackdropFilter: DS.glass.blur,
+    borderRadius: '4px',
+    border: DS.glass.border
+  });
+  backBtn.addEventListener('mouseenter', () => { backBtn.style.background = 'rgba(255,255,255,0.05)'; });
+  backBtn.addEventListener('mouseleave', () => { backBtn.style.background = 'rgba(10,10,10,0.85)'; });
+  backBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearActiveCard();
+  });
+  fisheyeWrap.appendChild(backBtn);
 
-    topBar.appendChild(logo);
-    topBar.appendChild(playerIdentifier);
-    topBar.appendChild(settingsBtn);
-    el.appendChild(topBar);
+  fisheyeWrap.appendChild(leftColumn);
 
-    // Content area
-    const contentArea = document.createElement('div');
-    Object.assign(contentArea.style, {
-      position: 'absolute', top: '80px', left: '32px', bottom: '32px', width: '65%',
-      display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gridTemplateRows: 'repeat(3, 1fr)', gap: '16px', zIndex: '2'
-    });
+  // Bottom Banner
+  const botBanner = document.createElement('div');
+  botBanner.className = 'mm-glass mm-bot-banner';
+  Object.assign(botBanner.style, {
+    position: 'absolute', bottom: 'clamp(12px, 2vh, 24px)', left: '50%', transform: 'translateX(-50%)', zIndex: '2',
+    height: 'clamp(48px, 8vh, 64px)', display: 'flex', alignItems: 'center', padding: '0 clamp(8px, 2vw, 16px)', gap: 'clamp(8px, 2vw, 16px)', cursor: 'pointer'
+  });
+  botBanner.addEventListener('click', () => setActiveCard('MULTIPLAYER'));
 
-    const createCard = (titleText: string, subtitleText: string, gradient: string, onClick?: () => void, disabled?: boolean) => {
-       const card = document.createElement('div');
-       Object.assign(card.style, {
-         position: 'relative', overflow: 'hidden', cursor: disabled ? 'default' : 'pointer', border: 'none', borderRadius: '0'
-       });
-       if (disabled) {
-           card.style.opacity = '0.35';
-           card.style.pointerEvents = 'none';
-       }
+  const botImg = document.createElement('div');
+  Object.assign(botImg.style, {
+    width: 'clamp(32px, 6vh, 48px)', height: 'clamp(32px, 6vh, 48px)', border: DS.glass.borderAccent, background: '#1A1208',
+    backgroundImage: "url('/splash_screen.png')", backgroundSize: 'cover', backgroundPosition: 'center'
+  });
+  botBanner.appendChild(botImg);
 
-       const imgLayer = document.createElement('div');
-       Object.assign(imgLayer.style, {
-         position: 'absolute', inset: '0', zIndex: '1', background: gradient
-       });
-       card.appendChild(imgLayer);
+  const botTextCol = document.createElement('div');
+  Object.assign(botTextCol.style, { display: 'flex', flexDirection: 'column' });
+  const botTitle = document.createElement('div');
+  botTitle.textContent = 'FEATURED OPERATION';
+  Object.assign(botTitle.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(12px, 2vh, 16px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase', color: '#E8E8E8' });
+  const botSub = document.createElement('div');
+  botSub.textContent = '(Standard · Open Match)';
+  Object.assign(botSub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(9px, 1.5vh, 12px)', color: '#888888' });
+  botTextCol.appendChild(botTitle);
+  botTextCol.appendChild(botSub);
+  botBanner.appendChild(botTextCol);
 
-       const darkLayer = document.createElement('div');
-       Object.assign(darkLayer.style, {
-         position: 'absolute', inset: '0', zIndex: '2', background: 'rgba(0,0,0,0.3)'
-       });
-       card.appendChild(darkLayer);
+  fisheyeWrap.appendChild(botBanner);
 
-       const btmGradient = document.createElement('div');
-       Object.assign(btmGradient.style, {
-         position: 'absolute', bottom: '0', left: '0', right: '0', height: '50%', zIndex: '2',
-         background: 'linear-gradient(transparent, rgba(0,0,0,0.92))'
-       });
-       card.appendChild(btmGradient);
+  document.body.appendChild(el);
 
-       const content = document.createElement('div');
-       Object.assign(content.style, {
-          position: 'absolute', bottom: '0', left: '0', right: '0', zIndex: '3', padding: '16px'
-       });
-       
-       const title = document.createElement('h3');
-       title.textContent = titleText;
-       Object.assign(title.style, {
-          fontFamily: "'Barlow Condensed', sans-serif", fontSize: '24px', textTransform: 'uppercase', 
-          fontWeight: 'bold', color: '#E8E8E8', margin: '0'
-       });
+  // Set initial state
+  clearActiveCard();
 
-       const subtitle = document.createElement('div');
-       subtitle.textContent = subtitleText;
-       Object.assign(subtitle.style, {
-          fontFamily: "'Barlow Condensed', sans-serif", fontSize: '14px', color: '#888888', 
-          margin: '4px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-       });
+  setTimeout(() => { if (el) el.style.opacity = '1'; }, 50);
+}
 
-       content.appendChild(title);
-       content.appendChild(subtitle);
-       card.appendChild(content);
-
-       if (!disabled) {
-          card.addEventListener('mouseenter', () => card.style.outline = '2px solid #C8882A');
-          card.addEventListener('mouseleave', () => card.style.outline = 'none');
-          card.style.transition = 'outline 150ms';
-       }
-
-       if (onClick) {
-           card.addEventListener('click', onClick);
-       }
-
-       return card;
-    };
-
-    const alertComingSoon = () => alert("Coming soon.");
-
-    contentArea.appendChild(createCard("MULTIPLAYER", "Co-op infiltration. 5–10 contractors.", "linear-gradient(135deg, #0D1117 0%, #1A0A0A 100%)", () => screenManager.showLobby()));
-    contentArea.appendChild(createCard("PROFILE", "Sign in to save progress.", "linear-gradient(135deg, #0D1117 0%, #0A0A1A 100%)", alertComingSoon));
-    contentArea.appendChild(createCard("FACTION", "Vibe Co. or Slop Inc.", "linear-gradient(135deg, #0D1117 0%, #0A1A0A 100%)", alertComingSoon));
-    contentArea.appendChild(createCard("INSTANT FEEDBACK", "Rate your experience.", "linear-gradient(135deg, #131109 0%, #1A1500 100%)", showFeedbackModal));
-    contentArea.appendChild(createCard("STORE", "Coming soon.", "linear-gradient(135deg, #0D1117 0%, #111117 100%)", undefined, true));
-    contentArea.appendChild(createCard("STATISTICS", "Matches. Eliminations. Extractions.", "linear-gradient(135deg, #0D1117 0%, #0A0A0A 100%)", alertComingSoon));
-
-    el.appendChild(contentArea);
-    document.body.appendChild(el);
+function updateProfileBox() {
+  const auth = getAuth();
+  if (auth.currentUser && !auth.currentUser.isAnonymous) {
+    profileNameText.textContent = `${(auth.currentUser.displayName || 'PLAYER').toUpperCase()}`;
+    profileRankBadge.textContent = '1'; // Placeholder for DB rank
+  } else {
+    // Generate transient ID or use generic guest
+    const guestId = localStorage.getItem('guestId') || Math.random().toString(36).substring(2, 8).toUpperCase();
+    localStorage.setItem('guestId', guestId);
+    profileNameText.textContent = `GUEST — [${guestId}]`;
+    profileRankBadge.textContent = '—';
+    profileNameText.style.color = '#888888';
   }
 }
 
-function showFeedbackModal() {
-    let modal = document.getElementById('feedback-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'feedback-modal';
-        Object.assign(modal.style, {
-            position: 'fixed', inset: '0', zIndex: '1100', background: 'rgba(0,0,0,0.85)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-        });
+function setActiveCard(id: string) {
+  if (activeCardId === id && currentRightPanelMode === id as any) return;
+  import('../audio').then(({ audioManager }) => audioManager.play('click'));
+  activeCardId = id;
+  currentRightPanelMode = id as any;
 
-        const card = document.createElement('div');
-        Object.assign(card.style, {
-            width: '400px', maxWidth: '90vw', background: '#111111', border: '1px solid #2A2A2A',
-            padding: '32px', borderRadius: '0'
-        });
+  Array.from(leftColumn.children).forEach(child => {
+     const c = child as HTMLElement;
+     const tEl = c.querySelector('.mm-card-text') as HTMLElement;
+     
+     if (c.dataset.id === id) {
+       c.classList.add('mm-card-expanded');
+       c.classList.remove('mm-card-dimmed');
+       
+       if (id === 'FACTION') {
+          if (userFaction === 'VIBE CO.') c.classList.add('faction-vibe');
+          else if (userFaction === 'SLOP INC.') c.classList.add('faction-slop');
+       }
 
-        const title = document.createElement('h2');
-        title.textContent = 'FEEDBACK';
-        Object.assign(title.style, {
-            fontFamily: "'Barlow Condensed', sans-serif", fontSize: '24px', color: '#E8E8E8', textTransform: 'uppercase', marginBottom: '24px'
-        });
-        card.appendChild(title);
+       c.style.border = DS.glass.borderAccentFull;
+       c.style.borderLeft = `3px solid ${DS.colors.accent}`;
+       c.style.background = 'rgba(200, 136, 42, 0.06)';
+       c.style.boxShadow = `${DS.glass.glowOuter}, ${DS.glass.glowInner}`;
+       if (tEl) tEl.style.color = '#E8E8E8';
+       c.style.transform = 'scaleX(1.02)';
+     } else {
+       if (c.dataset.id) {
+         c.classList.add('mm-card-dimmed');
 
-        const starRow = document.createElement('div');
-        Object.assign(starRow.style, { display: 'flex', gap: '8px' });
-        let selectedRating = 0;
-        const stars: HTMLButtonElement[] = [];
+         c.style.border = '1px solid transparent';
+         c.style.borderBottom = '1px solid rgba(255,255,255,0.02)';
+         c.style.borderLeft = c.dataset.id === 'STORE' ? `3px solid transparent` : `3px solid ${DS.colors.accent}`;
+         c.style.background = 'transparent';
+         c.style.boxShadow = 'none';
+         if (tEl) tEl.style.color = 'rgba(232,232,232,0.7)';
+         c.style.transform = 'scaleX(1)';
+         c.classList.remove('mm-card-expanded');
+       }
+     }
+  });
 
-        for (let i=1; i<=5; i++) {
-            const btn = document.createElement('button');
-            btn.innerHTML = '★';
-            Object.assign(btn.style, {
-                width: '40px', height: '40px', background: 'transparent', border: 'none',
-                fontSize: '28px', cursor: 'pointer', color: '#2A2A2A', padding: '0'
-            });
-            btn.addEventListener('mouseenter', () => {
-                for(let j=0; j<5; j++) stars[j].style.color = j < i ? '#C8882A' : (j < selectedRating ? '#C8882A' : '#2A2A2A');
-            });
-            btn.addEventListener('mouseleave', () => {
-                for(let j=0; j<5; j++) stars[j].style.color = j < selectedRating ? '#C8882A' : '#2A2A2A';
-            });
-            btn.addEventListener('click', () => {
-                selectedRating = i;
-                for(let j=0; j<5; j++) stars[j].style.color = j < selectedRating ? '#C8882A' : '#2A2A2A';
-            });
-            stars.push(btn);
-            starRow.appendChild(btn);
-        }
-        card.appendChild(starRow);
+  const backBtn = document.querySelector('.mm-back-btn') as HTMLElement | null;
+  if (backBtn) backBtn.style.display = 'block';
 
-        const textarea = document.createElement('textarea');
-        textarea.placeholder = "Describe your experience.";
-        Object.assign(textarea.style, {
-            display: 'block', width: '100%', height: '120px', marginTop: '16px', background: '#0A0A0A',
-            border: '1px solid #2A2A2A', borderRadius: '0', color: '#E8E8E8', fontFamily: "'Barlow Condensed', sans-serif",
-            fontSize: '14px', padding: '12px', resize: 'none', boxSizing: 'border-box'
-        });
-        card.appendChild(textarea);
-
-        const submitBtn = document.createElement('button');
-        submitBtn.textContent = 'SUBMIT';
-        Object.assign(submitBtn.style, {
-            display: 'block', width: '100%', height: '48px', marginTop: '16px', background: '#C8882A',
-            border: 'none', borderRadius: '0', color: '#0A0A0A', fontFamily: "'Barlow Condensed', sans-serif",
-            fontSize: '24px', fontWeight: 'bold', textTransform: 'uppercase', cursor: 'pointer'
-        });
-        submitBtn.addEventListener('click', async () => {
-            const auth = getAuth();
-            const uid = auth.currentUser ? auth.currentUser.uid : "guest";
-            try {
-                const db = getFirestore();
-                await addDoc(collection(db, "feedback"), {
-                    rating: selectedRating,
-                    text: textarea.value,
-                    timestamp: serverTimestamp(),
-                    userId: uid
-                });
-            } catch (e) {
-                console.error(e);
-            }
-            modal!.style.display = 'none';
-        });
-        card.appendChild(submitBtn);
-
-        const cancelBtn = document.createElement('div');
-        cancelBtn.textContent = 'CANCEL';
-        Object.assign(cancelBtn.style, {
-            display: 'block', width: '100%', marginTop: '12px', textAlign: 'center', fontSize: '14px',
-            color: '#888888', cursor: 'pointer', textDecoration: 'underline', fontFamily: "'Barlow Condensed', sans-serif"
-        });
-        cancelBtn.addEventListener('click', () => {
-            modal!.style.display = 'none';
-        });
-        card.appendChild(cancelBtn);
-
-        modal.appendChild(card);
-        document.body.appendChild(modal);
-    }
-    
-    // Reset modal
-    const textarea = modal.querySelector('textarea');
-    if (textarea) textarea.value = '';
-    modal.style.display = 'flex';
+  renderRightPanel();
 }
+
+function clearActiveCard() {
+  activeCardId = null;
+  currentRightPanelMode = 'DEFAULT';
+  Array.from(leftColumn.children).forEach(child => {
+     const c = child as HTMLElement;
+     if (!c.dataset.id) return;
+     c.classList.remove('mm-card-dimmed');
+     c.classList.remove('mm-card-expanded');
+     c.style.border = '1px solid transparent';
+     c.style.borderBottom = '1px solid rgba(255,255,255,0.02)';
+     c.style.borderLeft = c.dataset.id === 'STORE' ? `3px solid transparent` : `3px solid ${DS.colors.accent}`;
+     c.style.background = 'transparent';
+     c.style.boxShadow = 'none';
+     c.style.transform = 'scaleX(1)';
+     const tEl = c.querySelector('.mm-card-text') as HTMLElement;
+     if (tEl) tEl.style.color = 'rgba(232,232,232,0.7)';
+  });
+
+  const backBtn = document.querySelector('.mm-back-btn') as HTMLElement | null;
+  if (backBtn) backBtn.style.display = 'none';
+
+  renderRightPanel();
+}
+
+function createPanelBlock(label: string, renderContent: (container: HTMLElement) => void, isLast: boolean = false) {
+  const block = document.createElement('div');
+  Object.assign(block.style, {
+    padding: 'clamp(8px, 2vh, 16px) 0', borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.06)'
+  });
+  
+  if (label) {
+    const lbl = document.createElement('div');
+    lbl.textContent = label;
+    Object.assign(lbl.style, {
+      fontFamily: DS.typography.fontFamily, fontSize: 'clamp(8px, 1.25vh, 11px)', textTransform: 'uppercase',
+      color: '#888888', letterSpacing: '4px', marginBottom: 'clamp(4px, 1vh, 8px)'
+    });
+    block.appendChild(lbl);
+  }
+
+  renderContent(block);
+  return block;
+}
+
+function renderRightPanel() {
+  rightPanelContent.style.opacity = '0';
+  
+  // Right Column Overflow Logic
+  const rightCol = document.getElementById('mm-right-col');
+  if (rightCol) {
+     rightCol.style.overflowY = 'auto';
+  }
+
+  setTimeout(() => {
+    rightPanelContent.innerHTML = '';
+    
+    if (currentRightPanelMode === 'DEFAULT') {
+      rightPanelContent.appendChild(createPanelBlock('ACTIVE CONTRACTORS', c => {
+        const val = document.createElement('div');
+        val.textContent = '—'; // Pull from sever if available
+        Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(16px, 3vh, 24px)', fontWeight: DS.typography.weightBold, color: '#E8E8E8' });
+        const sub = document.createElement('div');
+        sub.textContent = 'Matches —    Rank —';
+        Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888' });
+        c.appendChild(val); c.appendChild(sub);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('FEATURED OPERATION', c => {
+        const val = document.createElement('div'); val.textContent = 'INFILTRATION';
+        Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', fontWeight: DS.typography.weightBold, color: '#E8E8E8' });
+        const sub = document.createElement('div'); sub.textContent = 'Standard mode. 5–10 contractors.';
+        Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888' });
+        c.appendChild(val); c.appendChild(sub);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('LATEST UPDATE', c => {
+        const val = document.createElement('div'); val.textContent = 'BUILD 0.1.0';
+        Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8' });
+        const sub = document.createElement('div'); sub.textContent = 'Initial development build.';
+        Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888' });
+        c.appendChild(val); c.appendChild(sub);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('CURRENT EVENT', c => {
+        const val = document.createElement('div'); val.textContent = 'NONE ACTIVE';
+        Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#555555' });
+        const sub = document.createElement('div'); sub.textContent = 'Check back later.';
+        Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#444444' });
+        c.appendChild(val); c.appendChild(sub);
+      }, true));
+    } 
+    else if (currentRightPanelMode === 'MULTIPLAYER') {
+      rightPanelContent.appendChild(createPanelBlock('GAME MODE', c => {
+         const opActive = document.createElement('div'); opActive.textContent = 'INFILTRATION';
+         Object.assign(opActive.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', borderLeft: '2px solid ' + DS.colors.accent, background: 'rgba(200,136,42,0.08)', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)', marginBottom: 'clamp(2px, 0.5vh, 4px)' });
+         const opFuture = document.createElement('div'); opFuture.innerHTML = 'HARDCORE <span style="font-size:clamp(8px, 1.25vh, 11px); color:#555555">COMING SOON</span>';
+         Object.assign(opFuture.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', opacity: '0.35', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)' });
+         c.appendChild(opActive); c.appendChild(opFuture);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('MATCH TYPE', c => {
+         const opActive = document.createElement('div'); opActive.textContent = 'OPEN MATCH';
+         Object.assign(opActive.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', borderLeft: '2px solid ' + DS.colors.accent, background: 'rgba(200,136,42,0.08)', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)', marginBottom: 'clamp(2px, 0.5vh, 4px)' });
+         const op2 = document.createElement('div'); op2.textContent = 'PRIVATE MATCH';
+         Object.assign(op2.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', opacity: '0.6', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)' });
+         c.appendChild(opActive); c.appendChild(op2);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('CONTRACTORS', c => {
+         const val = document.createElement('div'); val.textContent = '1 / 10';
+         Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8' });
+         const sub = document.createElement('div'); sub.textContent = 'Waiting for contractors...';
+         Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888' });
+         c.appendChild(val); c.appendChild(sub);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('', c => {
+         const btn = document.createElement('button');
+         btn.textContent = 'DEPLOY';
+         Object.assign(btn.style, {
+           width: '100%', height: 'clamp(32px, 6vh, 48px)', background: DS.colors.accent, color: '#0A0A0A', border: 'none',
+           fontFamily: DS.typography.fontFamily, fontSize: 'clamp(16px, 3vh, 24px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase',
+           cursor: 'pointer'
+         });
+         btn.addEventListener('click', () => { 
+             ensureAssetsDownloaded(() => screenManager.showLobby(), getDefaultMap().id); 
+         });
+         c.appendChild(btn);
+      }, true));
+    }
+    else if (currentRightPanelMode === 'FACTION') {
+      const auth = getAuth();
+      const isGuest = !auth.currentUser || auth.currentUser.isAnonymous;
+      rightPanelContent.appendChild(createPanelBlock('CURRENT FACTION', c => {
+         const val = document.createElement('div'); val.textContent = isGuest ? 'UNAFFILIATED' : (userFaction || 'UNASSIGNED');
+         Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8' });
+         c.appendChild(val);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('ENLIST', c => {
+         ['VIBE CO.', 'SLOP INC.'].forEach((f, i) => {
+            const btn = document.createElement('div'); btn.textContent = f;
+            const isSelected = userFaction === f;
+            Object.assign(btn.style, {
+              fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', padding: 'clamp(6px, 1.5vh, 12px)', marginBottom: 'clamp(4px, 1vh, 8px)', cursor: isGuest ? 'default' : 'pointer',
+              borderLeft: isSelected ? '2px solid ' + DS.colors.accent : '2px solid transparent',
+              background: isSelected ? 'rgba(200,136,42,0.08)' : 'transparent',
+              color: isSelected ? '#E8E8E8' : '#888888'
+            });
+            c.appendChild(btn);
+         });
+      }));
+      rightPanelContent.appendChild(createPanelBlock('', c => {
+         const btn = document.createElement('button');
+         btn.textContent = 'CONFIRM';
+         Object.assign(btn.style, {
+           width: '100%', height: 'clamp(32px, 6vh, 48px)', background: isGuest ? '#333' : DS.colors.accent, color: isGuest ? '#666' : '#0A0A0A', border: 'none',
+           fontFamily: DS.typography.fontFamily, fontSize: 'clamp(16px, 3vh, 24px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase', cursor: isGuest ? 'default' : 'pointer'
+         });
+         if (isGuest) btn.disabled = true;
+         c.appendChild(btn);
+         if (isGuest) {
+            const sub = document.createElement('div'); sub.textContent = 'Sign in to save faction.';
+            Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888', textAlign: 'center', marginTop: 'clamp(4px, 1vh, 8px)' });
+            c.appendChild(sub);
+         }
+      }, true));
+    }
+    else if (currentRightPanelMode === 'STATISTICS') {
+       rightPanelContent.appendChild(createPanelBlock('LIFETIME STATS', c => {
+         const stats = [
+           { l: 'MATCHES', v: '—' }, { l: 'WINS', v: '—' }, { l: 'WIN RATE', v: '—' }, { l: 'ELIMINATIONS', v: '—' }, { l: 'BEST SCORE', v: '—' }
+         ];
+         stats.forEach(s => {
+           const row = document.createElement('div');
+           Object.assign(row.style, { display: 'flex', justifyContent: 'space-between', marginBottom: 'clamp(4px, 1vh, 8px)' });
+           const lbl = document.createElement('span'); lbl.textContent = s.l;
+           Object.assign(lbl.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', color: '#888888' });
+           const val = document.createElement('span'); val.textContent = s.v;
+           Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', fontWeight: DS.typography.weightBold });
+           row.appendChild(lbl); row.appendChild(val); c.appendChild(row);
+         });
+       }));
+       rightPanelContent.appendChild(createPanelBlock('LAST MATCH', c => {
+         const lbl = document.createElement('div'); lbl.textContent = 'NO DATA AVAILABLE';
+         Object.assign(lbl.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', color: '#555555' });
+         c.appendChild(lbl);
+       }, true));
+    }
+    else if (currentRightPanelMode === 'FEEDBACK') {
+       let sr = 0;
+       const stars: HTMLElement[] = [];
+       rightPanelContent.appendChild(createPanelBlock('', c => {
+         const row = document.createElement('div'); Object.assign(row.style, { display: 'flex', gap: 'clamp(4px, 1vh, 8px)', marginBottom: 'clamp(8px, 2vh, 16px)' });
+         for (let i=1; i<=5; i++) {
+           const s = document.createElement('div'); s.innerHTML = '★';
+           Object.assign(s.style, { fontSize: 'clamp(20px, 3.5vh, 32px)', color: '#2A2A2A', cursor: 'pointer', lineHeight: '1' });
+           s.onclick = () => { sr = i; stars.forEach((st, idx) => st.style.color = idx < sr ? DS.colors.accent : '#2A2A2A'); };
+           stars.push(s); row.appendChild(s);
+         }
+         c.appendChild(row);
+
+         const txt = document.createElement('textarea');
+         txt.placeholder = 'Describe your experience.';
+         Object.assign(txt.style, {
+           width: '100%', height: 'clamp(50px, 10vh, 80px)', background: 'rgba(0,0,0,0.4)', border: DS.glass.border,
+           color: '#E8E8E8', fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', padding: 'clamp(5px, 1vh, 10px)', resize: 'none'
+         });
+         c.appendChild(txt);
+       }));
+       rightPanelContent.appendChild(createPanelBlock('', c => {
+         const btn = document.createElement('button'); btn.textContent = 'SUBMIT';
+         Object.assign(btn.style, {
+           width: '100%', height: 'clamp(30px, 4vh, 40px)', background: DS.colors.accent, color: '#0A0A0A', border: 'none',
+           fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase', cursor: 'pointer'
+         });
+         btn.onclick = async () => {
+           const auth = getAuth();
+           const uid = auth.currentUser ? auth.currentUser.uid : "guest";
+           const txt = rightPanelContent.querySelector('textarea');
+           try {
+               await addDoc(collection(getFirestore(), "feedback"), {
+                   rating: sr, text: txt?.value || '', timestamp: serverTimestamp(), userId: uid
+               });
+               if(txt) txt.value = '';
+               sr = 0; stars.forEach(st => st.style.color = '#2A2A2A');
+               btn.textContent = 'SENT';
+               setTimeout(() => btn.textContent = 'SUBMIT', 2000);
+           } catch(e) {}
+         };
+         c.appendChild(btn);
+       }, true));
+    }
+    else if (currentRightPanelMode === 'STORE') {
+        rightPanelContent.appendChild(createPanelBlock('STORE', c => {
+            const val = document.createElement('div'); val.textContent = 'OFFLINE';
+            Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#888888' });
+            c.appendChild(val);
+        }));
+    }
+    else if (currentRightPanelMode === 'MAP_EDITOR') {
+        rightPanelContent.appendChild(createPanelBlock('AVAILABLE MAPS', c => {
+            MAP_REGISTRY.forEach(map => {
+                const mapBtn = document.createElement('div');
+                Object.assign(mapBtn.style, {
+                    padding: 'clamp(8px, 1.5vh, 12px)',
+                    marginBottom: '8px',
+                    borderLeft: `2px solid ${DS.colors.accent}`,
+                    background: 'rgba(255,255,255,0.05)',
+                    cursor: 'pointer',
+                    color: '#E8E8E8',
+                    fontFamily: DS.typography.fontFamily,
+                    fontSize: 'clamp(14px, 2.5vh, 18px)'
+                });
+                mapBtn.textContent = map.displayName;
+                mapBtn.addEventListener('mouseenter', () => { mapBtn.style.background = 'rgba(255,255,255,0.1)'; });
+                mapBtn.addEventListener('mouseleave', () => { mapBtn.style.background = 'rgba(255,255,255,0.05)'; });
+                mapBtn.addEventListener('click', () => {
+                    if ((window as any).launchMapEditor) {
+                        (window as any).launchMapEditor(map.id);
+                    } else {
+                        console.log('launchMapEditor missing');
+                    }
+                });
+                c.appendChild(mapBtn);
+            });
+        }));
+    }
+
+    rightPanelContent.style.opacity = '1';
+  }, 100);
+}
+

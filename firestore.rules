@@ -1,8 +1,37 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Default deny: Secure-by-default
     match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Client-side player persistent stats
+    match /player_stats/{playerId} {
+      allow read, write: if request.auth != null && request.auth.uid == playerId;
+    }
+
+    // Client-side matches_in_progress session locking
+    match /matches_in_progress/{matchId} {
       allow read, write: if request.auth != null;
+    }
+
+    // Client-side user feedback submission
+    match /feedback/{feedbackId} {
+      allow create: if request.auth != null;
+    }
+
+    // Server Authoritative: Users scores & outcomes (Synced and certified by server authoritative loops)
+    match /Users/{playerId} {
+      allow read: if request.auth != null && request.auth.uid == playerId;
+      allow write: if false; // Only manageable server-side via Firebase Admin SDK
+    }
+
+    // Server Authoritative: MatchInProgress tracking
+    match /MatchInProgress/{playerId} {
+      allow read: if request.auth != null && request.auth.uid == playerId;
+      allow write: if false; // Only manageable server-side via Firebase Admin SDK
     }
   }
 }

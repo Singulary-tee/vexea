@@ -1,4 +1,6 @@
 import * as screenManager from "./screen-manager";
+import { getDefaultMap } from "../../shared/maps/map-registry";
+import { ensureAssetsDownloaded } from "../asset-cache";
 
 export function initLobby() {
   let el = document.getElementById('lobby-screen');
@@ -61,13 +63,14 @@ export function initLobby() {
 
         const content = document.createElement('div');
         Object.assign(content.style, {
-           position: 'absolute', bottom: '0', left: '0', right: '0', zIndex: '3', padding: '16px', boxSizing: 'border-box'
+           position: 'absolute', bottom: '0', left: '0', right: '0', zIndex: '3', padding: '8px 16px', boxSizing: 'border-box',
+           maxHeight: '30%', overflow: 'hidden'
         });
 
         const clsName = document.createElement('div');
         clsName.textContent = name;
         Object.assign(clsName.style, {
-           fontFamily: "'Barlow Condensed', sans-serif", fontSize: '24px', textTransform: 'uppercase',
+           fontFamily: "'Barlow Condensed', sans-serif", fontSize: '18px', textTransform: 'uppercase',
            fontWeight: 'bold', color: '#E8E8E8'
         });
         content.appendChild(clsName);
@@ -75,7 +78,7 @@ export function initLobby() {
         const clsDesc = document.createElement('div');
         clsDesc.textContent = desc;
         Object.assign(clsDesc.style, {
-           fontFamily: "'Barlow Condensed', sans-serif", fontSize: '14px', color: '#888888', marginTop: '4px'
+           fontFamily: "'Barlow Condensed', sans-serif", fontSize: '13px', color: '#888888', marginTop: '4px'
         });
         content.appendChild(clsDesc);
 
@@ -201,10 +204,18 @@ export function initLobby() {
 
     // Emit ready logic can be wired later
     readyBtn.addEventListener('click', () => {
-        // Mock transition to game
-        screenManager.showGame();
-        window.dispatchEvent(new Event("start-match"));
-        // Here we could emit a ready event if we bound it to the transport adapter.
+        // Synchronously request fullscreen and pointer lock on canvas-container
+            const docEl = document.documentElement as any;
+            if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+                if (docEl.requestFullscreen) docEl.requestFullscreen();
+                else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+            }
+
+        const map = getDefaultMap();
+        ensureAssetsDownloaded(() => {
+            screenManager.showGame();
+            window.dispatchEvent(new CustomEvent("start-match", { detail: { map } }));
+        }, map.id);
     });
     
     actionBar.appendChild(readyBtn);
