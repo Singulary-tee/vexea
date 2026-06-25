@@ -12,6 +12,7 @@ let outboundPackets: any[] = createPacketBuffer(10);
 let inboundIdx = 0;
 let outboundIdx = 0;
 let logs: string[] = [];
+let devLlmDisabled = false;
 
 // Expose dynamically for main.ts 
 (window as any).initDevMenu = initDevMenu;
@@ -133,12 +134,29 @@ export function trackNetwork(direction: "IN" | "OUT", data: any) {
 }
 
 export function receivedLLMFeed(data: any) {
-    if (!isDev) return;
+    if (!isDev || !data) return;
     llmFeed = data;
     if (activePanel === "LLM FEED") {
         const el = document.getElementById("dev-llm");
         if (el) {
-            el.innerHTML = `<b>Latency:</b> ${data.latency}ms<br><b>Total Calls:</b> ${data.count}<br><b>Raw JSON Payload:</b><br>${data.payload}<br><b>Tool Calls:</b><br>${data.calls}<br><b>Failed Ops:</b><br>${data.failedOps ? JSON.stringify(data.failedOps) : "[]"}`;
+            const tempPay = data.payload === undefined || data.payload === null ? "" : data.payload;
+            const tempCalls = data.calls === undefined || data.calls === null ? "[]" : data.calls;
+            
+            let formattedPayload = "";
+            try {
+                formattedPayload = typeof tempPay === "string" && tempPay.trim() ? JSON.stringify(JSON.parse(tempPay), null, 2) : JSON.stringify(tempPay, null, 2);
+            } catch (e) {
+                formattedPayload = String(tempPay);
+            }
+
+            let formattedCalls = "";
+            try {
+                formattedCalls = typeof tempCalls === "string" && tempCalls.trim() ? JSON.stringify(JSON.parse(tempCalls), null, 2) : JSON.stringify(tempCalls, null, 2);
+            } catch (e) {
+                formattedCalls = String(tempCalls);
+            }
+
+            el.innerHTML = `<b>Latency:</b> ${data.latency || 0}ms<br><b>Total Calls:</b> ${data.count || 0}<br><b>Raw JSON Payload:</b><br>${formattedPayload}<br><b>Tool Calls:</b><br>${formattedCalls}<br><b>Failed Ops:</b><br>${data.failedOps ? JSON.stringify(data.failedOps, null, 2) : "[]"}`;
         }
     } else if (activePanel === "ZONES") {
         drawZones();
@@ -152,6 +170,7 @@ let droneJitterMapRef: Map<number, any>;
 export function initDevMenu(channel: any, jitterMap: any) {
     if (!isDev) return;
     activeChannel = channel;
+    (window as any).activeChannel = channel;
     droneJitterMapRef = jitterMap;
 
     // Monkeypatch Geckos outbound
@@ -178,7 +197,7 @@ export function initDevMenu(channel: any, jitterMap: any) {
     overlay.id = "dev-overlay";
     overlay.style.cssText = "display:none;position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:999998;pointer-events:auto;color:#0f0;font-family:monospace;padding:10px;flex-direction:column;";
     
-    const tabs = ["GAME CONTROL", "CONSOLE", "LLM FEED", "AI NAV", "PERF", "NETWORK", "ZONES"];
+    const tabs = ["GAME CONTROL", "WEPS", "CONSOLE", "LLM FEED", "AI NAV", "PERF", "NETWORK", "ZONES"];
     const header = document.createElement("div");
     header.style.cssText = "display:flex;gap:10px;margin-bottom:10px;overflow-x:auto;";
     tabs.forEach(t => {
@@ -219,6 +238,7 @@ function toggleDevMenu() {
     if (overlay) overlay.style.display = isMenuOpen ? "flex" : "none";
     if (isMenuOpen) renderPanel();
 }
+(window as any).toggleDevMenu = toggleDevMenu;
 
 function renderPanel() {
     const c = document.getElementById("dev-content");
@@ -244,8 +264,13 @@ function renderPanel() {
                 <button data-class="demolitions" style="padding:5px;">Demolitions</button>
             </div>
             <h3>Manage Entities</h3>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 20px;">
                 <button id="dev-clear-drones" style="padding:5px;">Clear All Drones</button>
+                <button id="dev-spawn-bots" style="padding:5px;">Spawn 3 Test Bots</button>
+            </div>
+            <h3>LLM Commander</h3>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button id="dev-toggle-llm" style="padding:5px;">${devLlmDisabled ? "ENABLE LLM COMMANDER" : "DISABLE LLM COMMANDER"}</button>
             </div>
         `;
         
@@ -258,7 +283,7 @@ function renderPanel() {
                 const dir = new THREE.Vector3(0, 0, -1);
                 dir.applyQuaternion(camera.quaternion);
                 const pos = new THREE.Vector3();
-                pos.copy(camera.position).add(dir.multiplyScalar(20)); // spawn 20 units in front
+                pos.copy(camera.position).add(dir.multiplyScalar(10)); // spawn 10 units in front
                 let spawnY = pos.y;
                 if (spawnY < Number(0.5)) spawnY = Number(0.5); // don't spawn under floor
                 
@@ -281,6 +306,95 @@ function renderPanel() {
             clearBtn.addEventListener('click', () => {
                 if (activeChannel) activeChannel.emit("dev_clear_drones", {});
                 if (droneJitterMapRef) droneJitterMapRef.clear();
+            });
+        }
+
+        const botsBtn = document.getElementById('dev-spawn-bots');
+        if (botsBtn) {
+            botsBtn.addEventListener('click', () => {
+                if (activeChannel) activeChannel.emit("dev_spawn_bots", { count: 3 });
+            });
+        }
+
+        const toggleLlmBtn = document.getElementById('dev-toggle-llm');
+        if (toggleLlmBtn) {
+            toggleLlmBtn.addEventListener('click', () => {
+                devLlmDisabled = !devLlmDisabled;
+                toggleLlmBtn.innerText = devLlmDisabled ? "ENABLE LLM COMMANDER" : "DISABLE LLM COMMANDER";
+                if (activeChannel) activeChannel.emit("dev_toggle_llm", { disabled: devLlmDisabled });
+            });
+        }
+    }
+    else if (activePanel === "WEPS") {
+        const offsets = (window as any).DEV_WEAPON_OFFSETS;
+        if (!offsets) {
+            c.innerHTML = "<div>DEV_WEAPON_OFFSETS not found.</div>";
+            return;
+        }
+
+        const renderSliders = (type: string, data: any) => {
+            let html = `<h3>${type.toUpperCase()}</h3>`;
+            for (const state of ['hip', 'ads', 'muzzle']) {
+                html += `<h4>${state.toUpperCase()}</h4><div style="display:flex; flex-direction:column; gap:5px; margin-bottom:10px;">`;
+                for (const axis of ['x', 'y', 'z']) {
+                    const id = `wep-${type}-${state}-${axis}`;
+                    html += `<label style="display:flex; justify-content:space-between; max-width: 300px;">
+                        <span>${axis.toUpperCase()}: <span id="${id}-val">${data[state][axis].toFixed(3)}</span></span>
+                        <input type="range" id="${id}" min="-2" max="2" step="0.005" value="${data[state][axis]}" style="width:200px;">
+                    </label>`;
+                }
+                html += `</div>`;
+            }
+            return html;
+        };
+
+        c.innerHTML = `
+            <h2>Weapon Offsets</h2>
+            ${renderSliders('rifle', offsets.rifle)}
+            ${renderSliders('pistol', offsets.pistol)}
+            <button id="dev-export-weps" style="margin-top:20px; padding:10px; background:#0f0; color:black; font-weight:bold; border:none; cursor:pointer;">EXPORT JSON</button>
+        `;
+
+        const bindSliders = (type: string, data: any) => {
+            for (const state of ['hip', 'ads', 'muzzle']) {
+                for (const axis of ['x', 'y', 'z']) {
+                    const id = `wep-${type}-${state}-${axis}`;
+                    const input = document.getElementById(id) as HTMLInputElement;
+                    const val = document.getElementById(`${id}-val`);
+                    if (input && val) {
+                        input.addEventListener('input', (e) => {
+                            const v = parseFloat((e.target as HTMLInputElement).value);
+                            val.innerText = v.toFixed(3);
+                            data[state][axis as keyof THREE.Vector3] = v;
+                        });
+                    }
+                }
+            }
+        };
+
+        bindSliders('rifle', offsets.rifle);
+        bindSliders('pistol', offsets.pistol);
+
+        const expBtn = document.getElementById('dev-export-weps');
+        if (expBtn) {
+            expBtn.addEventListener('click', () => {
+                const out = JSON.stringify({
+                    rifle: {
+                        hip: {x: offsets.rifle.hip.x, y: offsets.rifle.hip.y, z: offsets.rifle.hip.z},
+                        ads: {x: offsets.rifle.ads.x, y: offsets.rifle.ads.y, z: offsets.rifle.ads.z},
+                        muzzle: {x: offsets.rifle.muzzle.x, y: offsets.rifle.muzzle.y, z: offsets.rifle.muzzle.z}
+                    },
+                    pistol: {
+                        hip: {x: offsets.pistol.hip.x, y: offsets.pistol.hip.y, z: offsets.pistol.hip.z},
+                        ads: {x: offsets.pistol.ads.x, y: offsets.pistol.ads.y, z: offsets.pistol.ads.z},
+                        muzzle: {x: offsets.pistol.muzzle.x, y: offsets.pistol.muzzle.y, z: offsets.pistol.muzzle.z}
+                    }
+                }, null, 2);
+                navigator.clipboard.writeText(out).then(() => {
+                    const old = expBtn.innerText;
+                    expBtn.innerText = "COPIED TO CLIPBOARD!";
+                    setTimeout(() => expBtn.innerText = old, 1500);
+                });
             });
         }
     }

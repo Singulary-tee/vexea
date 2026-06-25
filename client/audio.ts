@@ -38,7 +38,9 @@ class AudioManager {
             rifle_reload: 'rifle_reload.mp3',
             pistol_reload: 'pistol_reload.mp3',
             pistol_fire: 'pistol_fire.mp3',
-            rifle_fire: 'rifle_fire.mp3'
+            rifle_fire: 'rifle_fire.mp3',
+            hit_confirmed: 'metal_ricochet.mp3',
+            drone_death: 'metal_ricochet.mp3'
         };
 
         this.totalAssets = Object.keys(audioFiles).length;
@@ -135,10 +137,23 @@ class AudioManager {
     }
 
     public playWeaponReload(activeWeapon: number) {
+        this.stop('rifle_reload');
+        this.stop('pistol_reload');
         if (activeWeapon === 1) {
             this.play('rifle_reload');
         } else {
             this.play('pistol_reload');
+        }
+    }
+    
+    public stopWeaponReload() {
+        this.stop('rifle_reload');
+        this.stop('pistol_reload');
+    }
+
+    public stop(key: string) {
+        if (this.sounds[key]) {
+            this.sounds[key].stop();
         }
     }
 

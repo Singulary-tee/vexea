@@ -41,8 +41,8 @@ class MatchManager {
     const room = this.activeRooms.get(roomId);
     if (room) {
       console.log(`[MATCH MANAGER] Shutting down empty Room: ${roomId}`);
-      room.shutdown();
       this.activeRooms.delete(roomId);
+      room.shutdown();
     }
   }
 

@@ -10,6 +10,7 @@ export interface ClientTransport {
   onRaw(callback: (buffer: ArrayBuffer) => void): void;
   emit(event: string, data: unknown): void;
   rawEmit(buffer: ArrayBuffer): void;
+  disconnect(): void;
 }
 
 export function createClientTransport(): ClientTransport {
@@ -111,6 +112,10 @@ class GeckosClientAdapter implements ClientTransport {
             this.channel.raw.emit(buffer);
         }
     }
+
+    disconnect(): void {
+        this.channel?.close();
+    }
 }
 
 class SocketIOClientAdapter implements ClientTransport {
@@ -192,5 +197,9 @@ class SocketIOClientAdapter implements ClientTransport {
             const serializedPayload = { type: 'raw', data: Array.from(new Uint8Array(buffer)) };
             this.socket.emit("raw", serializedPayload);
         }
+    }
+
+    disconnect(): void {
+        this.socket?.disconnect();
     }
 }

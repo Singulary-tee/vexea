@@ -1,24 +1,25 @@
 import * as screenManager from "./screen-manager";
-import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { DS } from "../design-system";
 import { getDevMap, getDefaultMap, MAP_REGISTRY } from "../../shared/maps/map-registry";
-import { hasCachedBlob, getCachedOrFetchUrl, ensureAssetsDownloaded } from "../asset-cache";
+import { hasCachedBlob, getCachedOrFetchUrl, ensureAssetsDownloaded, getAssetUrl } from "../asset-cache";
 import { EXTENDED_SOUNDS, EXTENDED_TEXTURES } from "./splash";
-import { setupAreaCorridors } from "../stage";
 
 let styleInjected = false;
 let activeCardId: string | null = null;
 let currentRightPanelMode: 'DEFAULT' | 'MULTIPLAYER' | 'FACTION' | 'STATISTICS' | 'FEEDBACK' | 'STORE' | 'PROFILE' | 'MAP_EDITOR' = 'DEFAULT';
 let userFaction: string | null = null;
+let registeredUserData: any = null;
+let userSubscriptionUnsubscribe: (() => void) | null = null;
 
-const preloadImages = [
-    '/multiplayer_card.png',
-    '/vibeCo_card.png',
-    '/slopInc_card.png',
-    '/statistics_card.png',
-    '/store_card.png',
-    '/feedback_card.png'
+const cardImages = [
+    'multiplayer_card.png',
+    'vibeCo_card.png',
+    'slopInc_card.png',
+    'statistics_card.png',
+    'store_card.png',
+    'feedback_card.png'
 ];
 
 // Element References
@@ -31,19 +32,42 @@ let profileNameText: HTMLElement;
 
 
 export function initMainMenu() {
-  preloadImages.forEach(src => {
+  cardImages.forEach(name => {
     const img = new Image();
-    img.src = src;
+    img.src = getAssetUrl(name);
   });
 
   const auth = getAuth();
-  if (auth.currentUser && !auth.currentUser.isAnonymous) {
-      const db = getFirestore();
-      getDoc(doc(db, 'users', auth.currentUser.uid)).then(d => {
-          if (d.exists()) {
-              userFaction = d.data()?.faction || null;
-          }
-      }).catch(() => {});
+  if (auth.currentUser) {
+    const db = getFirestore();
+    const uid = auth.currentUser.uid;
+    
+    if (userSubscriptionUnsubscribe) {
+      userSubscriptionUnsubscribe();
+    }
+    
+    userSubscriptionUnsubscribe = onSnapshot(doc(db, 'users', uid), (snapshot) => {
+      if (snapshot.exists()) {
+        registeredUserData = snapshot.data();
+        userFaction = registeredUserData.faction || null;
+        
+        const overlay = document.getElementById('vex-enlistment-overlay');
+        if (overlay) overlay.remove();
+        
+        checkDailyRefresh(registeredUserData, doc(db, 'users', uid));
+        enableLeftColumnMenu(true);
+      } else {
+        registeredUserData = null;
+        userFaction = null;
+        enableLeftColumnMenu(false);
+        showEnlistmentOverlay(db, auth);
+      }
+      
+      updateProfileBox();
+      renderRightPanel();
+    }, (err) => {
+      console.warn("User state subscription failed:", err);
+    });
   }
 
   let el = document.getElementById('main-menu-screen');
@@ -81,12 +105,12 @@ export function initMainMenu() {
         background-position: center !important;
         background-repeat: no-repeat !important;
       }
-      .mm-card[data-id="MULTIPLAYER"].mm-card-expanded { background-image: url('/multiplayer_card.png') !important; }
-      .mm-card[data-id="STATISTICS"].mm-card-expanded { background-image: url('/statistics_card.png') !important; }
-      .mm-card[data-id="STORE"].mm-card-expanded { background-image: url('/store_card.png') !important; }
-      .mm-card[data-id="FEEDBACK"].mm-card-expanded { background-image: url('/feedback_card.png') !important; }
-      .mm-card.faction-vibe.mm-card-expanded { background-image: url('/vibeCo_card.png') !important; }
-      .mm-card.faction-slop.mm-card-expanded { background-image: url('/slopInc_card.png') !important; }
+      .mm-card[data-id="MULTIPLAYER"].mm-card-expanded { background-image: url('${getAssetUrl("multiplayer_card.png")}') !important; }
+      .mm-card[data-id="STATISTICS"].mm-card-expanded { background-image: url('${getAssetUrl("statistics_card.png")}') !important; }
+      .mm-card[data-id="STORE"].mm-card-expanded { background-image: url('${getAssetUrl("store_card.png")}') !important; }
+      .mm-card[data-id="FEEDBACK"].mm-card-expanded { background-image: url('${getAssetUrl("feedback_card.png")}') !important; }
+      .mm-card.faction-vibe.mm-card-expanded { background-image: url('${getAssetUrl("vibeCo_card.png")}') !important; }
+      .mm-card.faction-slop.mm-card-expanded { background-image: url('${getAssetUrl("slopInc_card.png")}') !important; }
       .mm-card-dimmed {
         opacity: 0.3 !important;
       }
@@ -121,12 +145,21 @@ export function initMainMenu() {
       }
       #settings-sidebar::-webkit-scrollbar { display:none; }
       .mm-left-col { overflow-y: auto; overflow-x: hidden; }
+      @media (max-width: 768px) {
          .mm-left-col { width: 320px; }
          .mm-bot-banner { width: 50vw; }
          .mm-wordmark { font-size: 32px !important; }
          .mm-profile-rank { display: none !important; }
          .mm-glass { backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important; }
          .mm-card-text { font-size: clamp(14px, 2vw, 18px) !important; }
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.8; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.05); }
+      }
+      @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
       }
     `;
     document.head.appendChild(style);
@@ -138,7 +171,7 @@ export function initMainMenu() {
   Object.assign(el.style, {
     position: 'fixed', inset: '0', zIndex: '900', display: 'none',
     backgroundColor: '#000',
-    backgroundImage: "url('/splash_screen.png')",
+    backgroundImage: `url('${getAssetUrl("splash_screen.png")}')`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     opacity: '0', transition: 'opacity 500ms ease-out',
@@ -359,7 +392,7 @@ export function initMainMenu() {
     });
     (devBtn.firstChild as HTMLElement).style.color = '#FF0064';
     devBtn.addEventListener('click', () => {
-       const mapId = getDevMap().id;
+       const mapId = getDefaultMap().id;
        ensureAssetsDownloaded(() => {
            try {
                const docEl = document.documentElement as any;
@@ -370,7 +403,7 @@ export function initMainMenu() {
            } catch (err) {}
 
            // Direct dispatch bypassing screens
-           window.dispatchEvent(new CustomEvent('start-match', { detail: { mode: 'STANDARD', class: 'ASSAULT', solo: true, map: getDevMap() }}));
+           window.dispatchEvent(new CustomEvent('start-match', { detail: { mode: 'STANDARD', class: 'ASSAULT', solo: true, map: getDefaultMap() }}));
            screenManager.showGame();
        }, mapId);
     });
@@ -383,6 +416,11 @@ export function initMainMenu() {
       borderLeft: '3px solid #FF0064'
     });
     (mapEditorBtn.firstChild as HTMLElement).style.color = '#FF0064';
+    mapEditorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      screenManager.showDevMapEditor();
+    }, true);
     leftColumn.appendChild(mapEditorBtn);
   }
 
@@ -425,7 +463,7 @@ export function initMainMenu() {
   const botImg = document.createElement('div');
   Object.assign(botImg.style, {
     width: 'clamp(32px, 6vh, 48px)', height: 'clamp(32px, 6vh, 48px)', border: DS.glass.borderAccent, background: '#1A1208',
-    backgroundImage: "url('/splash_screen.png')", backgroundSize: 'cover', backgroundPosition: 'center'
+    backgroundImage: `url('${getAssetUrl("splash_screen.png")}')`, backgroundSize: 'cover', backgroundPosition: 'center'
   });
   botBanner.appendChild(botImg);
 
@@ -452,17 +490,36 @@ export function initMainMenu() {
 }
 
 function updateProfileBox() {
-  const auth = getAuth();
-  if (auth.currentUser && !auth.currentUser.isAnonymous) {
-    profileNameText.textContent = `${(auth.currentUser.displayName || 'PLAYER').toUpperCase()}`;
-    profileRankBadge.textContent = '1'; // Placeholder for DB rank
+  if (registeredUserData) {
+    profileNameText.textContent = `${registeredUserData.displayName.toUpperCase()}`;
+    profileRankBadge.textContent = `${registeredUserData.battlePass || 1}`;
+    profileRankBadge.style.display = 'block';
+    profileNameText.style.color = '#E8E8E8';
+
+    let crDisplay = document.getElementById('profile-cr-display');
+    if (!crDisplay) {
+      crDisplay = document.createElement('div');
+      crDisplay.id = 'profile-cr-display';
+      Object.assign(crDisplay.style, {
+        fontFamily: DS.typography.fontFamily,
+        fontSize: 'clamp(9px, 1.25vh, 12px)',
+        color: DS.colors.accent,
+        letterSpacing: '1.2px',
+        marginTop: '2px',
+        fontWeight: 'bold'
+      });
+      profileNameText.parentNode?.insertBefore(crDisplay, profileNameText.nextSibling);
+    }
+    crDisplay.textContent = `CR: ${registeredUserData.credits !== undefined ? registeredUserData.credits : 100} · EN: ${registeredUserData.energy !== undefined ? registeredUserData.energy : 100}`;
   } else {
-    // Generate transient ID or use generic guest
     const guestId = localStorage.getItem('guestId') || Math.random().toString(36).substring(2, 8).toUpperCase();
     localStorage.setItem('guestId', guestId);
     profileNameText.textContent = `GUEST — [${guestId}]`;
     profileRankBadge.textContent = '—';
     profileNameText.style.color = '#888888';
+
+    const crDisplay = document.getElementById('profile-cr-display');
+    if (crDisplay) crDisplay.remove();
   }
 }
 
@@ -632,6 +689,10 @@ function renderRightPanel() {
            cursor: 'pointer'
          });
          btn.addEventListener('click', () => { 
+             if (registeredUserData && (registeredUserData.energy || 0) < 10) {
+                 showMenuNotification("DEPLOYMENT REJECTED: INSUFFICIENT ENERGY. REFILL DEV CREDITS IN STATISTICS.", "warning");
+                 return;
+             }
              ensureAssetsDownloaded(() => screenManager.showLobby(), getDefaultMap().id); 
          });
          c.appendChild(btn);
@@ -677,7 +738,14 @@ function renderRightPanel() {
     else if (currentRightPanelMode === 'STATISTICS') {
        rightPanelContent.appendChild(createPanelBlock('LIFETIME STATS', c => {
          const stats = [
-           { l: 'MATCHES', v: '—' }, { l: 'WINS', v: '—' }, { l: 'WIN RATE', v: '—' }, { l: 'ELIMINATIONS', v: '—' }, { l: 'BEST SCORE', v: '—' }
+           { l: 'MATCHES', v: registeredUserData ? String(registeredUserData.totalMatches || 0) : '—' },
+           { l: 'WINS', v: registeredUserData ? String(registeredUserData.totalWins || 0) : '—' },
+           { l: 'WIN RATE', v: registeredUserData ? `${registeredUserData.winRate || 0}%` : '—' },
+           { l: 'ELIMINATIONS', v: registeredUserData ? String(registeredUserData.totalDroneEliminations || 0) : '—' },
+           { l: 'DEATHS', v: registeredUserData ? String(registeredUserData.totalDeaths || 0) : '—' },
+           { l: 'OBJECTIVE TIME', v: registeredUserData ? `${registeredUserData.totalObjectiveTimeHeld || 0}s` : '—' },
+           { l: 'REVIVES', v: registeredUserData ? String(registeredUserData.totalRevivesPerformed || 0) : '—' },
+           { l: 'BEST SCORE', v: registeredUserData ? String(registeredUserData.highestIndividualScore || 0) : '—' }
          ];
          stats.forEach(s => {
            const row = document.createElement('div');
@@ -688,6 +756,72 @@ function renderRightPanel() {
            Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', fontWeight: DS.typography.weightBold });
            row.appendChild(lbl); row.appendChild(val); c.appendChild(row);
          });
+
+         // DEV DIAGNOSTICS & TESTING PANEL
+         const devBlock = document.createElement('div');
+         Object.assign(devBlock.style, {
+           marginTop: '24px',
+           borderTop: '1px dashed rgba(255,255,255,0.1)',
+           paddingTop: '16px',
+           fontFamily: DS.typography.fontFamily
+         });
+         
+         const devTitle = document.createElement('div');
+         devTitle.textContent = 'DEV DIAGNOSTICS';
+         Object.assign(devTitle.style, {
+           fontSize: '11px',
+           letterSpacing: '3px',
+           color: '#FF0064',
+           marginBottom: '8px'
+         });
+         devBlock.appendChild(devTitle);
+         
+         const devNote = document.createElement('div');
+         devNote.textContent = 'NOTE: Standard 100-credit allotment is arbitrary and subject to game balance review.';
+         Object.assign(devNote.style, {
+           fontSize: '10px',
+           color: '#888888',
+           marginBottom: '12px',
+           textTransform: 'none'
+         });
+         devBlock.appendChild(devNote);
+         
+         const refillBtn = document.createElement('button');
+         refillBtn.textContent = 'REFILL CREDITS & ENERGY [DEV SERVER AUTH]';
+         Object.assign(refillBtn.style, {
+           width: '100%',
+           padding: '8px',
+           background: 'rgba(255,0,100,0.15)',
+           border: '1px solid rgba(255,0,100,0.4)',
+           color: '#FF0064',
+           fontSize: '11px',
+           fontWeight: 'bold',
+           letterSpacing: '2px',
+           cursor: 'pointer'
+         });
+         refillBtn.onclick = () => {
+           const auth = getAuth();
+           import('../main').then(({ getSocketChannel }) => {
+             const chan = getSocketChannel();
+             if (chan && registeredUserData) {
+               chan.emit('refill_credits', { uid: auth.currentUser?.uid });
+               showMenuNotification("CREDITS REFILL REQUEST EMITTED.");
+             } else {
+               showMenuNotification("CHANNEL INACTIVE. OFFLINE FALLBACK EMULATING REFILL.", "warning");
+               const uid = auth.currentUser?.uid;
+               if (uid) {
+                 import('firebase/firestore').then(({ updateDoc }) => {
+                   updateDoc(doc(getFirestore(), 'users', uid), {
+                     credits: 1000,
+                     energy: 1000
+                   });
+                 });
+               }
+             }
+           });
+         };
+         devBlock.appendChild(refillBtn);
+         c.appendChild(devBlock);
        }));
        rightPanelContent.appendChild(createPanelBlock('LAST MATCH', c => {
          const lbl = document.createElement('div'); lbl.textContent = 'NO DATA AVAILABLE';
@@ -777,5 +911,369 @@ function renderRightPanel() {
 
     rightPanelContent.style.opacity = '1';
   }, 100);
+}
+
+function checkDailyRefresh(userData: any, userDocRef: any) {
+  if (!userData || !userData.dailyRefreshedAt) return;
+  
+  let refreshedDate: Date;
+  if (userData.dailyRefreshedAt.toDate) {
+    refreshedDate = userData.dailyRefreshedAt.toDate();
+  } else if (userData.dailyRefreshedAt.seconds) {
+    refreshedDate = new Date(userData.dailyRefreshedAt.seconds * 1000);
+  } else {
+    refreshedDate = new Date(userData.dailyRefreshedAt);
+  }
+  
+  const now = new Date();
+  
+  const refreshedYear = refreshedDate.getFullYear();
+  const refreshedMonth = refreshedDate.getMonth();
+  const refreshedDay = refreshedDate.getDate();
+  
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentDay = now.getDate();
+  
+  const isDifferentDay = (currentYear > refreshedYear) ||
+                         (currentYear === refreshedYear && currentMonth > refreshedMonth) ||
+                         (currentYear === refreshedYear && currentMonth === refreshedMonth && currentDay > refreshedDay);
+                         
+  if (isDifferentDay) {
+    import('firebase/firestore').then(async ({ updateDoc, serverTimestamp }) => {
+      try {
+        await updateDoc(userDocRef, {
+          credits: (userData.credits || 0) + 100,
+          energy: (userData.energy || 0) + 100,
+          dailyRefreshedAt: serverTimestamp()
+        });
+        showMenuNotification("DAILY REFRESH: +100 Credits & +100 Energy awarded!");
+      } catch (err) {
+        console.warn("Daily refresh update failed:", err);
+      }
+    });
+  }
+}
+
+function showMenuNotification(msg: string, type: 'info' | 'warning' = 'info') {
+  const container = document.getElementById('vex-menu-notification-container') || document.createElement('div');
+  if (!container.parentElement) {
+    container.id = 'vex-menu-notification-container';
+    Object.assign(container.style, {
+      position: 'absolute',
+      top: 'clamp(72px, 10vh, 100px)',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: '4500',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      pointerEvents: 'none'
+    });
+    document.body.appendChild(container);
+  }
+  
+  const toast = document.createElement('div');
+  toast.className = 'mm-glass';
+  Object.assign(toast.style, {
+    padding: '8px 16px',
+    fontFamily: DS.typography.fontFamily,
+    fontSize: '12px',
+    letterSpacing: '2px',
+    color: type === 'warning' ? '#FF5555' : DS.colors.accent,
+    borderLeft: `3px solid ${type === 'warning' ? '#FF5555' : DS.colors.accent}`,
+    boxShadow: DS.glass.glowOuter,
+    pointerEvents: 'auto',
+    opacity: '0',
+    transition: 'all 300ms cubic-bezier(0.4,0,0.2,1)',
+    transform: 'translateY(-20px)'
+  });
+  toast.textContent = msg.toUpperCase();
+  container.appendChild(toast);
+  
+  void toast.offsetWidth;
+  toast.style.opacity = '1';
+  toast.style.transform = 'translateY(0)';
+  
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-20px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+function enableLeftColumnMenu(enabled: boolean) {
+  if (!leftColumn) return;
+  Array.from(leftColumn.children).forEach(child => {
+    const c = child as HTMLElement;
+    if (enabled) {
+      c.style.pointerEvents = 'auto';
+      c.style.opacity = c.classList.contains('mm-card-dimmed') ? '0.3' : '1';
+    } else {
+      c.style.pointerEvents = 'none';
+      c.style.opacity = '0.15';
+    }
+  });
+}
+
+function showEnlistmentOverlay(db: any, auth: any) {
+  let overlay = document.getElementById('vex-enlistment-overlay');
+  if (overlay) return;
+  
+  overlay = document.createElement('div');
+  overlay.id = 'vex-enlistment-overlay';
+  Object.assign(overlay.style, {
+    position: 'absolute',
+    inset: '0',
+    zIndex: '4000',
+    background: 'rgba(5, 5, 5, 0.95)',
+    backdropFilter: 'blur(12px)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '24px',
+    animation: 'fade-in 400ms ease-out'
+  });
+  
+  const widthContainer = document.createElement('div');
+  Object.assign(widthContainer.style, {
+    width: '100%',
+    maxWidth: '520px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px'
+  });
+  
+  const branding = document.createElement('div');
+  Object.assign(branding.style, {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    marginBottom: '8px'
+  });
+  const logoStar = document.createElement('div');
+  logoStar.textContent = '✧';
+  Object.assign(logoStar.style, {
+    fontSize: '44px',
+    color: DS.colors.accent,
+    lineHeight: '1',
+    animation: 'pulse 2s infinite ease-in-out'
+  });
+  branding.appendChild(logoStar);
+  
+  const word = document.createElement('div');
+  word.textContent = 'VEXEA SECURE PORTAL';
+  Object.assign(word.style, {
+    fontFamily: DS.typography.fontFamily,
+    fontSize: '24px',
+    fontWeight: 'bold',
+    letterSpacing: '6px',
+    color: '#E8E8E8',
+    marginTop: '8px'
+  });
+  branding.appendChild(word);
+  
+  const sub = document.createElement('div');
+  sub.textContent = 'RESTRICTED SYSTEM ACCESS — REGISTER CODENAME';
+  Object.assign(sub.style, {
+    fontFamily: DS.typography.fontFamily,
+    fontSize: '11px',
+    letterSpacing: '3px',
+    color: '#888888',
+    marginTop: '4px'
+  });
+  branding.appendChild(sub);
+  widthContainer.appendChild(branding);
+  
+  const inputGroup = document.createElement('div');
+  Object.assign(inputGroup.style, { display: 'flex', flexDirection: 'column', gap: '6px' });
+  
+  const inputLabel = document.createElement('div');
+  inputLabel.textContent = 'CONTRACTOR CODENAME';
+  Object.assign(inputLabel.style, {
+    fontFamily: DS.typography.fontFamily,
+    fontSize: '11px',
+    letterSpacing: '3px',
+    color: DS.colors.accent
+  });
+  inputGroup.appendChild(inputLabel);
+  
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'ENTER CODENAME [3-16 ALPHANUMERIC]';
+  Object.assign(input.style, {
+    width: '100%',
+    padding: '12px',
+    background: 'rgba(0, 0, 0, 0.4)',
+    border: DS.glass.border,
+    color: '#E8E8E8',
+    fontFamily: DS.typography.fontFamily,
+    fontSize: '14px',
+    letterSpacing: '2px',
+    outline: 'none',
+    textAlign: 'center'
+  });
+  input.onfocus = () => { input.style.border = DS.glass.borderAccentFull; };
+  input.onblur = () => { input.style.border = DS.glass.border; };
+  inputGroup.appendChild(input);
+  widthContainer.appendChild(inputGroup);
+  
+  const factionLabel = document.createElement('div');
+  factionLabel.textContent = 'FACTION AFFILIATION [COSMETIC ONLY]';
+  Object.assign(factionLabel.style, {
+    fontFamily: DS.typography.fontFamily,
+    fontSize: '11px',
+    letterSpacing: '3px',
+    color: '#888888',
+    marginBottom: '-10px'
+  });
+  widthContainer.appendChild(factionLabel);
+  
+  const factionsGrid = document.createElement('div');
+  Object.assign(factionsGrid.style, {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '12px'
+  });
+  
+  let selectedFaction: string | null = null;
+  
+  const vibeCard = document.createElement('div');
+  vibeCard.className = 'mm-glass';
+  Object.assign(vibeCard.style, {
+    padding: '16px',
+    cursor: 'pointer',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    transition: 'all 250ms ease'
+  });
+  vibeCard.innerHTML = `
+    <div style="font-family:${DS.typography.fontFamily}; font-size:16px; font-weight:bold; letter-spacing:2px; color:#A855F7;">VIBE CO.</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:9px; letter-spacing:1px; color:#c084fc; margin-top:4px;">SILENT & PRECISE</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:10px; color:#888888; text-transform:none; margin-top:8px; line-height:1.4;">Corporate infiltrators specialized in speed, stealth, and facility breaches.</div>
+  `;
+  vibeCard.onclick = () => {
+    selectedFaction = 'VIBE CO.';
+    vibeCard.style.border = '1px solid #A855F7';
+    vibeCard.style.boxShadow = '0 0 15px rgba(168,85,247,0.2)';
+    slopCard.style.border = DS.glass.border;
+    slopCard.style.boxShadow = 'none';
+  };
+  factionsGrid.appendChild(vibeCard);
+  
+  const slopCard = document.createElement('div');
+  slopCard.className = 'mm-glass';
+  Object.assign(slopCard.style, {
+    padding: '16px',
+    cursor: 'pointer',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    transition: 'all 250ms ease'
+  });
+  slopCard.innerHTML = `
+    <div style="font-family:${DS.typography.fontFamily}; font-size:16px; font-weight:bold; letter-spacing:2px; color:#F97316;">SLOP INC.</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:9px; letter-spacing:1px; color:#fdba74; margin-top:4px;">BRUTALIST & UTILITY</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:10px; color:#888888; text-transform:none; margin-top:8px; line-height:1.4;">Heavy sweeper division specialized in maximum attrition and hardware pacification.</div>
+  `;
+  slopCard.onclick = () => {
+    selectedFaction = 'SLOP INC.';
+    slopCard.style.border = '1px solid #F97316';
+    slopCard.style.boxShadow = '0 0 15px rgba(249,115,22,0.2)';
+    vibeCard.style.border = DS.glass.border;
+    vibeCard.style.boxShadow = 'none';
+  };
+  factionsGrid.appendChild(slopCard);
+  widthContainer.appendChild(factionsGrid);
+  
+  const errText = document.createElement('div');
+  Object.assign(errText.style, {
+    fontFamily: DS.typography.fontFamily,
+    fontSize: '11px',
+    letterSpacing: '1px',
+    color: '#FF5555',
+    textAlign: 'center',
+    height: '14px',
+    margin: '-4px 0'
+  });
+  widthContainer.appendChild(errText);
+  
+  const enlistBtn = document.createElement('button');
+  enlistBtn.textContent = 'ENLIST CONTRACTOR';
+  Object.assign(enlistBtn.style, {
+    width: '100%',
+    padding: '12px',
+    background: DS.colors.accent,
+    color: '#0A0A0A',
+    fontFamily: DS.typography.fontFamily,
+    fontSize: '16px',
+    fontWeight: 'bold',
+    letterSpacing: '3px',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'all 200ms ease'
+  });
+  
+  enlistBtn.onclick = async () => {
+    const codename = input.value.trim().toUpperCase();
+    if (codename.length < 3 || codename.length > 16) {
+      errText.textContent = 'ERROR: CODENAME MUST BE 3 - 16 CHARACTERS';
+      return;
+    }
+    if (!/^[A-Z0-9]+$/.test(codename)) {
+      errText.textContent = 'ERROR: ONLY ALPHANUMERIC CHARACTERS ALLOWED';
+      return;
+    }
+    if (!selectedFaction) {
+      errText.textContent = 'ERROR: FACTION AFFILIATION REQUIRED';
+      return;
+    }
+    
+    enlistBtn.disabled = true;
+    enlistBtn.textContent = 'PROCESSING ENLISTMENT...';
+    errText.textContent = '';
+    
+    try {
+      await setDoc(doc(db, 'users', auth.currentUser.uid), {
+        displayName: codename,
+        faction: selectedFaction,
+        credits: 100,
+        energy: 100,
+        createdAt: serverTimestamp(),
+        dailyRefreshedAt: serverTimestamp(),
+        
+        totalMatches: 0,
+        totalWins: 0,
+        totalDroneEliminations: 0,
+        totalDeaths: 0,
+        totalObjectiveTimeHeld: 0,
+        totalRevivesPerformed: 0,
+        highestIndividualScore: 0,
+        winRate: 0,
+        score: 0,
+        kills: 0,
+        battlePass: 1
+      });
+      showMenuNotification("ENLISTMENT COMPLETE. WELCOME TO VEXEA, CONTRACTOR.");
+    } catch (e: any) {
+      console.warn("Enlistment failed:", e);
+      enlistBtn.disabled = false;
+      enlistBtn.textContent = 'ENLIST CONTRACTOR';
+      errText.textContent = 'ERROR: TRANSACTION REJECTED BY SYSTEM';
+    }
+  };
+  widthContainer.appendChild(enlistBtn);
+  widthContainer.appendChild(errText);
+  overlay.appendChild(widthContainer);
+  
+  const menuScreen = document.getElementById('main-menu-screen');
+  if (menuScreen) {
+    menuScreen.appendChild(overlay);
+  }
 }
 

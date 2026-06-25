@@ -110,6 +110,16 @@ export const HUD_HTML = `
   border-radius: 8px !important;
   overflow: hidden !important;
 }
+#minimap-container.fullscreen-minimap {
+  top: 5vh !important;
+  left: 5vw !important;
+  right: auto !important;
+  width: 90vw !important;
+  height: 90vh !important;
+  z-index: 10000 !important;
+  background: rgba(0, 0, 0, 0.95) !important;
+  border-radius: 4px !important;
+}
 #minimap-canvas {
   width: 100% !important;
   height: 100% !important;
@@ -963,6 +973,62 @@ m-65 -309 c46 -5 86 -12 89 -14 4 -5 -23 -81 -37 -103 -7 -9 -31 -4 -105 25
     <div class="cross-line" style="top: 0; left: -1px; width: 2px; height: 0.6vw; transform: translateY(0.3vw);"></div>
     <div class="cross-line" style="left: -0.6vw; top: -1px; width: 0.6vw; height: 2px; transform: translateX(-0.3vw);"></div>
     <div class="cross-line" style="left: 0; top: -1px; width: 0.6vw; height: 2px; transform: translateX(0.3vw);"></div>
+  </div>
+
+  <!-- POST MATCH SUMMARY SCREEN -->
+  <div id="post-match-screen" style="display: none; position: absolute; inset: 0; z-index: 2000; background: rgba(5, 5, 5, 0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); flex-direction: column; align-items: center; justify-content: center; color: white; padding: 24px;">
+    <div style="width: 100%; max-width: 640px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(10, 10, 10, 0.85); box-shadow: 0 0 30px rgba(0,0,0,0.8); padding: 32px; display: flex; flex-direction: column; gap: 24px;">
+      
+      <!-- TITLE & STATUS -->
+      <div style="text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 16px;">
+        <div id="summary-victory-status" style="font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #C8882A;">OPERATION COMPLETE</div>
+        <div style="font-size: 11px; letter-spacing: 3px; color: #888888; margin-top: 4px;">CONTRACT DIVISION SYSTEM ENGAGEMENT SUMMARY</div>
+      </div>
+
+      <!-- PERSONAL SUMMARY GRID -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 10px; letter-spacing: 2px; color: #888888;">CONTRACTOR SCORE</div>
+          <div id="summary-score" style="font-size: 36px; font-weight: bold; color: white;">0</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; justify-content: center; align-items: flex-end; text-align: right;">
+          <div style="font-size: 10px; letter-spacing: 2px; color: #888888;">BATTLEPASS TIER</div>
+          <div style="font-size: 18px; font-weight: bold; color: #C8882A; display: flex; align-items: center; gap: 6px;">
+            TIER <span id="summary-bp-tier">1</span> <span style="font-size: 12px; color: #4ade80;">(+20% XP)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PERFORMANCE METRICS STATS -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 11px; letter-spacing: 3px; color: #C8882A; font-weight: bold;">PERFORMANCE ASSESSMENT</div>
+        
+        <div id="summary-stats-container" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Dynamically filled stats rows -->
+        </div>
+      </div>
+
+      <!-- REWARDS GAINED (CREDITS, XP, PASS) -->
+      <div style="background: rgba(200, 136, 42, 0.05); border: 1px solid rgba(200, 136, 42, 0.15); padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 10px; letter-spacing: 2px; color: #C8882A; font-weight: bold;">EARNED CREDITS & STAMINA TARIFF</div>
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span style="color: #888888;">MATCH COMPLETION ALLOTMENT</span>
+          <span style="color: #4ade80; font-weight: bold;">+25 CR</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span style="color: #888888;">OPERATION ENVELOPE TAX (ENERGY)</span>
+          <span style="color: #f87171; font-weight: bold;">-10 EN</span>
+        </div>
+      </div>
+
+      <!-- DISPATCH BUTTON -->
+      <div>
+        <button id="main-menu-btn" style="width: 100%; padding: 14px; background: #C8882A; border: none; color: #0A0A0A; font-family: inherit; font-size: 16px; font-weight: bold; letter-spacing: 3px; cursor: pointer; transition: all 200ms ease;">
+          RETURN TO COMMAND PORTAL
+        </button>
+      </div>
+
+    </div>
   </div>
 
 </div>

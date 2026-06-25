@@ -43,6 +43,7 @@ export async function orchestrateMatchLoad(mapEntry: MapRegistryEntry, channel: 
 }
 
 async function waitForServerReady(channel: any): Promise<void> {
+  if ((window as any)._serverMatchReady) return Promise.resolve();
   return new Promise((resolve) => {
     const handleMatchReady = () => {
       resolve();

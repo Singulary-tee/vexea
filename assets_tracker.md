@@ -13,7 +13,7 @@ The following assets have been completely cleaned out of the direct workspace fi
 | `StreetLightPoles.bin` | Model | Root Directory | `Asset` Release Package |
 | `animated_drone.glb` | Model | Root Directory | `Asset` Release Package |
 | `animated_recon_fixed-wing.glb` | Model | Root Directory | `Asset` Release Package |
-| `base_basic_pbr.glb` | Model | Root Directory | `Asset` Release Package |
+| `grenade.glb` | Model | Root Directory (Grenade Prop) | `Asset` Release Package |
 | `bpre_rifleman.glb` | Model | Root Directory | `Asset` Release Package |
 | `concrete_block_low_poly.glb` | Model | Root Directory | `Asset` Release Package |
 | `concrete_fence_low-poly.glb` | Model | Root Directory | `Asset` Release Package |

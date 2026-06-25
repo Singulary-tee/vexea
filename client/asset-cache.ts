@@ -156,7 +156,7 @@ export async function populateBlobUrlMap(): Promise<void> {
  * Static lists of required files for maps
  */
 export const MAP_1_ASSETS = [
-  "base_basic_pbr.glb",
+  "grenade.glb",
   "bpre_rifleman.glb",
   "concrete_fence_low-poly.glb",
   "animated_drone.glb",
@@ -210,19 +210,20 @@ export const REQUIRED_SOUNDS = [
   "rifle_fire.mp3"
 ];
 
-export function getRequiredFilesForMap(mapId: string): { name: string; cat: "Asset" | "Sound" }[] {
+export function getRequiredFilesForMap(mapId: string): { name: string; cat: "Asset" | "Sound" | "Image" }[] {
   if (mapId === 'map_1_facility') {
     return [
       ...MAP_1_ASSETS.map(name => ({ name, cat: "Asset" as const })),
-      ...REQUIRED_SOUNDS.map(name => ({ name, cat: "Sound" as const }))
+      ...REQUIRED_SOUNDS.map(name => ({ name, cat: "Sound" as const })),
+      { name: "Surface_Impact.png", cat: "Image" as const }
     ];
   }
   return []; // Dev maps do not require external downloads
 }
 
-export async function getMissingFilesForMap(mapId: string): Promise<{ name: string; cat: "Asset" | "Sound" }[]> {
+export async function getMissingFilesForMap(mapId: string): Promise<{ name: string; cat: "Asset" | "Sound" | "Image" }[]> {
   const reqs = getRequiredFilesForMap(mapId);
-  const missing: { name: string; cat: "Asset" | "Sound" }[] = [];
+  const missing: { name: string; cat: "Asset" | "Sound" | "Image" }[] = [];
   for (const item of reqs) {
     const hasCached = await hasCachedBlob(item.name);
     if (!hasCached) {
@@ -261,7 +262,7 @@ export async function downloadMapAssets(
  */
 export async function getCachedOrFetchUrl(
   filename: string,
-  category: "Asset" | "Sound" | "Video",
+  category: "Asset" | "Sound" | "Video" | "Image",
   onProgress?: (progress: number) => void
 ): Promise<string> {
   let localPath = filename;
@@ -294,6 +295,8 @@ export async function getCachedOrFetchUrl(
         ? "https://github.com/Singulary-tee/vexea/releases/download/Asset"
         : category === "Video"
         ? "https://github.com/Singulary-tee/vexea/releases/download/Video"
+        : category === "Image"
+        ? "https://github.com/Singulary-tee/vexea/releases/download/Images"
         : "https://github.com/Singulary-tee/vexea/releases/download/Sound";
 
     const downloadUrl = `${baseUrl}/${baseName}`;
@@ -335,7 +338,14 @@ export async function getCachedOrFetchUrl(
       position += chunk.length;
     }
 
-    const mime = category === "Sound" ? "audio/mp3" : category === "Video" ? "video/mp4" : "application/octet-stream";
+    const mime =
+      category === "Sound"
+        ? "audio/mp3"
+        : category === "Video"
+        ? "video/mp4"
+        : category === "Image"
+        ? "image/png"
+        : "application/octet-stream";
     const blob = new Blob([fullBuffer], { type: mime });
 
     // Cache it asynchronously
@@ -350,16 +360,22 @@ export async function getCachedOrFetchUrl(
   }
 }
 
+/**
+ * Returns the cached local blob URL if present in blobUrlMap, falling back to "/" paths.
+ */
+export function getAssetUrl(filename: string): string {
+  const base = filename.substring(filename.lastIndexOf("/") + 1);
+  if (blobUrlMap.has(base)) {
+    return blobUrlMap.get(base)!;
+  }
+  return "/" + base;
+}
+
 export async function ensureAssetsDownloaded(onComplete: () => void, mapId: string) {
   const missingAssets = await getMissingFilesForMap(mapId);
 
   if (missingAssets.length === 0) {
     await populateBlobUrlMap();
-    if (!(window as any).__STAGE_SETUP_DONE__) {
-      const stageMod = await import("./stage");
-      await stageMod.setupAreaCorridors(mapId);
-      (window as any).__STAGE_SETUP_DONE__ = true;
-    }
     onComplete();
     return;
   }
@@ -446,12 +462,6 @@ export async function ensureAssetsDownloaded(onComplete: () => void, mapId: stri
     await Promise.all(Array(workerCount).fill(0).map(processQueue));
     await populateBlobUrlMap();
     
-    if (!(window as any).__STAGE_SETUP_DONE__) {
-      const stageMod = await import("./stage");
-      await stageMod.setupAreaCorridors(mapId);
-      (window as any).__STAGE_SETUP_DONE__ = true;
-    }
-
     progressText.textContent = "VEXEA SYSTEM READY";
     setTimeout(() => {
       document.body.removeChild(modal);

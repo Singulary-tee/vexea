@@ -1,3 +1,5 @@
+import { getAssetUrl } from "./asset-cache";
+
 export const initUIEditor = () => {
     const settingsModal = document.getElementById("settings-modal");
     const hudContainer = document.getElementById("hud-container");
@@ -92,7 +94,7 @@ export const initUIEditor = () => {
     bgImage.style.pointerEvents = "none";
     // Load from settings or fallback
     const s = (window as any).vexeaSettings || {};
-    const refImg = s.referenceImage || "/file_00000000cdd071f48495d22753c89fa1.png";
+    const refImg = s.referenceImage || getAssetUrl("file_00000000cdd071f48495d22753c89fa1.png");
     bgImage.style.backgroundImage = `url('${refImg}')`;
     hudContainer.prepend(bgImage);
 

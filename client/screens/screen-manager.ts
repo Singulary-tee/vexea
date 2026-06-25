@@ -1,7 +1,7 @@
 import { DS } from "../design-system";
 import { audioManager } from "../audio";
 
-const screens = ['splash-screen', 'main-menu-screen', 'lobby-screen'];
+const screens = ['splash-screen', 'main-menu-screen', 'lobby-screen', 'dev-map-editor-screen'];
 let transitionTimers: number[] = [];
 
 export function hideAll() {
@@ -55,6 +55,13 @@ export function showMainMenu() {
 
 export function showLobby() {
   showScreen('lobby-screen', 500, false);
+}
+
+export function showDevMapEditor() {
+  showScreen('dev-map-editor-screen', 500, false);
+}
+if (typeof window !== 'undefined') {
+  (window as any).showDevMapEditor = showDevMapEditor;
 }
 
 export function showGame() {

@@ -13,8 +13,6 @@ function findInventory(filename) {
 
 // Just map everything manually if we can, or do it programmatically.
 specData.buildings.forEach(building => {
-    if (!building.placeholder) return;
-    
     let bestMatch = null;
     let bBox = null;
     let requiredScale = { x: 1, y: 1, z: 1 };
@@ -28,9 +26,9 @@ specData.buildings.forEach(building => {
     };
 
     if (building.meshType === 'TYPE_LARGE_HALL') {
-        bestMatch = attemptMatch('warehouse_building.glb') || attemptMatch('small_warehouse.glb') || attemptMatch('base_basic_pbr.glb');
+        bestMatch = attemptMatch('warehouse_building.glb') || attemptMatch('small_warehouse.glb') || attemptMatch('grenade.glb');
     } else if (building.meshType === 'TYPE_MEDIUM_BLOCK') {
-        bestMatch = attemptMatch('small_warehouse.glb') || attemptMatch('base_basic_pbr.glb');
+        bestMatch = attemptMatch('small_warehouse.glb') || attemptMatch('grenade.glb');
     } else if (building.meshType === 'TYPE_SMALL_UTILITY') {
         bestMatch = attemptMatch('industrial_asset_pack_free.glb') || attemptMatch('small_warehouse.glb') || attemptMatch('defaultmaterial.glb');
     } else if (building.meshType === 'TYPE_TOWER') {

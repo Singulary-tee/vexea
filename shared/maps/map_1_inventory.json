@@ -186,7 +186,7 @@
     ]
   },
   {
-    "filename": "base_basic_pbr.glb",
+    "filename": "grenade.glb",
     "originalFile": "base_basic_pbr.glb",
     "boundingBox": {
       "x": -0.55247563123703,
@@ -200,6 +200,40 @@
     "hasAnimations": false,
     "meshNames": [
       "model"
+    ]
+  },
+  {
+    "filename": "warehouse_building.glb",
+    "originalFile": "warehouse_building.glb",
+    "boundingBox": {
+      "x": -12.855663776397705,
+      "y": 0,
+      "z": -20.3825044631958,
+      "width": 25.71132755279541,
+      "height": 34.103164203464985,
+      "depth": 40.7650089263916
+    },
+    "triangleCount": 12400,
+    "hasAnimations": false,
+    "meshNames": [
+      "Warehouse_Mesh"
+    ]
+  },
+  {
+    "filename": "small_warehouse.glb",
+    "originalFile": "small_warehouse.glb",
+    "boundingBox": {
+      "x": -5.04931605497041,
+      "y": 0,
+      "z": -6.094037383095678,
+      "width": 10.09863210994082,
+      "height": 3.847301449406769,
+      "depth": 12.188074766191356
+    },
+    "triangleCount": 6200,
+    "hasAnimations": false,
+    "meshNames": [
+      "Small_Warehouse_Mesh"
     ]
   },
   {

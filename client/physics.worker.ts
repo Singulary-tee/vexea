@@ -1,4 +1,5 @@
 import RAPIER from "@dimforge/rapier3d-compat";
+import mapSpec from "../shared/maps/map_1_facility.spec.json";
 
 let world: RAPIER.World;
 let kcc: RAPIER.KinematicCharacterController;
@@ -42,12 +43,32 @@ self.onmessage = async (e) => {
         world.createCollider(RAPIER.ColliderDesc.cuboid(1, 20, 100).setTranslation(-100, 10, 0));
 
         // Pillars & Crates
-        world.createCollider(RAPIER.ColliderDesc.cylinder(4, 6).setTranslation(0, 3, 0));
-        world.createCollider(RAPIER.ColliderDesc.cuboid(5, 4, 1).setTranslation(-15, 2, -15));
-        world.createCollider(RAPIER.ColliderDesc.cuboid(5, 4, 1).setTranslation(15, 2, -15));
-        world.createCollider(RAPIER.ColliderDesc.cuboid(4, 4, 4).setTranslation(35, 2, 20));
-        world.createCollider(RAPIER.ColliderDesc.cuboid(3, 3, 3).setTranslation(45, 1.5, 35));
-        world.createCollider(RAPIER.ColliderDesc.cuboid(12, 5, 1).setTranslation(30, 2.5, -20));
+        // world.createCollider(RAPIER.ColliderDesc.cylinder(4, 6).setTranslation(0, 3, 0));
+        // world.createCollider(RAPIER.ColliderDesc.cuboid(5, 4, 1).setTranslation(-15, 2, -15));
+        // world.createCollider(RAPIER.ColliderDesc.cuboid(5, 4, 1).setTranslation(15, 2, -15));
+        // world.createCollider(RAPIER.ColliderDesc.cuboid(4, 4, 4).setTranslation(35, 2, 20));
+        // world.createCollider(RAPIER.ColliderDesc.cuboid(3, 3, 3).setTranslation(45, 1.5, 35));
+        // world.createCollider(RAPIER.ColliderDesc.cuboid(12, 5, 1).setTranslation(30, 2.5, -20));
+
+        // Actual map buildings
+        if (mapSpec && mapSpec.buildings) {
+            for (const b of mapSpec.buildings) {
+                let sizeX = b.size.x || 10;
+                let sizeZ = b.size.z || 10;
+                const angleRad = b.rotation && b.rotation.y ? (b.rotation.y * Math.PI) / 180 : 0;
+                if (Math.abs(Math.sin(angleRad)) > 0.707) {
+                    const temp = sizeX;
+                    sizeX = sizeZ;
+                    sizeZ = temp;
+                }
+                const halfX = sizeX / 2;
+                const halfY = (b.size.y || 10) / 2;
+                const halfZ = sizeZ / 2;
+                const desc = RAPIER.ColliderDesc.cuboid(halfX, halfY, halfZ)
+                    .setTranslation(b.position.x, b.position.y + halfY, b.position.z);
+                world.createCollider(desc);
+            }
+        }
 
         // Player Setup
         const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, 1.2, 10);
@@ -70,9 +91,17 @@ self.onmessage = async (e) => {
             const moveZ = sharedData[1];
             const speed = sharedData[2];
             const isJump = sharedData[3] > 0;
+            const isCrouch = sharedData[9] > 0;
 
             let velY = sharedData[4];
             velY -= 9.81 * 3.0 * 0.0166;
+            
+            // Adjust collider height based on crouch
+            if (isCrouch) {
+                playerCollider.setHalfHeight(0.25);
+            } else {
+                playerCollider.setHalfHeight(0.5);
+            }
             
             const isGrounded = kcc.computedGrounded();
             if (isGrounded && velY < 0) velY = -0.1;
@@ -101,6 +130,10 @@ self.onmessage = async (e) => {
             sharedData[6] = finalPos.y;
             sharedData[7] = finalPos.z;
             sharedData[8] = isGrounded ? 1 : 0;
+            
+            if (moveZ !== 0) {
+               console.log("[Worker] Moving! finalPos.z:", finalPos.z, "moveZ:", moveZ, "computed.z:", computed.z);
+            }
             
         }, 16.66);
     }

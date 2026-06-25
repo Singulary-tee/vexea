@@ -1,5 +1,7 @@
 import * as THREE from "three/webgpu";
 import { DETAILED_WEAPONS } from "../shared/weapons";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { getCachedOrFetchUrl } from "./asset-cache";
 
 // Zero-GC pre-allocated math variables for frame loop optimization
 const _pos = new THREE.Vector3();
@@ -12,357 +14,322 @@ export let weaponsContainer: THREE.Group | null = null;
 export let rifleGroup: THREE.Group | null = null;
 export let pistolGroup: THREE.Group | null = null;
 
+// Animation stuff
+export let rifleMixer: THREE.AnimationMixer | null = null;
+export let pistolMixer: THREE.AnimationMixer | null = null;
+export const weaponActions = {
+  rifle: {} as Record<string, THREE.AnimationAction>,
+  pistol: {} as Record<string, THREE.AnimationAction>
+};
+
 // Global constants
 export const WEAPON_SWITCH_DURATION = 0.4; // 400ms switch cooldown
 
+export const DEV_WEAPON_OFFSETS = {
+  rifle: {
+    hip: new THREE.Vector3(0, 0, 0),
+    ads: new THREE.Vector3(0, 0, 0),
+    muzzle: new THREE.Vector3(0, 0, -0.5)
+  },
+  pistol: {
+    hip: new THREE.Vector3(0, 0, 0),
+    ads: new THREE.Vector3(0, 0, 0),
+    muzzle: new THREE.Vector3(0, 0, -0.2)
+  }
+};
+(window as any).DEV_WEAPON_OFFSETS = DEV_WEAPON_OFFSETS;
+
 // Weapon State Tracker (Zero heap allocations at runtime)
 export const weaponVisualState = {
-  activeSlot: 1,            // 1 = Rifle, 2 = Pistol
+  activeSlot: 1,            // 1 = Rifle/SMG, 2 = Pistol
   switchTimer: 0.0,         // Decays from WEAPON_SWITCH_DURATION to 0
   pendingSlot: 0,           // The weapon we are switching to
 
   // Smooth Recoil Drift (decays back to zero)
-  recoilZ: 0.0,             // Gun kick translation back
-  recoilPitch: 0.0,         // Gun upward rotation
-  recoilYaw: 0.0,           // Gun sideways rotation
+  recoilZ: 0.0,             
+  recoilPitch: 0.0,         
+  recoilYaw: 0.0,           
 
   // Breathing Sway variables
   swayCycle: 0.0,
 };
 
-/**
- * Creates custom 3D models for the Rifle and Pistol using Three.js primitive shapes.
- */
 export function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera): THREE.Group {
   weaponsContainer = new THREE.Group();
   weaponsContainer.name = "WeaponsContainer";
   scene.add(weaponsContainer);
 
-  // Materials definitions
-  const matteDarkMetal = new THREE.MeshStandardMaterial({ 
-    color: 0x15171b, 
-    roughness: 0.65, 
-    metalness: 0.85 
-  });
-  const chromeMetal = new THREE.MeshStandardMaterial({ 
-    color: 0x7a818c, 
-    roughness: 0.25, 
-    metalness: 0.95 
-  });
-  const sciFiOrangePlastic = new THREE.MeshStandardMaterial({ 
-    color: 0xe65c00, 
-    roughness: 0.4, 
-    metalness: 0.2 
-  });
-  const glowingRedResist = new THREE.MeshStandardMaterial({ 
-    color: 0x221111, 
-    emissive: new THREE.Color(0xff0033), 
-    roughness: 0.1,
-    metalness: 0.9
-  });
-  const glowingGreenResist = new THREE.MeshStandardMaterial({ 
-    color: 0x112211, 
-    emissive: new THREE.Color(0x33ff33), 
-    roughness: 0.1,
-    metalness: 0.9
-  });
-
-  // ==========================================
-  // 1. RIFLE MODEL BUILD (Slot 1)
-  // ==========================================
   rifleGroup = new THREE.Group();
   rifleGroup.name = "RifleModel";
-
-  // Receiver body
-  const receiverGeom = new THREE.BoxGeometry(0.04, 0.06, 0.35);
-  const receiverMesh = new THREE.Mesh(receiverGeom, matteDarkMetal);
-  receiverMesh.position.set(0, 0, 0);
-  rifleGroup.add(receiverMesh);
-
-  // Handguard
-  const handguardGeom = new THREE.BoxGeometry(0.038, 0.05, 0.2);
-  const handguardMesh = new THREE.Mesh(handguardGeom, sciFiOrangePlastic);
-  handguardMesh.position.set(0, -0.01, -0.22);
-  rifleGroup.add(handguardMesh);
-
-  // Barrel extending front
-  const barrelGeom = new THREE.CylinderGeometry(0.008, 0.008, 0.3, 8);
-  barrelGeom.rotateX(Math.PI / 2);
-  const barrelMesh = new THREE.Mesh(barrelGeom, chromeMetal);
-  barrelMesh.position.set(0, 0.005, -0.42);
-  rifleGroup.add(barrelMesh);
-
-  // Stock
-  const stockGeom = new THREE.BoxGeometry(0.035, 0.07, 0.18);
-  const stockMesh = new THREE.Mesh(stockGeom, sciFiOrangePlastic);
-  stockMesh.position.set(0, -0.012, 0.24);
-  rifleGroup.add(stockMesh);
-
-  // Rifle Grip
-  const gripGeom = new THREE.BoxGeometry(0.03, 0.08, 0.04);
-  gripGeom.rotateX(Math.PI / 6);
-  const gripMesh = new THREE.Mesh(gripGeom, matteDarkMetal);
-  gripMesh.position.set(0, -0.06, 0.05);
-  rifleGroup.add(gripMesh);
-
-  // Rifle Magazine
-  const magGeom = new THREE.BoxGeometry(0.028, 0.12, 0.05);
-  magGeom.rotateX(-Math.PI / 18);
-  const magMesh = new THREE.Mesh(magGeom, matteDarkMetal);
-  magMesh.position.set(0, -0.08, -0.05);
-  rifleGroup.add(magMesh);
-
-  // Reflex Sight Scope
-  const scopeMountGeom = new THREE.BoxGeometry(0.015, 0.02, 0.03);
-  const scopeMount = new THREE.Mesh(scopeMountGeom, matteDarkMetal);
-  scopeMount.position.set(0, 0.04, -0.05);
-  rifleGroup.add(scopeMount);
-
-  const scopeTubeGeom = new THREE.BoxGeometry(0.03, 0.03, 0.09);
-  const scopeTube = new THREE.Mesh(scopeTubeGeom, matteDarkMetal);
-  scopeTube.position.set(0, 0.055, -0.05);
-  rifleGroup.add(scopeTube);
-
-  // Holographic red reticle plate inside scope
-  const reticleGeom = new THREE.BoxGeometry(0.018, 0.018, 0.002);
-  const reticleMesh = new THREE.Mesh(reticleGeom, glowingRedResist);
-  reticleMesh.position.set(0, 0.055, -0.09);
-  rifleGroup.add(reticleMesh);
-
-  // Front Sight Guide pin
-  const frontSightGeom = new THREE.BoxGeometry(0.006, 0.025, 0.006);
-  const frontSight = new THREE.Mesh(frontSightGeom, matteDarkMetal);
-  frontSight.position.set(0, 0.03, -0.55);
-  rifleGroup.add(frontSight);
-
-  // Muzzle Tip Object (where fire starts, absolute front of barrel)
-  const rifleMuzzleNode = new THREE.Object3D();
-  rifleMuzzleNode.position.set(0, 0.005, -0.58);
-  rifleGroup.add(rifleMuzzleNode);
-  (rifleGroup as any).muzzleNode = rifleMuzzleNode;
-
   weaponsContainer.add(rifleGroup);
 
-  // ==========================================
-  // 2. PISTOL MODEL BUILD (Slot 2)
-  // ==========================================
   pistolGroup = new THREE.Group();
   pistolGroup.name = "PistolModel";
   pistolGroup.visible = false;
-
-  // Pistol Slide
-  const slideGeom = new THREE.BoxGeometry(0.03, 0.038, 0.18);
-  const slideMesh = new THREE.Mesh(slideGeom, chromeMetal);
-  slideMesh.position.set(0, 0, 0);
-  pistolGroup.add(slideMesh);
-
-  // Pistol Grip
-  const pGripGeom = new THREE.BoxGeometry(0.028, 0.09, 0.035);
-  pGripGeom.rotateX(Math.PI / 5);
-  const pGripMesh = new THREE.Mesh(pGripGeom, matteDarkMetal);
-  pGripMesh.position.set(0, -0.055, 0.03);
-  pistolGroup.add(pGripMesh);
-
-  // Small laser pointer or tactical light under barrel
-  const tacLightGeom = new THREE.CylinderGeometry(0.007, 0.007, 0.05, 8);
-  tacLightGeom.rotateX(Math.PI / 2);
-  const tacLightMesh = new THREE.Mesh(tacLightGeom, matteDarkMetal);
-  tacLightMesh.position.set(0, -0.022, -0.04);
-  pistolGroup.add(tacLightMesh);
-
-  const tacticalLensGeom = new THREE.BoxGeometry(0.01, 0.01, 0.002);
-  const tacticalLens = new THREE.Mesh(tacticalLensGeom, glowingRedResist);
-  tacticalLens.position.set(0, -0.022, -0.066);
-  pistolGroup.add(tacticalLens);
-
-  // Sights: Front tritium green dot
-  const pFrontSightGeom = new THREE.BoxGeometry(0.004, 0.01, 0.004);
-  const pFrontSight = new THREE.Mesh(pFrontSightGeom, matteDarkMetal);
-  pFrontSight.position.set(0, 0.023, -0.08);
-  pistolGroup.add(pFrontSight);
-
-  const pFrontDotGeom = new THREE.SphereGeometry(0.002, 4, 4);
-  const pFrontDot = new THREE.Mesh(pFrontDotGeom, glowingGreenResist);
-  pFrontDot.position.set(0, 0.026, -0.076);
-  pistolGroup.add(pFrontDot);
-
-  // Sights: Rear tritium notch
-  const pRearSightGeom = new THREE.BoxGeometry(0.012, 0.008, 0.004);
-  const pRearSight = new THREE.Mesh(pRearSightGeom, matteDarkMetal);
-  pRearSight.position.set(0, 0.022, 0.075);
-  pistolGroup.add(pRearSight);
-
-  const pLeftDot = new THREE.Mesh(pFrontDotGeom, glowingGreenResist);
-  pLeftDot.position.set(-0.004, 0.024, 0.073);
-  pistolGroup.add(pLeftDot);
-
-  const pRightDot = new THREE.Mesh(pFrontDotGeom, glowingGreenResist);
-  pRightDot.position.set(0.004, 0.024, 0.073);
-  pistolGroup.add(pRightDot);
-
-  // Pistol Barrel Core peaking out
-  const pBarrelGeom = new THREE.CylinderGeometry(0.006, 0.006, 0.02, 8);
-  pBarrelGeom.rotateX(Math.PI / 2);
-  const pBarrelMesh = new THREE.Mesh(pBarrelGeom, matteDarkMetal);
-  pBarrelMesh.position.set(0, 0.004, -0.091);
-  pistolGroup.add(pBarrelMesh);
-
-  // Pistol Muzzle Object
-  const pistolMuzzleNode = new THREE.Object3D();
-  pistolMuzzleNode.position.set(0, 0.004, -0.1);
-  pistolGroup.add(pistolMuzzleNode);
-  (pistolGroup as any).muzzleNode = pistolMuzzleNode;
-
   weaponsContainer.add(pistolGroup);
+
+  const loader = new GLTFLoader();
+
+  // Load SMG (Rifle slot)
+  getCachedOrFetchUrl("smg_fps_animations.glb", "Asset").then((url) => {
+    loader.load(url, (gltf) => {
+      rifleGroup!.add(gltf.scene);
+      rifleMixer = new THREE.AnimationMixer(gltf.scene);
+      gltf.animations.forEach((clip) => {
+        weaponActions.rifle[clip.name.toLowerCase()] = rifleMixer!.clipAction(clip);
+      });
+      // Try play idle
+      const idle = Object.keys(weaponActions.rifle).find(n => n.includes('idle'));
+      if (idle) weaponActions.rifle[idle].play();
+
+      // Find muzzle node or create one
+      let muzzleNode = gltf.scene.getObjectByName('Muzzle') || gltf.scene.getObjectByName('muzzle');
+      if (!muzzleNode) {
+          let anySkinnedMesh: any = null;
+          gltf.scene.traverse((c: any) => { if (c.isSkinnedMesh) anySkinnedMesh = c; });
+          
+          let weaponBone: any = null;
+          if (anySkinnedMesh && anySkinnedMesh.skeleton) {
+             weaponBone = anySkinnedMesh.skeleton.bones.find((b: any) => b.name.toLowerCase().includes('weapon') || b.name.toLowerCase().includes('gun') || b.name.toLowerCase().includes('muzzle') || b.name.toLowerCase().includes('flash'));
+             if (!weaponBone) weaponBone = anySkinnedMesh.skeleton.bones.find((b: any) => b.name.toLowerCase().includes('hand'));
+             if (!weaponBone) weaponBone = anySkinnedMesh.skeleton.bones[anySkinnedMesh.skeleton.bones.length - 1];
+          }
+          
+          muzzleNode = new THREE.Object3D();
+          muzzleNode.name = "DynamicMuzzle";
+          if (weaponBone) {
+              weaponBone.add(muzzleNode);
+          } else {
+              rifleGroup!.add(muzzleNode);
+          }
+      } else {
+          const dummy = new THREE.Object3D();
+          dummy.name = "DynamicMuzzle";
+          muzzleNode.add(dummy);
+          muzzleNode = dummy;
+      }
+      (rifleGroup as any).muzzleNode = muzzleNode;
+      console.log("[WEAPONS] SMG Loaded, Animations:", Object.keys(weaponActions.rifle));
+    });
+  });
+
+  // Load Pistol
+  getCachedOrFetchUrl("animated_pistol.glb", "Asset").then((url) => {
+    loader.load(url, (gltf) => {
+      pistolGroup!.add(gltf.scene);
+      pistolMixer = new THREE.AnimationMixer(gltf.scene);
+      gltf.animations.forEach((clip) => {
+        weaponActions.pistol[clip.name.toLowerCase()] = pistolMixer!.clipAction(clip);
+      });
+      // Try play idle
+      const idle = Object.keys(weaponActions.pistol).find(n => n.includes('idle'));
+      if (idle) weaponActions.pistol[idle].play();
+
+      let muzzleNode = gltf.scene.getObjectByName('Muzzle') || gltf.scene.getObjectByName('muzzle');
+      if (!muzzleNode) {
+          let anySkinnedMesh: any = null;
+          gltf.scene.traverse((c: any) => { if (c.isSkinnedMesh) anySkinnedMesh = c; });
+          
+          let weaponBone: any = null;
+          if (anySkinnedMesh && anySkinnedMesh.skeleton) {
+             weaponBone = anySkinnedMesh.skeleton.bones.find((b: any) => b.name.toLowerCase().includes('weapon') || b.name.toLowerCase().includes('gun') || b.name.toLowerCase().includes('muzzle') || b.name.toLowerCase().includes('flash'));
+             if (!weaponBone) weaponBone = anySkinnedMesh.skeleton.bones.find((b: any) => b.name.toLowerCase().includes('hand'));
+             if (!weaponBone) weaponBone = anySkinnedMesh.skeleton.bones[anySkinnedMesh.skeleton.bones.length - 1];
+          }
+          
+          muzzleNode = new THREE.Object3D();
+          muzzleNode.name = "DynamicMuzzle";
+          if (weaponBone) {
+              weaponBone.add(muzzleNode);
+          } else {
+              pistolGroup!.add(muzzleNode);
+          }
+      } else {
+          const dummy = new THREE.Object3D();
+          dummy.name = "DynamicMuzzle";
+          muzzleNode.add(dummy);
+          muzzleNode = dummy;
+      }
+      (pistolGroup as any).muzzleNode = muzzleNode;
+      console.log("[WEAPONS] Pistol Loaded, Animations:", Object.keys(weaponActions.pistol));
+    });
+  });
 
   return weaponsContainer;
 }
 
-/**
- * Triggers a visual recoil kick, modifying displacement and orientation.
- */
-export function applyWeaponRecoil(upForce: number, sideForce: number): void {
-  // Add direct backward push
-  weaponVisualState.recoilZ = Math.min(0.2, weaponVisualState.recoilZ + 0.12);
-  // Add direct upward pitch kick rotation
-  weaponVisualState.recoilPitch = Math.min(0.35, weaponVisualState.recoilPitch + upForce * 3.5);
-  // Introduce small random sideways roll/yaw kickback
-  weaponVisualState.recoilYaw += (Math.random() - 0.5) * sideForce * 3.0;
+export function playWeaponAnimation(animName: string, loop: boolean = true) {
+    const slot = weaponVisualState.activeSlot;
+    const actions = slot === 1 ? weaponActions.rifle : weaponActions.pistol;
+    if (!actions) return;
+    
+    // Play named animation. To do it properly, cross-fade.
+    const clipName = Object.keys(actions).find(n => n.includes(animName.toLowerCase()));
+    if (clipName && actions[clipName]) {
+        const action = actions[clipName];
+        action.reset();
+        if (!loop) {
+            action.setLoop(THREE.LoopOnce, 1);
+            action.clampWhenFinished = true;
+        } else {
+            action.setLoop(THREE.LoopRepeat, Infinity);
+        }
+        action.play();
+        // Crossfade from others if needed
+    }
 }
 
-/**
- * Triggers weapon switching state.
- */
+export function applyWeaponRecoil(upForce: number, sideForce: number): void {
+  weaponVisualState.recoilZ = Math.min(0.2, weaponVisualState.recoilZ + 0.12);
+  weaponVisualState.recoilPitch = Math.min(0.35, weaponVisualState.recoilPitch + upForce * 3.5);
+  weaponVisualState.recoilYaw += (Math.random() - 0.5) * sideForce * 3.0;
+
+  // Attempt to play a shoot animation if it exists
+  playWeaponAnimation('shoot', false);
+  playWeaponAnimation('fire', false);
+}
+
 export function switchActiveWeaponModel(slot: number): void {
   if (weaponVisualState.activeSlot === slot) return;
   weaponVisualState.pendingSlot = slot;
   weaponVisualState.switchTimer = WEAPON_SWITCH_DURATION;
 }
 
-/**
- * Checks if the weapon is currently drawing or holstering.
- */
 export function isSwitchingWeapon(): boolean {
   return weaponVisualState.switchTimer > 0;
 }
 
-/**
- * Retrieves the current world coordinate position of the bullet ignition point on the barrel.
- */
 export function getMuzzleWorldPosition(outVec: THREE.Vector3, camera: THREE.Camera): void {
   const activeMesh = weaponVisualState.activeSlot === 1 ? rifleGroup : pistolGroup;
   if (activeMesh && (activeMesh as any).muzzleNode) {
+    const muzzleOffset = weaponVisualState.activeSlot === 1 ? DEV_WEAPON_OFFSETS.rifle.muzzle : DEV_WEAPON_OFFSETS.pistol.muzzle;
+    
+    // First, make sure the local offset of the dummy node is 0
+    (activeMesh as any).muzzleNode.position.set(0, 0, 0);
+    (activeMesh as any).muzzleNode.updateMatrixWorld(true);
+    
+    // Get the base animated world position from the model's muzzle or bone
     (activeMesh as any).muzzleNode.getWorldPosition(outVec);
+    
+    // Convert the camera's rotation to world axes so the DEV_WEAPON_OFFSETS 
+    // predictably apply in view space (X=Right, Y=Up, Z=Backward)
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+    
+    outVec.addScaledVector(right, muzzleOffset.x);
+    outVec.addScaledVector(up, muzzleOffset.y);
+    outVec.addScaledVector(forward, muzzleOffset.z);
   } else {
-    // Zero-overhead fallback to camera offset if uninitialized
     outVec.copy(camera.position);
     const cameraDir = _pos.set(0, 0, -1).applyQuaternion(camera.quaternion);
     outVec.addScaledVector(cameraDir, 0.5);
   }
 }
 
-/**
- * Animates and positions the weapons container and individual meshes.
- * Resolves springs, ads translation alignments, breathing sway, and weapon swap overlays.
- */
+export let isWeaponReloading = false;
+export function setWeaponReloading(val: boolean) {
+  if (isWeaponReloading !== val) {
+    isWeaponReloading = val;
+    if (val) {
+        // Find a reload animation
+        playWeaponAnimation('reload', false);
+    } else {
+        // Revert to idle or run
+        playWeaponAnimation('idle', true);
+    }
+  }
+}
+
+let lastAnimState = 'idle';
+
 export function updateWeaponsContainer(
   dt: number,
   camera: THREE.Camera,
   isADS: boolean,
-  currentAdsLerp: number
+  currentAdsLerp: number,
+  isMoving: boolean = false
 ): void {
   if (!weaponsContainer || !rifleGroup || !pistolGroup) return;
 
-  // 1. Process Weapon Switching Progress
+  if (rifleMixer) rifleMixer.update(dt);
+  if (pistolMixer) pistolMixer.update(dt);
+
+  // Animation State Machine
+  let desiredAnim = 'idle';
+  if (isWeaponReloading) {
+     desiredAnim = 'reload';
+  } else if (isMoving) {
+     desiredAnim = isADS ? 'walk' : 'run';
+  } else {
+     desiredAnim = isADS ? 'idle' : 'idle'; 
+  }
+
+  if (desiredAnim !== lastAnimState && !isWeaponReloading) {
+     lastAnimState = desiredAnim;
+     playWeaponAnimation(desiredAnim, true);
+  }
+
+  // Switch logic
   if (weaponVisualState.switchTimer > 0) {
     const prevTimer = weaponVisualState.switchTimer;
     weaponVisualState.switchTimer = Math.max(0, weaponVisualState.switchTimer - dt);
 
-    // Swap models exactly at the half-way threshold (draw/holster intersection)
     if (prevTimer > WEAPON_SWITCH_DURATION * 0.5 && weaponVisualState.switchTimer <= WEAPON_SWITCH_DURATION * 0.5) {
       weaponVisualState.activeSlot = weaponVisualState.pendingSlot;
       rifleGroup.visible = (weaponVisualState.activeSlot === 1);
       pistolGroup.visible = (weaponVisualState.activeSlot === 2);
+      playWeaponAnimation('draw', false); // Play draw animation on switch
     }
   }
 
-  // Determine current active weapon and fetch characteristics
   const activeSlot = weaponVisualState.activeSlot;
   const stats = activeSlot === 1 ? DETAILED_WEAPONS.rifle : DETAILED_WEAPONS.pistol;
 
-  // 2. Resolve Smooth Recoil Decay (smooth elastic drift backwards and forwards)
   const recoverySpeed = stats.recoilRecoveryRate * 1.5;
   weaponVisualState.recoilZ = Math.max(0.0, weaponVisualState.recoilZ - dt * recoverySpeed);
   weaponVisualState.recoilPitch = Math.max(0.0, weaponVisualState.recoilPitch - dt * recoverySpeed);
   weaponVisualState.recoilYaw -= Math.sign(weaponVisualState.recoilYaw) * Math.min(Math.abs(weaponVisualState.recoilYaw), dt * recoverySpeed);
 
-  // 3. Compute Breathing Sway (Only visible and prominent when aiming down the sights!)
-  // In hip fire, sway is 0. In full ADS, it achieves maximum amplitude to represent breath holding details
+
   weaponVisualState.swayCycle += dt * stats.swaySpeed;
-  const swayIntensity = currentAdsLerp * stats.swayAmplitude * 6.5; // Scale up to feel visible in sights
+  const swayIntensity = currentAdsLerp * stats.swayAmplitude * 6.5; 
   const swayX = Math.sin(weaponVisualState.swayCycle) * swayIntensity;
   const swayY = Math.cos(weaponVisualState.swayCycle * 2.0) * swayIntensity * 0.5;
 
-  // 4. Calculate Holster Lower-Raise Displacement
   let switchYOffset = 0.0;
   if (weaponVisualState.switchTimer > 0) {
-    const progress = weaponVisualState.switchTimer / WEAPON_SWITCH_DURATION; // 1 to 0
-    // Sinusoidal arc downwards for holster, raising new model upwards
+    const progress = weaponVisualState.switchTimer / WEAPON_SWITCH_DURATION; 
     switchYOffset = -0.4 * Math.sin(progress * Math.PI);
   }
 
-  // 5. Compute Aim-Down-Sights (ADS) Base offsets
-  // Rifle Center Offset alignment coordinates
-  const rifleHipX = 0.15;
-  const rifleHipY = -0.15;
-  const rifleHipZ = -0.40;
-  // Sight alignment matches holographic center precisely
-  const rifleAdsX = 0.0;
-  const rifleAdsY = -0.055; // Height offset to aim straight down holographic window
-  const rifleAdsZ = -0.22;
+  // Hip / ADS alignments.
+  const offsets = activeSlot === 1 ? DEV_WEAPON_OFFSETS.rifle : DEV_WEAPON_OFFSETS.pistol;
+  const hipX = offsets.hip.x, hipY = offsets.hip.y, hipZ = offsets.hip.z;
+  const adsX = offsets.ads.x, adsY = offsets.ads.y, adsZ = offsets.ads.z;
 
-  // Pistol Center Offset alignment coordinates
-  const pistolHipX = 0.12;
-  const pistolHipY = -0.13;
-  const pistolHipZ = -0.30;
-  // Align iron notch perfectly
-  const pistolAdsX = 0.0;
-  const pistolAdsY = -0.024; // Height offset to align tritium dots in center
-  const pistolAdsZ = -0.18;
-
-  const hipX = activeSlot === 1 ? rifleHipX : pistolHipX;
-  const hipY = activeSlot === 1 ? rifleHipY : pistolHipY;
-  const hipZ = activeSlot === 1 ? rifleHipZ : pistolHipZ;
-
-  const adsX = activeSlot === 1 ? rifleAdsX : pistolAdsX;
-  const adsY = activeSlot === 1 ? rifleAdsY : pistolAdsY;
-  const adsZ = activeSlot === 1 ? rifleAdsZ : pistolAdsZ;
-
-  // Blend Hip and ADS offsets via current ads zoom ratio
   const baseTargetX = hipX + (adsX - hipX) * currentAdsLerp;
   const baseTargetY = hipY + (adsY - hipY) * currentAdsLerp;
   const baseTargetZ = hipZ + (adsZ - hipZ) * currentAdsLerp;
 
-  // Assemble comprehensive final coordinates including recoil, sway, and switch translations
   const finalX = baseTargetX + swayX + (weaponVisualState.recoilYaw * 0.05);
   const finalY = baseTargetY + swayY + switchYOffset + (weaponVisualState.recoilPitch * 0.12);
-  const finalZ = baseTargetZ - weaponVisualState.recoilZ; // recoil translation kickback
+  const finalZ = baseTargetZ - weaponVisualState.recoilZ; 
 
-  // Copy camera position and orientation as our coordinate system anchor
   weaponsContainer.position.copy(camera.position);
+  // Match camera rotation perfectly
   weaponsContainer.quaternion.copy(camera.quaternion);
 
-  // Slide relative to camera space
-  weaponsContainer.translateZ(finalZ);
-  weaponsContainer.translateX(finalX);
-  weaponsContainer.translateY(finalY);
+  // Apply recoil rotation relative to the camera
+  weaponsContainer.rotateX(weaponVisualState.recoilPitch + (swayY * 1.5));
+  weaponsContainer.rotateY(-weaponVisualState.recoilYaw + (swayX * 1.5));
+  weaponsContainer.rotateZ(-swayX * 4.0);
+  
+  // Model files are facing +Z instead of -Z, so spin them 180 on Y
+  weaponsContainer.rotateY(Math.PI);
 
-  // Feed in local rotational kicks and sway rolls
-  _rot.set(
-    weaponVisualState.recoilPitch + (swayY * 1.5),
-    -weaponVisualState.recoilYaw + (swayX * 1.5),
-    -swayX * 4.0, // Rotate/tilt side-to-side during sideways sway loops
-    'YXZ'
-  );
-  weaponsContainer.rotation.copy(_rot);
+  // Apply translational offsets (X and Z inverted because we just spun 180 degrees)
+  weaponsContainer.translateX(-finalX);
+  weaponsContainer.translateY(finalY);
+  weaponsContainer.translateZ(-finalZ);
 }

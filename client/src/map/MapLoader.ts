@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MapRegistryEntry } from '../../../shared/maps/map-registry';
 import { getCachedOrFetchUrl, blobUrlMap } from '../../asset-cache';
@@ -25,6 +26,8 @@ export class MapLoader {
   private mergedMeshes: THREE.Mesh[] = [];
   private centerpieceFlickerTime: number = 0;
   private centerpieceDisc: THREE.Mesh | null = null;
+  private sceneAddCallCount: number = 0;
+  private concreteWallMat: THREE.MeshStandardMaterial | null = null;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -107,8 +110,11 @@ export class MapLoader {
   }
 
   async buildScene(): Promise<void> {
+    this.sceneAddCallCount = 0;
     if (!this.spec) return;
     console.log('[MAP DEBUG] buildScene called with spec:', JSON.stringify(this.spec).slice(0, 200));
+
+    await this.setupEnvironment();
 
     const zoneGeometries: Map<string, { geom: THREE.BufferGeometry, mat: THREE.Material }[]> = new Map();
 
@@ -118,6 +124,14 @@ export class MapLoader {
         // Clone geometry and apply world matrix to bake transformations
         const bGeom = mesh.geometry.clone();
         bGeom.applyMatrix4(mesh.matrixWorld);
+        
+        if (!bGeom.attributes.uv) {
+            const count = bGeom.attributes.position.count;
+            bGeom.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+        }
+        if (!bGeom.attributes.normal) {
+            bGeom.computeVertexNormals();
+        }
         
         // Ensure standard attributes only, or match them. For simple merging we drop morph targets etc if any.
         zoneGeometries.get(zoneId)!.push({ geom: bGeom, mat: Array.isArray(mesh.material) ? mesh.material[0] : mesh.material });
@@ -182,6 +196,9 @@ export class MapLoader {
                   mesh.receiveShadow = false;
                   this.mergedMeshes.push(mesh);
                   this.scene.add(mesh);
+                  this.sceneAddCallCount++;
+              } else {
+                  console.warn(`[MAP DEBUG] Failed to merge geometry for zone ${zoneId}: BufferGeometryUtils.mergeGeometries returned null for a group of ${group.geoms.length} geometries.`);
               }
           } catch(e) {
               console.error("Failed to merge geometry for zone", zoneId, e);
@@ -189,6 +206,153 @@ export class MapLoader {
       });
     });
 
+    // Add CollisionMap exact representation
+    if (this.spec && Array.isArray(this.spec.buildings)) {
+      for (const b of this.spec.buildings) {
+        if (b && b.position && b.size) {
+          const angleRad = b.rotation && b.rotation.y ? (b.rotation.y * Math.PI) / 180 : 0;
+          let sizeX = b.size.x || 10;
+          let sizeZ = b.size.z || 10;
+          if (Math.abs(Math.sin(angleRad)) > 0.707) {
+            const temp = sizeX;
+            sizeX = sizeZ;
+            sizeZ = temp;
+          }
+          const halfX = sizeX / 2;
+          const halfY = (b.size.y || 10) / 2;
+          const halfZ = sizeZ / 2;
+
+          const cx = b.position.x;
+          const cy = b.position.y + halfY;
+          const cz = b.position.z;
+
+          const box3 = new THREE.Box3(
+            new THREE.Vector3(cx - halfX, cy - halfY, cz - halfZ),
+            new THREE.Vector3(cx + halfX, cy + halfY, cz + halfZ)
+          );
+
+          const boxHelper = new THREE.Box3Helper(box3, new THREE.Color(0x0000ff));
+          this.scene.add(boxHelper);
+          this.mergedMeshes.push(boxHelper as any);
+        }
+      }
+    }
+
+    console.log('[MAP DEBUG] Scene build complete. Zones merged:', this.mergedMeshes.length, 'Total draw calls added:', this.sceneAddCallCount);
+  }
+
+  async setupEnvironment(): Promise<void> {
+    if (!this.spec) return;
+
+    // Ground plane: a single large flat plane covering the full 768x768 world size.
+    // We use the asphalt_02 PBR texture set to fit the facility vibe.
+    const textureLoader = new THREE.TextureLoader();
+    let diffUrl = '';
+    let normUrl = '';
+    let armUrl = '';
+    let skyboxUrl = '';
+    let wallDiffUrl = '';
+    let wallNormUrl = '';
+    let wallArmUrl = '';
+    try {
+      diffUrl = await getCachedOrFetchUrl('asphalt_02_diff_1k.jpg', 'Asset');
+      normUrl = await getCachedOrFetchUrl('asphalt_02_nor_gl_1k.jpg', 'Asset');
+      armUrl = await getCachedOrFetchUrl('asphalt_02_arm_1k.jpg', 'Asset');
+      skyboxUrl = await getCachedOrFetchUrl('qwantani_dusk_2_puresky_4k.hdr', 'Asset');
+      
+      wallDiffUrl = await getCachedOrFetchUrl('concrete_tiles_02_diff_1k.jpg', 'Asset');
+      wallNormUrl = await getCachedOrFetchUrl('concrete_tiles_02_nor_gl_1k.jpg', 'Asset');
+      wallArmUrl = await getCachedOrFetchUrl('concrete_tiles_02_arm_1k.jpg', 'Asset');
+    } catch (e) {
+      console.warn('Failed to load environment textures from cache', e);
+      return;
+    }
+
+    const albedo = textureLoader.load(diffUrl);
+    const normal = textureLoader.load(normUrl);
+    const arm = textureLoader.load(armUrl);
+
+    if (wallDiffUrl) {
+      const wallAlbedo = textureLoader.load(wallDiffUrl);
+      const wallNormal = textureLoader.load(wallNormUrl);
+      const wallArm = textureLoader.load(wallArmUrl);
+      
+      wallAlbedo.colorSpace = THREE.SRGBColorSpace;
+      [wallAlbedo, wallNormal, wallArm].forEach(tex => {
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(4, 4);
+      });
+      
+      this.concreteWallMat = new THREE.MeshStandardMaterial({
+        map: wallAlbedo,
+        normalMap: wallNormal,
+        roughnessMap: wallArm,
+        aoMap: wallArm,
+        metalnessMap: wallArm,
+        metalness: 0.1,
+        roughness: 0.7
+      });
+    } else {
+      this.concreteWallMat = new THREE.MeshStandardMaterial({
+        color: 0x768192,
+        roughness: 0.8,
+        metalness: 0.1
+      });
+    }
+
+    albedo.colorSpace = THREE.SRGBColorSpace;
+    [albedo, normal, arm].forEach(tex => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(80, 80);
+    });
+
+    const groundMat = new THREE.MeshStandardMaterial({
+      map: albedo,
+      normalMap: normal,
+      roughnessMap: arm,
+      aoMap: arm,
+      metalnessMap: arm,
+      metalness: 1.0,
+      roughness: 1.0
+    });
+
+    const { x: wX, z: wZ } = this.spec.worldSize;
+    const groundGeom = new THREE.PlaneGeometry(wX, wZ);
+    groundGeom.rotateX(-Math.PI / 2);
+    const groundMesh = new THREE.Mesh(groundGeom, groundMat);
+    // Center at world center (wX/2, wZ/2) instead of origin
+    groundMesh.position.set(wX / 2, 0, wZ / 2);
+    groundMesh.castShadow = false;
+    groundMesh.receiveShadow = false;
+    this.scene.add(groundMesh);
+
+    // HDR skybox
+    const rgbeLoader = new HDRLoader();
+    rgbeLoader.load(skyboxUrl, (texture) => {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      this.scene.background = texture;
+      this.scene.environment = texture;
+      
+      const fogNear = 80;
+      const fogFar = 400;
+      this.scene.fog = new THREE.Fog(0x8899aa, fogNear, fogFar);
+      
+      // Clear WebGPU specific fogNode if it was set
+      if ((this.scene as any).fogNode) {
+          (this.scene as any).fogNode = null;
+      }
+      
+      console.log('[ENV DEBUG] Environment setup complete. Skybox loaded: true', 'Fog near/far:', fogNear, fogFar);
+    });
+
+    // Ambient + directional light simulating dusk HDR
+    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    this.scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffddbb, 0.6);
+    dirLight.position.set(100, 200, 50); 
+    this.scene.add(dirLight);
   }
 
   private buildCenterpiece(): THREE.Group {
@@ -256,8 +420,14 @@ export class MapLoader {
             prop.rotation.z ? prop.rotation.z * Math.PI / 180 : 0
           );
         }
+        if (prop.scale) {
+          clone.scale.set(prop.scale.x, prop.scale.y, prop.scale.z);
+        } else {
+          clone.scale.set(1, 1, 1);
+        }
         this.mergedMeshes.push(clone as any as THREE.Mesh); // Track to dispose
         this.scene.add(clone);
+        this.sceneAddCallCount++;
       }
     }
   }

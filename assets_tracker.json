@@ -5,7 +5,7 @@
     { "name": "StreetLightPoles.bin", "category": "Model", "source": "Release" },
     { "name": "animated_drone.glb", "category": "Model", "source": "Release" },
     { "name": "animated_recon_fixed-wing.glb", "category": "Model", "source": "Release" },
-    { "name": "base_basic_pbr.glb", "category": "Model", "source": "Release" },
+    { "name": "grenade.glb", "category": "Model", "source": "Release" },
     { "name": "bpre_rifleman.glb", "category": "Model", "source": "Release" },
     { "name": "concrete_block_low_poly.glb", "category": "Model", "source": "Release" },
     { "name": "concrete_fence_low-poly.glb", "category": "Model", "source": "Release" },
@@ -84,7 +84,17 @@
     { "name": "rocky_trail_1k.gltf", "category": "Texture", "source": "TexturesFolder" },
     { "name": "rocky_trail_arm_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
     { "name": "rocky_trail_diff_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocky_trail_nor_gl_1k.jpg", "category": "Texture", "source": "TexturesFolder" }
+    { "name": "rocky_trail_nor_gl_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
+    { "name": "Blueprint.png", "category": "Image", "source": "Release" },
+    { "name": "Surface_Impact.png", "category": "Image", "source": "Release" },
+    { "name": "feedback_card.png", "category": "Image", "source": "Release" },
+    { "name": "file_00000000cdd071f48495d22753c89fa1.png", "category": "Image", "source": "Release" },
+    { "name": "multiplayer_card.png", "category": "Image", "source": "Release" },
+    { "name": "slopInc_card.png", "category": "Image", "source": "Release" },
+    { "name": "splash_screen.png", "category": "Image", "source": "Release" },
+    { "name": "statistics_card.png", "category": "Image", "source": "Release" },
+    { "name": "store_card.png", "category": "Image", "source": "Release" },
+    { "name": "vibeCo_card.png", "category": "Image", "source": "Release" }
   ],
   "sounds": [
     { "name": "bass_scratch.mp3", "category": "Audio" },

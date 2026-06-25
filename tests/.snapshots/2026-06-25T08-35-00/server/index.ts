@@ -36,7 +36,6 @@ dotenv.config();
 
 export const globalChannels: any[] = [];
 export const globalServerLogs: string[] = [];
-(global as any).serverLogs = globalServerLogs;
 const originalLog = console.log;
 
 console.log = function (...args: any[]) {
@@ -340,6 +339,7 @@ app.use((req, res, next) => {
 
 const PORT = 3000;
 const io = createTransport();
+io.listen(PORT, server);
 
 app.use(express.json());
 
@@ -387,11 +387,6 @@ app.get("/api/debug", (req, res) => {
     droneCount: r.drones.filter((d) => d.state !== DroneState.DEAD).length,
   }));
   res.json({ rooms: roomsData, logs: globalServerLogs });
-});
-
-app.get("/api/test-compile", (req, res) => {
-  console.log("[SERVER TEST] Custom /api/test-compile endpoint was hit!");
-  res.json({ success: true, timestamp: Date.now(), customLabel: "VEXEA_COMPILED_VERSION" });
 });
 
 io.onConnection((channel: ChannelAdapter) => {
@@ -504,23 +499,6 @@ io.onConnection((channel: ChannelAdapter) => {
     if (args.playerClass && pState) {
       pState.weapon = "rifle";
       pState.hp = 100;
-    }
-  });
-
-  channel.on("dev_set_position", (args: any) => {
-    console.log(`[SERVER DEV EVENT] Received dev_set_position:`, args, "pState exists:", !!pState);
-    if (args.position && pState) {
-      pState.posX = args.position.x;
-      pState.posY = args.position.y;
-      pState.posZ = args.position.z;
-      if (pState.body) {
-        pState.body.setNextKinematicTranslation({
-          x: pState.posX,
-          y: pState.posY,
-          z: pState.posZ
-        });
-      }
-      console.log(`[DEV DEBUG] Force positioned player ${pState.id} to:`, args.position);
     }
   });
 
@@ -653,82 +631,82 @@ io.onConnection((channel: ChannelAdapter) => {
           if (recTick > 0 && Math.abs(recTick - targetTick) <= 1) {
             const numDrones = currentRoom.historicalAABBHistory[baseIdx + 1];
             for (let dIdx = 0; dIdx < numDrones; dIdx++) {
-              const offset = baseIdx + 2 + dIdx * 4;
-              const dId = currentRoom.historicalAABBHistory[offset];
-              const cx = currentRoom.historicalAABBHistory[offset + 1];
-              const cy = currentRoom.historicalAABBHistory[offset + 2];
-              const cz = currentRoom.historicalAABBHistory[offset + 3];
+               const offset = baseIdx + 2 + dIdx * 4;
+               const dId = currentRoom.historicalAABBHistory[offset];
+               const cx = currentRoom.historicalAABBHistory[offset + 1];
+               const cy = currentRoom.historicalAABBHistory[offset + 2];
+               const cz = currentRoom.historicalAABBHistory[offset + 3];
 
-              const tox = cx - args.origin.x;
-              const toy = cy - args.origin.y;
-              const toz = cz - args.origin.z;
+               const tox = cx - args.origin.x;
+               const toy = cy - args.origin.y;
+               const toz = cz - args.origin.z;
 
-              const t = tox * dirX + toy * dirY + toz * dirZ;
-              if (t > 0) {
-                const px = args.origin.x + dirX * t;
-                const py = args.origin.y + dirY * t;
-                const pz = args.origin.z + dirZ * t;
+               const t = tox * dirX + toy * dirY + toz * dirZ;
+               if (t > 0) {
+                 const px = args.origin.x + dirX * t;
+                 const py = args.origin.y + dirY * t;
+                 const pz = args.origin.z + dirZ * t;
 
-                const hitDrone = currentRoom.drones.find((d) => d.id === dId);
-                if (!hitDrone || hitDrone.state === DroneState.DEAD) continue;
+                 const hitDrone = currentRoom.drones.find((d) => d.id === dId);
+                 if (!hitDrone || hitDrone.state === DroneState.DEAD) continue;
 
-                // EXCLUSION RULES: Exclude the player/shooter themselves, and enforce player-vs-drone hits only.
-                if (hitDrone.id.toString() === pState.id) {
-                  continue;
-                }
+                 // EXCLUSION RULES: Exclude the player/shooter themselves, and enforce player-vs-drone hits only.
+                 if (hitDrone.id.toString() === pState.id) {
+                   continue;
+                 }
 
-                let w = 1,
-                  h = 1,
-                  l = 1;
-                switch (hitDrone.type) {
-                  case DroneType.ROTARY_SHOOTER:
-                    w = 0.6;
-                    h = 0.6;
-                    l = 0.6;
-                    break;
-                  case DroneType.BOMBER:
-                    w = 0.5;
-                    h = 0.5;
-                    l = 0.5;
-                    break;
-                  case DroneType.RECON:
-                    w = 0.4;
-                    h = 0.4;
-                    l = 0.4;
-                    break;
-                  case DroneType.FIXED_WING:
-                    w = 1.2;
-                    h = 0.4;
-                    l = 0.4;
-                    break;
-                  case DroneType.WHEELED:
-                    w = 0.8;
-                    h = 0.5;
-                    l = 0.6;
-                    break;
-                  case DroneType.ROBOT_DOG:
-                    w = 0.7;
-                    h = 0.6;
-                    l = 0.7;
-                    break;
-                  case DroneType.HUMANOID:
-                    w = 0.5;
-                    h = 1.8;
-                    l = 0.5;
-                    break;
-                }
+                 let w = 1,
+                   h = 1,
+                   l = 1;
+                 switch (hitDrone.type) {
+                   case DroneType.ROTARY_SHOOTER:
+                     w = 0.6;
+                     h = 0.6;
+                     l = 0.6;
+                     break;
+                   case DroneType.BOMBER:
+                     w = 0.5;
+                     h = 0.5;
+                     l = 0.5;
+                     break;
+                   case DroneType.RECON:
+                     w = 0.4;
+                     h = 0.4;
+                     l = 0.4;
+                     break;
+                   case DroneType.FIXED_WING:
+                     w = 1.2;
+                     h = 0.4;
+                     l = 0.4;
+                     break;
+                   case DroneType.WHEELED:
+                     w = 0.8;
+                     h = 0.5;
+                     l = 0.6;
+                     break;
+                   case DroneType.ROBOT_DOG:
+                     w = 0.7;
+                     h = 0.6;
+                     l = 0.7;
+                     break;
+                   case DroneType.HUMANOID:
+                     w = 0.5;
+                     h = 1.8;
+                     l = 0.5;
+                     break;
+                 }
 
-                if (
-                  Math.abs(px - cx) <= w / 2 &&
-                  Math.abs(py - cy) <= h / 2 &&
-                  Math.abs(pz - cz) <= l / 2
-                ) {
-                  if (t < distSqMin) {
-                    distSqMin = t;
-                    bestHitDrone = hitDrone;
-                  }
-                }
-              }
+                 if (
+                   Math.abs(px - cx) <= w / 2 &&
+                   Math.abs(py - cy) <= h / 2 &&
+                   Math.abs(pz - cz) <= l / 2
+                 ) {
+                   if (t < distSqMin) {
+                     distSqMin = t;
+                     bestHitDrone = hitDrone;
+                   }
+                 }
+               }
             }
             break;
           }
@@ -913,9 +891,6 @@ io.onConnection((channel: ChannelAdapter) => {
 const serveApp = async () => {
   // Setup Rapier globally once before room allocation
   await RAPIER.init();
-
-  // Start listening for incoming network transport only after Rapier is fully ready
-  io.listen(PORT, server);
 
   app.use("/shared", express.static(path.join(process.cwd(), "shared")));
 

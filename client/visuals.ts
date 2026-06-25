@@ -2,6 +2,7 @@ import * as THREE from "three/webgpu";
 import { uv, float, smoothstep, length as tslLength, vec2, vec4, mix } from "three/tsl";
 import { getSettings } from "./settings";
 import { audioManager } from "./audio";
+import { getAssetUrl } from "./asset-cache";
 
 // Pre-allocated math objects for Zero-GC loops
 const _vfxPos = new THREE.Vector3();
@@ -160,13 +161,15 @@ export function initMatchVisuals(scene: THREE.Scene) {
   flashMat.blending = THREE.AdditiveBlending;
   flashMat.depthWrite = false;
   flashMat.side = THREE.DoubleSide;
-  const flashUV = uv().sub(vec2(0.5, 0.5));
+  const flashUVNode = uv();
+  const offsetNode = vec2(0.5, 0.5);
+  const flashUV = flashUVNode.sub(offsetNode);
   const flashDist = tslLength(flashUV).mul(float(2.0));
   const flashAlpha = smoothstep(float(1.0), float(0.0), flashDist);
   flashMat.colorNode = vec4(float(1.0), float(1.0), float(1.0), flashAlpha);
 
   // DECAL MAT
-  const decalTexture = new THREE.TextureLoader().load('/Surface_Impact.png');
+  const decalTexture = new THREE.TextureLoader().load(getAssetUrl('Surface_Impact.png'));
   const decalMat = new THREE.MeshBasicNodeMaterial();
   decalMat.map = decalTexture;
   decalMat.transparent = true;
@@ -188,6 +191,7 @@ export function initMatchVisuals(scene: THREE.Scene) {
     tracerDirZ = new Float32Array(tracerSlots);
 
     tracerBatch = new THREE.BatchedMesh(tracerSlots, 4, 6, tracerMat);
+    tracerBatch.name = "VFX_Tracer";
     tracerBatch.frustumCulled = false;
     const _tracerGeom = new THREE.PlaneGeometry(1.0, 0.02);
     const _tracerGeomId = tracerBatch.addGeometry(_tracerGeom);
@@ -212,6 +216,7 @@ export function initMatchVisuals(scene: THREE.Scene) {
     sparkVelZ = new Float32Array(sSlots);
 
     sparkBatch = new THREE.BatchedMesh(sSlots, 4, 6, sparkMat);
+    sparkBatch.name = "VFX_Spark";
     sparkBatch.frustumCulled = false;
     const _sparkGeom = new THREE.PlaneGeometry(0.08, 0.08);
     const _sparkGeomId = sparkBatch.addGeometry(_sparkGeom);
@@ -236,6 +241,7 @@ export function initMatchVisuals(scene: THREE.Scene) {
     dustVelZ = new Float32Array(dSlots);
 
     dustBatch = new THREE.BatchedMesh(dSlots, 4, 6, dustMat);
+    dustBatch.name = "VFX_Dust";
     dustBatch.frustumCulled = false;
     const _dustGeom = new THREE.PlaneGeometry(0.15, 0.15);
     const _dustGeomId = dustBatch.addGeometry(_dustGeom);
@@ -257,6 +263,7 @@ export function initMatchVisuals(scene: THREE.Scene) {
     smokePosZ = new Float32Array(smSlots);
 
     smokeBatch = new THREE.BatchedMesh(smSlots, 4, 6, smokeMat);
+    smokeBatch.name = "VFX_Smoke";
     smokeBatch.frustumCulled = false;
     const _smokeGeom = new THREE.PlaneGeometry(0.12, 0.12);
     const _smokeGeomId = smokeBatch.addGeometry(_smokeGeom);
@@ -271,6 +278,7 @@ export function initMatchVisuals(scene: THREE.Scene) {
     decalSlots = cfg.decalSlots;
     decalInstIds = new Int32Array(decalSlots);
     decalBatch = new THREE.BatchedMesh(decalSlots, 4, 6, decalMat);
+    decalBatch.name = "VFX_Decal";
     decalBatch.frustumCulled = false;
     const _decalGeom = new THREE.PlaneGeometry(0.3, 0.3);
     const _decalGeomId = decalBatch.addGeometry(_decalGeom);
@@ -283,6 +291,7 @@ export function initMatchVisuals(scene: THREE.Scene) {
   
   const _flashGeom = new THREE.PlaneGeometry(0.6, 0.6);
   flashMesh = new THREE.Mesh(_flashGeom, flashMat);
+  flashMesh.name = "VFX_Flash";
   flashMesh.visible = false;
   _scene.add(flashMesh);
 

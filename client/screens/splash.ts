@@ -1,11 +1,23 @@
 import * as screenManager from "./screen-manager";
-import { getCachedOrFetchUrl } from "../asset-cache";
+import { getCachedOrFetchUrl, getAssetUrl, populateBlobUrlMap } from "../asset-cache";
 
 const SOUNDS_TO_PRELOAD = [
   'click.mp3', 'vexea_theme.mp3'
 ];
 
 const TEXTURES_TO_PRELOAD: string[] = [
+];
+
+const IMAGES_TO_PRELOAD = [
+  'splash_screen.png',
+  'vibeCo_card.png',
+  'slopInc_card.png',
+  'multiplayer_card.png',
+  'statistics_card.png',
+  'store_card.png',
+  'feedback_card.png',
+  'Blueprint.png',
+  'file_00000000cdd071f48495d22753c89fa1.png'
 ];
 
 const VIDEOS_TO_PRELOAD = [
@@ -40,17 +52,23 @@ export function initSplash() {
     position: 'fixed',
     inset: '0',
     zIndex: '1000',
-    backgroundImage: "url('/splash_screen.png')",
     backgroundSize: 'cover',
-    backgroundPosition: 'center center'
+    backgroundPosition: 'center center',
+    backgroundColor: '#0A0A0A'
+  });
+
+  // Attempt to resolve from cache immediately. If cached, apply background.
+  populateBlobUrlMap().then(() => {
+    if (el) {
+      el.style.backgroundImage = `url('${getAssetUrl("splash_screen.png")}')`;
+    }
   });
 
   if (el.children.length === 0) {
     Object.assign(el.style, {
       display: 'flex', flexDirection: 'column',
       width: '100vw', height: '100vh',
-      alignItems: 'center', justifyContent: 'center',
-      backgroundColor: '#0A0A0A' // fallback
+      alignItems: 'center', justifyContent: 'center'
     });
 
     const vignette = document.createElement('div');
@@ -93,6 +111,7 @@ export function initSplash() {
       const allFiles = [
         ...SOUNDS_TO_PRELOAD.map(f => ({ name: f, cat: 'Sound' as const })),
         ...TEXTURES_TO_PRELOAD.map(f => ({ name: f, cat: 'Asset' as const })),
+        ...IMAGES_TO_PRELOAD.map(f => ({ name: f, cat: 'Image' as const })),
         ...VIDEOS_TO_PRELOAD.map(f => ({ name: f, cat: 'Video' as const }))
       ];
       const total = allFiles.length;
@@ -123,6 +142,11 @@ export function initSplash() {
       });
 
       await Promise.all(workers);
+      await populateBlobUrlMap();
+
+      if (el) {
+        el.style.backgroundImage = `url('${getAssetUrl("splash_screen.png")}')`;
+      }
 
       loadingBarInner.style.width = '120px';
 
