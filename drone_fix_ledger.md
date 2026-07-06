@@ -8,7 +8,6 @@ Last result: NONE
 Initial Test
 
 Output:
-[CLIENT] [Cache] Fallback redirect activated for Mainvideo2.mp4
 [CLIENT] Failed to load drone model: animated_drone.glb
 --- TEST RESULTS ---
 ❌ [FAIL] Drone Batch System: Array exists

@@ -108,6 +108,73 @@ async function setCachedBlob(filename: string, blob: Blob): Promise<void> {
 }
 
 /**
+ * Lists all files currently in the IndexedDB cache.
+ */
+export async function listCachedFiles(): Promise<{ filename: string; timestamp: number; size: number }[]> {
+  const db = await initDB();
+  return new Promise((resolve) => {
+    const transaction = db.transaction(STORE_NAME, "readonly");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      const results = request.result || [];
+      resolve(results.map((r: any) => ({
+        filename: r.filename,
+        timestamp: r.timestamp,
+        size: r.blob ? r.blob.size : 0
+      })));
+    };
+
+    request.onerror = () => resolve([]);
+  });
+}
+
+/**
+ * Deletes a specific file from the IndexedDB cache.
+ */
+export async function deleteCachedFile(filename: string): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.delete(filename);
+
+    request.onsuccess = () => {
+      // Also remove from blobUrlMap if present
+      if (blobUrlMap.has(filename)) {
+        URL.revokeObjectURL(blobUrlMap.get(filename)!);
+        blobUrlMap.delete(filename);
+      }
+      resolve();
+    };
+    request.onerror = () => resolve();
+  });
+}
+
+/**
+ * Clears the entire IndexedDB cache.
+ */
+export async function clearCache(): Promise<void> {
+  const db = await initDB();
+  return new Promise((resolve) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.clear();
+
+    request.onsuccess = () => {
+      // Revoke all blob URLs
+      for (const url of blobUrlMap.values()) {
+        URL.revokeObjectURL(url);
+      }
+      blobUrlMap.clear();
+      resolve();
+    };
+    request.onerror = () => resolve();
+  });
+}
+
+/**
  * Maps a requested mock/virtual filename to the actual filename present in the release.
  */
 export function mapRequestedFileToReal(filename: string): string {
@@ -159,8 +226,11 @@ export const MAP_1_ASSETS = [
   "grenade.glb",
   "bpre_rifleman.glb",
   "concrete_fence_low-poly.glb",
-  "animated_drone.glb",
-  "animated_recon_fixed-wing.glb",
+  "quadcopter_rifle.glb",
+  "quadcopter_bomb.glb",
+  "wheeled_drone.glb",
+  "fixed_wing_drone.glb",
+  "quadcopter_camera.glb",
   "security_camera_01_1k.gltf.glb",
   "security_camera_02_1k.gltf.glb",
   "concrete_block_low_poly.glb",

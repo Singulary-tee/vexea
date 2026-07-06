@@ -53,11 +53,34 @@ class InputManager {
     '2': InputAction.SWAP_WEAPON_2,
   };
 
+  private eventCallbacks: { type: string, handler: any }[] = [];
+
   public init() {
-    window.addEventListener("keydown", this.onKeyDown.bind(this));
-    window.addEventListener("keyup", this.onKeyUp.bind(this));
-    window.addEventListener("mousedown", this.onMouseDown.bind(this));
-    window.addEventListener("mouseup", this.onMouseUp.bind(this));
+    const kd = this.onKeyDown.bind(this);
+    const ku = this.onKeyUp.bind(this);
+    const md = this.onMouseDown.bind(this);
+    const mu = this.onMouseUp.bind(this);
+
+    window.addEventListener("keydown", kd);
+    window.addEventListener("keyup", ku);
+    window.addEventListener("mousedown", md);
+    window.addEventListener("mouseup", mu);
+
+    this.eventCallbacks = [
+        { type: "keydown", handler: kd },
+        { type: "keyup", handler: ku },
+        { type: "mousedown", handler: md },
+        { type: "mouseup", handler: mu }
+    ];
+  }
+
+  public dispose() {
+    for (const item of this.eventCallbacks) {
+        window.removeEventListener(item.type, item.handler);
+    }
+    this.eventCallbacks = [];
+    this.handlers = [];
+    this.resetAll();
   }
 
   public registerHandler(handler: InputHandler) {

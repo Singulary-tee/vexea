@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { spawnEnvironmentDecalAndDust } from "./visuals";
+import { spawnEnvironmentDecalAndDust } from "./src/vfx/VFXOrchestrator";
 
 export class HitscanSystem {
   private raycaster = new THREE.Raycaster();
+  private targets: THREE.Object3D[] = [];
 
   constructor() {}
 
@@ -15,7 +16,16 @@ export class HitscanSystem {
     this.raycaster.set(camera.position, direction);
     this.raycaster.camera = camera;
 
-    const intersects = this.raycaster.intersectObjects(scene.children, true);
+    this.targets.length = 0;
+    scene.children.forEach(child => {
+      // Skip local player weapon models, laser lines, lights, dynamic particle/VFX systems, and floating HUD elements
+      if (child.name === "WeaponsContainer" || child.name === "WeaponsGroup" || child.name === "DynamicMuzzle") return;
+      if (child.name.includes("VFX") || child.name.includes("Light") || child.name.includes("Helper")) return;
+      if (child.name === "floatingUI" || child.type === "Sprite" || child.type === "LineSegments" || child.type === "PointLight" || child.type === "DirectionalLight") return;
+      this.targets.push(child);
+    });
+
+    const intersects = this.raycaster.intersectObjects(this.targets, true);
 
     for (let i = 0; i < intersects.length; i++) {
       const hit = intersects[i];

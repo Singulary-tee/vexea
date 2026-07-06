@@ -1,8 +1,8 @@
 import * as THREE from "three/webgpu";
 import { uv, float, smoothstep, length as tslLength, vec2, vec4, mix } from "three/tsl";
-import { getSettings } from "./settings";
-import { audioManager } from "./audio";
-import { getAssetUrl } from "./asset-cache";
+import { getSettings } from "../../settings";
+import { audioManager } from "../../audio";
+import { getAssetUrl } from "../../asset-cache";
 
 // Pre-allocated math objects for Zero-GC loops
 const _vfxPos = new THREE.Vector3();

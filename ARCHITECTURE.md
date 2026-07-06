@@ -5,7 +5,7 @@
 ---
 
 ## 1. Core Stack & Infrastructure
-*   **Renderer (Client):** Three.js r169+ with TSL. WebGPU primary, WebGL fallback.
+*   **Renderer (Client):** Three.js r184 with TSL (Three Shading Language). We strictly use the WebGPU renderer with `forcewebgl` if/when absolutely necessary for compatibility, and the outdated legacy WebGL renderer is never used. This project is strictly designed, developed, and tested using the modern WebGPU pipeline. Under no circumstances should legacy WebGL-specific limitations, outdated APIs, or concepts like "WebGL buffer allocation" be assumed or referenced as primary.
 *   **Physics:** Rapier via WASM.
     *   **Server:** Authoritative state, static collisions, hitscan validation.
     *   **Client:** Used **ONLY** for player kinematic character controller and static map geometry. **Drones are NOT simulated in client-side Rapier.**
@@ -17,7 +17,15 @@
 
 ---
 
-## 2. Security, Authentication & Database
+## 2. AI Studio Preview Environment Workarounds (CRITICAL / HIGH IMPORTANCE)
+*   **Networking Fallback:** Due to CORS, sandboxing, and Cross-Origin Isolation policies native to the AI Studio preview iframe environment which prevent the standard use of Geckos.io (WebRTC Data Channels) and SharedArrayBuffer, we utilize **Socket.io and JSON** as the primary transport layer to ensure reliability and bypass UDP/WebRTC port-blocking constraints in this specific containerized preview. This is a primary production workaround.
+*   **Thread Synchronization Fallback:** For high-frequency thread synchronization, we rely on **Worker postMessage** as the fallback synchronization channel instead of SharedArrayBuffer (which is blocked by Cross-Origin Isolation constraints in the preview iframe).
+*   **Server Lifecycle Coupling:** Inside the ephemeral AI Studio environment, the server is tightly coupled to the preview applet container. On page refresh, or when the applet is stopped/restarted, both the client and the server terminate and reload together. The server does not survive page reloads or run persistently in the background like a production VPS/droplet.
+*   **Dependency Reference Authoritativeness:** The `node_modules` directory is the absolute authoritative source for any edits, builds, or plans touching external APIs (e.g., Three.js, Rapier, or Yuka). Never rely on outdated training data or pre-trained assumptions about these packages; verify their structural and interface APIs directly from the installed package files.
+
+---
+
+## 3. Security, Authentication & Database
 *   **Authentication:** Firebase Anonymous Auth.
 *   **Persistent State (Firestore):** Post-match batch writing only.
     *   *Match Lock Anti-Exploit:* At match start, write a `MatchInProgress` document containing player IDs. At match end, an atomic transaction updates stats and deletes `MatchInProgress`. A scheduled Google Cloud Function sweeps stale docs (>2 hours) and explicitly records a forfeit/death penalty for combat loggers/disconnects.
@@ -27,7 +35,7 @@
 
 ---
 
-## 3. The Geckos Serialization & Networking Stack
+## 4. The Geckos Serialization & Networking Stack
 *   **Protocol:** Geckos.io (WebRTC Data Channels) for authoritative UDP-like client-server communication.
 *   **Network vs. Physics Loops:**
     *   *Physics Tick:* 60Hz (16.66ms) using Node `setInterval` (Rapier, A* validation, hitscans).
@@ -44,7 +52,7 @@
 
 ---
 
-## 4. Server Architecture (Zero GC Pipeline)
+## 5. Server Architecture (Zero GC Pipeline)
 *   **Object Pooling:** Pre-allocate all buffers, matrixes, and vectors before the match. No `new` keywords, array spreads, or object literals in the tick loop. Input queues use fixed-size typed arrays. Mutate broadcast payloads in place.
 *   **Dynamic Obstacles & AI Pathing:**
     *   *Static Navmesh:* Global A* uses a lightweight JSON graph. No `THREE` namespace on the server.
@@ -56,7 +64,7 @@
 
 ---
 
-## 5. The Authoritative Combat System
+## 6. The Authoritative Combat System
 *   **Hitscan Validation:** Player weapons are instant raycasts. Client registers unconfirmed hit marker immediately. Server executes raycast intersection check against a **Float32Array cyclic ring buffer** of lightweight AABBs at timestamp `T`. Do NOT rewind Rapier physics states.
 *   **Timestamp Trust Exploit (Backtrack Hack) Prevention:**
     *   Server maintains a rolling RTT average per player.
@@ -73,7 +81,7 @@
 
 ---
 
-## 6. Client Dead Reckoning & Zero-Allocation Render Loop
+## 7. Client Dead Reckoning & Zero-Allocation Render Loop
 *   **Dead Reckoning & Jitter Buffer:**
     *   Client maintains a Ring Buffer of the last 3 UDP network packets.
     *   Drones render at `Server_Time - 100ms` to hide 20Hz UDP gaps.
@@ -82,7 +90,7 @@
 *   **The Zero-Allocation Client Pipeline:**
     *   `Geckos.io ArrayBuffer` -> `Dead Reckoning Interpolator` -> `Pre-allocated Vector3/Quaternion` -> `Pre-allocated Matrix4 Compose` -> `BatchedMesh Buffer Write`.
 *   **Batched Geometries & Draw Call Budget (Max 15 Draw Calls):**
-    *   Drones and projectiles use `THREE.BatchedMesh` (r169+) for independent per-instance skeletal animations in a single draw call.
+    *   Drones and projectiles use `THREE.BatchedMesh` (r184) for independent per-instance skeletal animations in a single draw call.
     *   Static map geometry batched into a single merged geometry at load time (1 draw call).
 *   **Runtime Asset Loading & Shaders:**
     *   Pre-atlasing occurs at the build level via `gltf-transform`. Zero runtime atlasing.
@@ -102,7 +110,7 @@
 
 ---
 
-## 7. The LLM Commander Ecosystem (Gemini 3.5 Flash)
+## 8. The LLM Commander Ecosystem (Gemini 3.5 Flash)
 *   **Control Loop:** 8-second asynchronous fire-and-forget loop.
 *   **Prompt Architecture:** Strictly clinical, mechanical vocabulary. Rejects narrative phrasing to bypass Google aligner filter blocks.
 *   **Topological Edge Graph:** Static Prompt defines specific node adjacency (e.g., "Core -> Bridge -> Warehouse"). Costs zero dynamic payload tokens.

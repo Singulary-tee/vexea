@@ -1,3 +1,5 @@
+import { processDroneIntelligence, DroneIntelConfig, INTEL_CONFIGS, getPlayerEntity } from "./ai/DroneIntelligence";
+import * as YUKA from "yuka";
 import { GoogleGenAI, Type } from "@google/genai";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { ACTIVE_GAMEMODE } from "../shared/gamemode-configs.js";
@@ -19,6 +21,8 @@ import {
   BehaviorProfile,
   DRONE_CONFIGS,
   TOTAL_STATE_BUFFER_SIZE as CONST_BUFFER_SIZE,
+  PLAYER_CENTER_OFFSET,
+  PLAYER_TOTAL_HEIGHT,
 } from "../shared/constants";
 import { ChannelAdapter } from "./transport/adapter";
 import { getMapById } from "../shared/maps/map-registry";
@@ -96,6 +100,8 @@ export interface PlayerState {
   velEmaZ: number;
   adMultiplier?: number;
   firedThisTick?: boolean;
+  godMode?: boolean;
+  infiniteAmmo?: boolean;
 
   maxHp: number;
   isAlive: boolean;
@@ -125,7 +131,14 @@ export interface PlayerState {
 export interface ServerDrone {
   id: number;
   type: DroneType;
-  state: DroneState;
+  state: DroneState; // This now acts as the Task
+  mode: "NORMAL" | "COMBAT";
+  yukaVehicle?: YUKA.Vehicle;
+  yukaMemory?: YUKA.MemorySystem;
+  yukaVision?: YUKA.Vision;
+  yukaTarget?: YUKA.MemoryRecord | null;
+  bomberState?: "SEEKING" | "LOCKED" | "COMMITTED";
+  bomberLockTime?: number;
   behavior: BehaviorProfile;
   zone: ZoneName;
   posX: number;
@@ -150,6 +163,10 @@ export interface ServerDrone {
   damageLog: { playerId: string; timestamp: number }[];
   body?: RAPIER.RigidBody | null;
   collider?: RAPIER.Collider | null;
+  kcc?: RAPIER.KinematicCharacterController | null;
+  currentVelocity?: { x: number; y: number; z: number };
+  currentHeading?: { x: number; y: number; z: number };
+  currentSpeed?: number;
 }
 
 export interface ServerCamera {
@@ -180,8 +197,9 @@ export interface ServerZoneState {
 
 const HISTORICAL_SAMPLES_MAX = 120;
 const HISTORIC_BLOCK_SIZE = 2 + MAX_DRONES * 4;
+const DEBUG_PHYSICS_TICKS = false;
 
-const astarPath = (start: ZoneName, end: ZoneName): ZoneName[] => {
+export const astarPath = (start: ZoneName, end: ZoneName): ZoneName[] => {
   if (start === end) return [start];
 
   const queue: ZoneName[][] = [[start]];
@@ -204,6 +222,8 @@ const astarPath = (start: ZoneName, end: ZoneName): ZoneName[] => {
   return [start];
 };
 
+import { LLMCommander } from "./ai/LLMCommander";
+import { PhysicsWorldManager } from "./physics/PhysicsWorldManager";
 export function getDroneColliderRadius(type: DroneType): number {
   switch (type) {
     case DroneType.ROTARY_SHOOTER:
@@ -234,6 +254,19 @@ export class MatchRoom {
   public failedOperations: string[] = [];
   public zoneSummary!: Record<ZoneName, ServerZoneState>;
 
+  // Debug Cube Fields
+  public devCubeBody: RAPIER.RigidBody | null = null;
+  public devCubeCollider: RAPIER.Collider | null = null;
+  public devCubeEvents: string[] = [];
+  public devCubePrevState: "air" | "ground" | "none" = "none";
+  public devCubeSpawned = false;
+
+  // Dev Physics Settings
+  public devPhysicsGravityY = -9.81;
+  public devPhysicsSpeedMultiplier = 1.0;
+  public devPhysicsPaused = false;
+  public devPhysicsStepOnceRequested = false;
+
   // Projectiles Pool
   public projActive = new Uint8Array(200);
   public projPosX = new Float32Array(200);
@@ -255,12 +288,11 @@ export class MatchRoom {
 
   // Rapier Physics
   public rapierWorld!: RAPIER.World;
+  public physicsManager!: PhysicsWorldManager;
 
-  // AI config
-  private geminiClient: GoogleGenAI | null = null;
+  public llmCommander: LLMCommander | null = null;
   public aiCommanderActive = false;
   public llmCommanderDisabled = false;
-  private geminiThrottleCooldownUntil = 0;
 
   // Sockets pre-allocated pack write buffers
   private preallocatedBuffer = new ArrayBuffer(TOTAL_STATE_BUFFER_SIZE);
@@ -278,12 +310,13 @@ export class MatchRoom {
   public zoneRegistry: ZoneRegistry | null = null;
   public collisionMap: CollisionSystem | null = null;
   public specJson: any = null;
+  public onShutdown?: (roomId: string) => void;
 
   private airHangarIndex = 0;
   private groundGarageIndex = 0;
   private elevatorShaftIndex = 0;
 
-  private getNextSpawnPoint(
+  public getNextSpawnPoint(
     spawnType: "AIR_HANGAR" | "GROUND_GARAGE" | "ELEVATOR_SHAFT",
   ): { x: number; y: number; z: number } | null {
     if (!this.specJson || !this.specJson.spawnPoints) return null;
@@ -311,10 +344,12 @@ export class MatchRoom {
     this.roomId = roomId;
     this.mapId = mapId;
     this.initMapConfig();
-    this.initPhysics();
+    this.physicsManager = new PhysicsWorldManager(this.specJson);
+    this.physicsManager.initPhysics();
+    this.rapierWorld = this.physicsManager.rapierWorld;
     this.initEntities();
-    this.initLLMCommander(geminiKey);
-    this.startSimulationLoops();
+    this.llmCommander = new LLMCommander(this, geminiKey);
+    // Phase 1 complete. Simulation loops start in triggerStartMatch()
   }
 
   private initMapConfig() {
@@ -343,74 +378,27 @@ export class MatchRoom {
     }
   }
 
-  private initPhysics() {
-    this.rapierWorld = new RAPIER.World({ x: 0.0, y: -9.81, z: 0.0 });
-
-    // Map Boundaries
-    this.rapierWorld.createCollider(
-      RAPIER.ColliderDesc.cuboid(100, 0.5, 100).setTranslation(0, -0.5, 0),
-    );
-    this.rapierWorld.createCollider(
-      RAPIER.ColliderDesc.cuboid(100, 20, 1).setTranslation(0, 10, 100),
-    );
-    this.rapierWorld.createCollider(
-      RAPIER.ColliderDesc.cuboid(100, 20, 1).setTranslation(0, 10, -100),
-    );
-    this.rapierWorld.createCollider(
-      RAPIER.ColliderDesc.cuboid(1, 20, 100).setTranslation(100, 10, 0),
-    );
-    this.rapierWorld.createCollider(
-      RAPIER.ColliderDesc.cuboid(1, 20, 100).setTranslation(-100, 10, 0),
-    );
-
-    // Core Pillars / Objs
-    // this.rapierWorld.createCollider(
-    //   RAPIER.ColliderDesc.cylinder(6, 4).setTranslation(0, 3, 0),
-    // );
-    // this.rapierWorld.createCollider(
-    //   RAPIER.ColliderDesc.cuboid(5, 4, 1).setTranslation(-15, 2, -15),
-    // );
-    // this.rapierWorld.createCollider(
-    //   RAPIER.ColliderDesc.cuboid(5, 4, 1).setTranslation(15, 2, -15),
-    // );
-    // this.rapierWorld.createCollider(
-    //   RAPIER.ColliderDesc.cuboid(4, 4, 4).setTranslation(35, 2, 20),
-    // );
-    // this.rapierWorld.createCollider(
-    //   RAPIER.ColliderDesc.cuboid(3, 3, 3).setTranslation(45, 1.5, 35),
-    // );
-    // this.rapierWorld.createCollider(
-    //   RAPIER.ColliderDesc.cuboid(12, 5, 1).setTranslation(30, 2.5, -20),
-    // );
-
-    // Actual map buildings
-    if (this.specJson && this.specJson.buildings) {
-      for (const b of this.specJson.buildings) {
-        let sizeX = b.size.x || 10;
-        let sizeZ = b.size.z || 10;
-        const angleRad = b.rotation && b.rotation.y ? (b.rotation.y * Math.PI) / 180 : 0;
-        if (Math.abs(Math.sin(angleRad)) > 0.707) {
-          const temp = sizeX;
-          sizeX = sizeZ;
-          sizeZ = temp;
-        }
-        const halfX = sizeX / 2;
-        const halfY = (b.size.y || 10) / 2;
-        const halfZ = sizeZ / 2;
-        const desc = RAPIER.ColliderDesc.cuboid(halfX, halfY, halfZ)
-          .setTranslation(b.position.x, b.position.y + halfY, b.position.z);
-        this.rapierWorld.createCollider(desc);
-      }
-    }
-  }
-
   private initEntities() {
     // Populate drone structures preallocated pool
     for (let i = 0; i < MAX_DRONES; i++) {
+      const memorySlots = [];
+      for (let j = 0; j < 10; j++) {
+        memorySlots.push({
+          playerId: "",
+          posX: 0,
+          posY: 0,
+          posZ: 0,
+          confidence: 0,
+          lastUpdated: 0
+        });
+      }
+
       this.drones.push({
         id: 0,
         type: DroneType.WHEELED,
         state: DroneState.DEAD,
+        mode: "NORMAL",
+        // memory: memorySlots, removed for Yuka
         behavior: "patrol",
         zone: ZONES.CORE,
         posX: 0,
@@ -436,6 +424,13 @@ export class MatchRoom {
         body: null,
         collider: null,
       });
+      const drone = this.drones[this.drones.length - 1];
+      drone.yukaVehicle = new YUKA.Vehicle();
+      drone.yukaVehicle.maxForce = 20;
+      drone.yukaVehicle.maxSpeed = 10;
+      drone.yukaMemory = new YUKA.MemorySystem(drone.yukaVehicle);
+      drone.yukaMemory.memorySpan = 10;
+      drone.yukaVision = new YUKA.Vision(drone.yukaVehicle);
     }
 
     // Initialize cameras
@@ -465,7 +460,7 @@ export class MatchRoom {
       [ZONES.SPAWN]: {
         id: ZONES.SPAWN,
         name: "zone_spawn",
-        bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+        bounds: { minX: 0, maxX: 128, minZ: 640, maxZ: 768 },
         connectedZones: [ZONES.COURTYARD],
         droneGroups: [],
         playerPresence: "unknown",
@@ -478,7 +473,7 @@ export class MatchRoom {
       [ZONES.COURTYARD]: {
         id: ZONES.COURTYARD,
         name: "zone_courtyard",
-        bounds: { minX: -60, maxX: 60, minZ: 20, maxZ: 80 },
+        bounds: { minX: 0, maxX: 288, minZ: 352, maxZ: 640 },
         connectedZones: [ZONES.SPAWN, ZONES.WAREHOUSE, ZONES.BRIDGE],
         droneGroups: [],
         playerPresence: "unknown",
@@ -491,7 +486,7 @@ export class MatchRoom {
       [ZONES.WAREHOUSE]: {
         id: ZONES.WAREHOUSE,
         name: "zone_warehouse",
-        bounds: { minX: -80, maxX: -20, minZ: 80, maxZ: 160 },
+        bounds: { minX: 0, maxX: 288, minZ: 128, maxZ: 352 },
         connectedZones: [ZONES.COURTYARD, ZONES.TUNNELS, ZONES.PLANT],
         droneGroups: [],
         playerPresence: "unknown",
@@ -504,7 +499,7 @@ export class MatchRoom {
       [ZONES.BRIDGE]: {
         id: ZONES.BRIDGE,
         name: "zone_bridge",
-        bounds: { minX: -20, maxX: 20, minZ: 80, maxZ: 140 },
+        bounds: { minX: 248, maxX: 328, minZ: 456, maxZ: 536 },
         connectedZones: [ZONES.COURTYARD, ZONES.PLANT],
         droneGroups: [],
         playerPresence: "unknown",
@@ -517,7 +512,7 @@ export class MatchRoom {
       [ZONES.PLANT]: {
         id: ZONES.PLANT,
         name: "zone_plant",
-        bounds: { minX: -20, maxX: 60, minZ: 140, maxZ: 220 },
+        bounds: { minX: 288, maxX: 768, minZ: 128, maxZ: 768 },
         connectedZones: [ZONES.WAREHOUSE, ZONES.BRIDGE, ZONES.CORE],
         droneGroups: [],
         playerPresence: "unknown",
@@ -530,7 +525,7 @@ export class MatchRoom {
       [ZONES.TUNNELS]: {
         id: ZONES.TUNNELS,
         name: "zone_tunnels",
-        bounds: { minX: -80, maxX: -20, minZ: 160, maxZ: 240 },
+        bounds: { minX: 128, maxX: 768, minZ: 0, maxZ: 128 },
         connectedZones: [ZONES.WAREHOUSE, ZONES.CORE],
         droneGroups: [],
         playerPresence: "unknown",
@@ -543,7 +538,7 @@ export class MatchRoom {
       [ZONES.CORE]: {
         id: ZONES.CORE,
         name: "zone_core",
-        bounds: { minX: -40, maxX: 40, minZ: 220, maxZ: 280 },
+        bounds: { minX: 320, maxX: 448, minZ: 320, maxZ: 448 },
         connectedZones: [ZONES.PLANT, ZONES.TUNNELS],
         droneGroups: [],
         playerPresence: "unknown",
@@ -565,14 +560,57 @@ export class MatchRoom {
       const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased()
         .setTranslation(d.posX, d.posY, d.posZ);
       d.body = this.rapierWorld.createRigidBody(bodyDesc);
-      const radius = getDroneColliderRadius(d.type);
-      const colliderDesc = RAPIER.ColliderDesc.ball(radius);
+      let colliderDesc: RAPIER.ColliderDesc;
+      const type = d.type;
+      if (type === DroneType.ROTARY_SHOOTER) {
+        colliderDesc = RAPIER.ColliderDesc.cuboid(0.77, 0.20, 0.59);
+      } else if (type === DroneType.BOMBER) {
+        colliderDesc = RAPIER.ColliderDesc.cuboid(0.70, 0.70, 0.70);
+      } else if (type === DroneType.RECON) {
+        colliderDesc = RAPIER.ColliderDesc.cuboid(0.41, 0.12, 0.90);
+      } else if (type === DroneType.FIXED_WING) {
+        colliderDesc = RAPIER.ColliderDesc.cuboid(0.62, 0.18, 1.35);
+      } else if (type === DroneType.WHEELED) {
+        colliderDesc = RAPIER.ColliderDesc.cuboid(0.98, 0.97, 0.55);
+        colliderDesc.setTranslation(0, -1.0, 0); // Preserve sink-fix
+      } else if (type === DroneType.ROBOT_DOG) {
+        colliderDesc = RAPIER.ColliderDesc.cuboid(0.82, 0.20, 1.23);
+      } else if (type === DroneType.HUMANOID) {
+        colliderDesc = RAPIER.ColliderDesc.capsule(1.5, 1.0); // Total height 5.0, matching targetRadius 2.5
+      } else {
+        colliderDesc = RAPIER.ColliderDesc.ball(1.5);
+      }
+      
       d.collider = this.rapierWorld.createCollider(colliderDesc, d.body);
+      
+      const offset = 0.1;
+      d.kcc = this.rapierWorld.createCharacterController(offset);
+      d.kcc.setUp({ x: 0, y: 1, z: 0 });
+      d.kcc.setApplyImpulsesToDynamicBodies(true);
+
+      if (d.type === DroneType.BOMBER || d.type === DroneType.ROTARY_SHOOTER) {
+        d.currentVelocity = { x: 0, y: 0, z: 0 };
+      } else if (d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
+        d.currentHeading = { x: 1, y: 0, z: 0 };
+        d.currentSpeed = 0;
+      }
+      
+      console.log('[COLLIDE_DIAG] Drone collider created. droneId:', d.id, 'colliderHandle:', d.collider.handle, 'collisionGroups:', d.collider.collisionGroups(), 'solverGroups:', d.collider.solverGroups(), 'isSensor:', d.collider.isSensor(), 'shape:', JSON.stringify(colliderDesc.shape));
     } catch (e) {}
   }
 
   public despawnDrone(d: ServerDrone) {
+    const oldState = d.state;
     d.state = DroneState.DEAD;
+    if (oldState !== DroneState.DEAD) {
+      this.broadcastReliableEvent({
+        type: "DRONE_DEATH",
+        droneId: d.id,
+        posX: d.posX,
+        posY: d.posY,
+        posZ: d.posZ,
+      });
+    }
     if (d.body) {
       try {
         if (this.rapierWorld) {
@@ -601,15 +639,7 @@ export class MatchRoom {
     return null;
   }
 
-  private initLLMCommander(geminiKey?: string) {
-    const key = geminiKey || process.env.GEMINI_API_KEY;
-    if (!key) return;
-    this.geminiClient = new GoogleGenAI({
-      apiKey: key,
-      httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-    });
-    this.aiCommanderActive = true;
-  }
+
 
   public registerPlayer(
     playerId: string,
@@ -617,6 +647,12 @@ export class MatchRoom {
     stats: any,
   ): PlayerState {
     console.log(`[SERVER registerPlayer] playerId: "${playerId}", mapId: "${this.mapId}"`);
+    
+    // Deterministic Spawning Phase 1/2: Resolve coordinates from map data
+    const spawnX = this.specJson?.playerSpawn?.position?.x ?? ((Math.random() - 0.5) * 40);
+    const spawnY = (this.specJson?.playerSpawn?.position?.y ?? 0) + 5.0;
+    const spawnZ = this.specJson?.playerSpawn?.position?.z ?? (120 + (Math.random() - 0.5) * 10);
+
     const pState: PlayerState = {
       id: playerId,
       channel,
@@ -626,15 +662,9 @@ export class MatchRoom {
       inputMask: 0,
       fire: 0,
       timestamp: Date.now(),
-      posX:
-        this.mapId === "map_1_facility"
-          ? 40.0
-          : (Math.random() - 0.5) * 40,
-      posY: 1.2,
-      posZ:
-        this.mapId === "map_1_facility"
-          ? 180.0
-          : 120 + (Math.random() - 0.5) * 10,
+      posX: spawnX,
+      posY: spawnY,
+      posZ: spawnZ,
       velX: 0,
       velY: 0,
       velZ: 0,
@@ -710,6 +740,7 @@ export class MatchRoom {
       colliderDesc,
       pState.body,
     );
+    console.log('[COLLIDE_DIAG] Player collider created. playerId:', playerId, 'colliderHandle:', pState.collider.handle, 'collisionGroups:', pState.collider.collisionGroups(), 'solverGroups:', pState.collider.solverGroups(), 'isSensor:', pState.collider.isSensor(), 'shape:', JSON.stringify(colliderDesc.shape));
     pState.kcc = this.rapierWorld.createCharacterController(0.01);
     pState.kcc.setUp({ x: 0, y: 1, z: 0 });
     pState.kcc.setApplyImpulsesToDynamicBodies(true);
@@ -721,6 +752,7 @@ export class MatchRoom {
       type: "handshake",
       id: playerId,
       zones: Object.values(ZONES),
+      position: { x: pState.posX, y: pState.posY, z: pState.posZ },
     });
     return pState;
   }
@@ -743,6 +775,96 @@ export class MatchRoom {
       for(let i=0; i<count; i++) {
           this.registerBotPlayer();
       }
+  }
+
+  public devSpawnCube(playerId: string, customPos?: { x: number; y: number; z: number }) {
+    if (!this.rapierWorld) return;
+    let player = this.players.get(playerId);
+    if (!player && this.players.size > 0) {
+      player = Array.from(this.players.values())[0];
+    }
+    
+    let spawnX = 0, spawnY = 10, spawnZ = 0;
+    if (customPos && customPos.x !== undefined && customPos.y !== undefined && customPos.z !== undefined) {
+      spawnX = Number(customPos.x);
+      spawnY = Number(customPos.y);
+      spawnZ = Number(customPos.z);
+    } else if (player) {
+      // Position the cube 5 meters in front of the player, and 3 meters high
+      const forwardX = Math.sin(player.yaw);
+      const forwardZ = Math.cos(player.yaw);
+      spawnX = player.posX + forwardX * 5.0;
+      spawnY = player.posY + 3.0;
+      spawnZ = player.posZ + forwardZ * 5.0;
+    }
+    
+    // Clean old
+    if (this.devCubeBody) {
+      try {
+        this.rapierWorld.removeRigidBody(this.devCubeBody);
+      } catch (e) {}
+    }
+    
+    this.devCubeEvents = [];
+    this.devCubePrevState = "air";
+    this.devCubeSpawned = true;
+    
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(spawnX, spawnY, spawnZ);
+    this.devCubeBody = this.rapierWorld.createRigidBody(bodyDesc);
+    const colliderDesc = RAPIER.ColliderDesc.cuboid(0.5, 0.5, 0.5);
+    this.devCubeCollider = this.rapierWorld.createCollider(colliderDesc, this.devCubeBody);
+    
+    this.devCubeEvents.push(`Spawned dynamic cube at (${spawnX.toFixed(2)}, ${spawnY.toFixed(2)}, ${spawnZ.toFixed(2)})`);
+    console.log(`[PHYSICS DEBUG] Spawned server debug cube at (${spawnX.toFixed(2)}, ${spawnY.toFixed(2)}, ${spawnZ.toFixed(2)})`);
+  }
+
+  public devClearCube() {
+    if (this.devCubeBody) {
+      try {
+        this.rapierWorld.removeRigidBody(this.devCubeBody);
+      } catch (e) {}
+      this.devCubeBody = null;
+      this.devCubeCollider = null;
+    }
+    this.devCubeSpawned = false;
+    this.devCubeEvents = [];
+  }
+
+  public setDevPhysicsGravityY(gY: number) {
+    this.devPhysicsGravityY = gY;
+    if (this.rapierWorld) {
+      this.rapierWorld.gravity = { x: 0, y: gY, z: 0 };
+    }
+    this.broadcastReliableEvent({
+      type: "dev_physics_settings_sync",
+      gravityY: this.devPhysicsGravityY,
+      speedMultiplier: this.devPhysicsSpeedMultiplier,
+      paused: this.devPhysicsPaused
+    });
+  }
+
+  public setDevPhysicsSpeedMultiplier(sM: number) {
+    this.devPhysicsSpeedMultiplier = sM;
+    this.broadcastReliableEvent({
+      type: "dev_physics_settings_sync",
+      gravityY: this.devPhysicsGravityY,
+      speedMultiplier: this.devPhysicsSpeedMultiplier,
+      paused: this.devPhysicsPaused
+    });
+  }
+
+  public setDevPhysicsPaused(p: boolean) {
+    this.devPhysicsPaused = p;
+    this.broadcastReliableEvent({
+      type: "dev_physics_settings_sync",
+      gravityY: this.devPhysicsGravityY,
+      speedMultiplier: this.devPhysicsSpeedMultiplier,
+      paused: this.devPhysicsPaused
+    });
+  }
+
+  public setDevPhysicsStepOnce() {
+    this.devPhysicsStepOnceRequested = true;
   }
 
   public removePlayer(playerId: string) {
@@ -772,16 +894,119 @@ export class MatchRoom {
     let lastPhysicsTime = process.hrtime.bigint();
     let physicsAccumulator = 0n;
 
+    // Task 1 & 4 Metrics
+    let tickTimeSum = 0;
+    let tickCount = 0;
+    let lastMetricEmit = Date.now();
+
     this.physicsInterval = setInterval(() => {
       const now = process.hrtime.bigint();
-      physicsAccumulator += now - lastPhysicsTime;
+      let elapsed = now - lastPhysicsTime;
       lastPhysicsTime = now;
+
+      if (this.devPhysicsPaused) {
+        elapsed = 0n;
+      } else {
+        elapsed = BigInt(Math.floor(Number(elapsed) * this.devPhysicsSpeedMultiplier));
+      }
+      physicsAccumulator += elapsed;
+
+      if (this.devPhysicsStepOnceRequested) {
+        physicsAccumulator += PHYSICS_TIMESTEP;
+        this.devPhysicsStepOnceRequested = false;
+      }
 
       if (physicsAccumulator > PHYSICS_TIMESTEP * 10n) {
         physicsAccumulator = PHYSICS_TIMESTEP * 10n;
       }
 
       while (physicsAccumulator >= PHYSICS_TIMESTEP) {
+        const tickStart = Date.now();
+        let preCubePos = { x: 0, y: 0, z: 0 };
+        let preCubeVel = { x: 0, y: 0, z: 0 };
+        if (this.devCubeBody && this.devCubeSpawned) {
+          const translation = this.devCubeBody.translation();
+          preCubePos = { x: translation.x, y: translation.y, z: translation.z };
+          const linvel = this.devCubeBody.linvel();
+          preCubeVel = { x: linvel.x, y: linvel.y, z: linvel.z };
+        }
+
+        // Broad-phase update BEFORE character queries
+        this.rapierWorld.step();
+        this.processTestEntities(Number(PHYSICS_TIMESTEP) / 1000000000.0);
+
+        if (this.devCubeBody && this.devCubeSpawned) {
+          const t = this.devCubeBody.translation();
+          const vel = this.devCubeBody.linvel();
+          
+          if (t.y < -10 && !this.devCubeEvents.some(e => e.includes("FELL THROUGH WORLD"))) {
+            this.devCubeEvents.push(`[${this.serverTick}] FELL THROUGH WORLD! Pos Y: ${t.y.toFixed(2)}`);
+          }
+          
+          let collidedWith: string[] = [];
+          try {
+            const sphereShape = RAPIER.ColliderDesc.ball(0.55).shape;
+            this.rapierWorld.intersectionsWithShape(
+              t,
+              { x: 0, y: 0, z: 0, w: 1 },
+              sphereShape,
+              (collider) => {
+                if (collider.handle === this.devCubeCollider?.handle) return true;
+                
+                const hitEntity = this.findHitEntity(collider.handle);
+                if (hitEntity) {
+                  if (hitEntity.type === "player") {
+                    collidedWith.push("Player");
+                  } else if (hitEntity.type === "drone") {
+                    collidedWith.push(`Drone (${hitEntity.obj.type})`);
+                  }
+                } else {
+                  const colTranslation = collider.translation();
+                  if (collider.shapeType() === RAPIER.ShapeType.Cuboid) {
+                    if (Math.abs(colTranslation.y - (-0.5)) < 0.1) {
+                      collidedWith.push("Floor");
+                    } else {
+                      collidedWith.push("Building");
+                    }
+                  } else {
+                    collidedWith.push("Wall");
+                  }
+                }
+                return true;
+              }
+            );
+          } catch (e) {}
+          
+          if (collidedWith.length > 0) {
+            if (this.devCubePrevState !== "ground") {
+              const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
+              
+              const dy = t.y - preCubePos.y;
+              // Compute solver Y normal force correction
+              const expectedFall = this.devPhysicsGravityY * (1 / 60);
+              const normalForceCorrectionY = dy - expectedFall;
+
+              this.devCubeEvents.push(`COLLISION: Touch ${collidedWith.join(", ")}`);
+              this.devCubeEvents.push(`  - Pre-Pos:  (${preCubePos.x.toFixed(3)}, ${preCubePos.y.toFixed(3)}, ${preCubePos.z.toFixed(3)})`);
+              this.devCubeEvents.push(`  - Post-Pos: (${t.x.toFixed(3)}, ${t.y.toFixed(3)}, ${t.z.toFixed(3)})`);
+              this.devCubeEvents.push(`  - Pre-Vel:  (${preCubeVel.x.toFixed(2)}, ${preCubeVel.y.toFixed(2)}, ${preCubeVel.z.toFixed(2)})`);
+              this.devCubeEvents.push(`  - Post-Vel: (${vel.x.toFixed(2)}, ${vel.y.toFixed(2)}, ${vel.z.toFixed(2)})`);
+              this.devCubeEvents.push(`  - Correct:  X: ${(t.x - preCubePos.x).toFixed(4)} | Y: ${normalForceCorrectionY.toFixed(4)} | Z: ${(t.z - preCubePos.z).toFixed(4)}`);
+              
+              this.devCubePrevState = "ground";
+            }
+          } else {
+            if (this.devCubePrevState === "ground" && Math.abs(vel.y) > 0.1) {
+              this.devCubeEvents.push(`Left surface, currently in air. Vel Y: ${vel.y.toFixed(2)}`);
+              this.devCubePrevState = "air";
+            }
+          }
+          
+          if (this.devCubeEvents.length > 50) {
+            this.devCubeEvents.splice(0, this.devCubeEvents.length - 50);
+          }
+        }
+
         if (this.matchActive) {
           this.serverTick++;
           const matchElapsed = (Date.now() - this.matchStartTime) / 1000;
@@ -792,6 +1017,13 @@ export class MatchRoom {
 
           // Respawn ticks & weapon states
           for (const player of this.players.values()) {
+            if (player.body && player.isAlive) {
+              const t = player.body.translation();
+              player.posX = t.x;
+              player.posY = t.y;
+              player.posZ = t.z;
+            }
+
             if (!player.isAlive) {
               player.hp = 0;
               player.inputMask = 0;
@@ -809,21 +1041,24 @@ export class MatchRoom {
                 player.isAlive = true;
                 player.isDead = false;
                 player.hp = player.maxHp;
-                if (
-                  this.mapId === "map_1_facility" &&
-                  this.specJson?.playerSpawn
-                ) {
-                  player.posX = this.specJson.playerSpawn.position.x;
-                  player.posY =
-                    (this.specJson.playerSpawn.position.y !== undefined
-                      ? this.specJson.playerSpawn.position.y
-                      : 0) + 1.2;
-                  player.posZ = this.specJson.playerSpawn.position.z;
-                } else {
-                  player.posX = (Math.random() - 0.5) * 40;
-                  player.posY = 1.0;
-                  player.posZ = 120 + (Math.random() - 0.5) * 10;
-                }
+                
+                // Reset weapon state on respawn
+                player.weaponState.primary.reserve = 120;
+                player.weaponState.primary.currentMag = 40;
+                player.weaponState.primary.isReloading = false;
+                player.weaponState.primary.reloadTimer = 0;
+                player.weaponState.secondary.reserve = 60;
+                player.weaponState.secondary.currentMag = 35;
+                player.weaponState.secondary.isReloading = false;
+                player.weaponState.secondary.reloadTimer = 0;
+                
+                const spawnX = this.specJson?.playerSpawn?.position?.x ?? ((Math.random() - 0.5) * 40);
+                const spawnY = (this.specJson?.playerSpawn?.position?.y ?? 0) + 5.0;
+                const spawnZ = this.specJson?.playerSpawn?.position?.z ?? (120 + (Math.random() - 0.5) * 10);
+
+                player.posX = spawnX;
+                player.posY = spawnY;
+                player.posZ = spawnZ;
 
                 if (player.body) {
                   player.body.setNextKinematicTranslation({
@@ -931,7 +1166,8 @@ export class MatchRoom {
               // Simple jump / gravity mechanics
               const gravity = -18.0;
               player.velY += gravity * 0.0166;
-              if (isJump && player.posY <= 1.2) {
+              const grounded = player.kcc.computedGrounded();
+              if (isJump && grounded) {
                 player.velY = 7.0;
               }
 
@@ -940,27 +1176,50 @@ export class MatchRoom {
                 y: player.velY * 0.0166,
                 z: player.velZ * 0.0166,
               };
+              if (DEBUG_PHYSICS_TICKS && this.serverTick % 300 === 0) {
+                console.log('[COLLIDE_DIAG] KCC query about to run. playerId:', player.id, 'colliderHandle:', player.collider.handle, 'desiredTranslation:', JSON.stringify(desiredTranslation), 'filterFlags:', RAPIER.QueryFilterFlags.EXCLUDE_SENSORS);
+              }
               player.kcc.computeColliderMovement(
                 player.collider,
                 desiredTranslation,
                 RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+                undefined,
+                undefined
               );
 
               const correctedTrans = player.kcc.computedMovement();
+              if (DEBUG_PHYSICS_TICKS && this.serverTick % 300 === 0) {
+                console.log('[COLLIDE_DIAG] KCC query result. playerId:', player.id, 'correctedTrans:', JSON.stringify(correctedTrans), 'computedGrounded:', player.kcc.computedGrounded(), 'numComputedCollisions:', player.kcc.numComputedCollisions());
+              }
+
+              for (let i = 0; i < player.kcc.numComputedCollisions(); i++) {
+                const collision = player.kcc.computedCollision(i);
+                if (DEBUG_PHYSICS_TICKS && this.serverTick % 300 === 0) {
+                  console.log('[COLLIDE_DIAG] KCC detected collision. playerId:', player.id, 'collisionIndex:', i, 'colliderHandle:', collision ? (collision.collider ? collision.collider.handle : 'unknown') : 'unknown', 'toi:', collision ? (collision.toi !== undefined ? collision.toi : 'unknown') : 'unknown');
+                }
+              }
               const prevX = player.posX;
               const prevY = player.posY;
               const prevZ = player.posZ;
 
-              // Apply Rapier collision results directly
-              player.posX += correctedTrans.x;
-              player.posY += correctedTrans.y;
-              player.posZ += correctedTrans.z;
+              if (player.body) {
+                const currentPos = player.body.translation();
+                const nextPos = {
+                  x: currentPos.x + correctedTrans.x,
+                  y: currentPos.y + correctedTrans.y,
+                  z: currentPos.z + correctedTrans.z,
+                };
+                player.body.setNextKinematicTranslation(nextPos);
+                player.posX = nextPos.x;
+                player.posY = nextPos.y;
+                player.posZ = nextPos.z;
+              }
 
               if (Math.abs(correctedTrans.x) < Math.abs(desiredTranslation.x) * 0.9 || 
                   Math.abs(correctedTrans.z) < Math.abs(desiredTranslation.z) * 0.9) {
                   const iterStr = Array.from(this.players.entries())[0][0]; // just logic for logging
                   if (player.id === iterStr && (player.inputMask & 0x01)!== 0) {
-                      console.log(`[COLLISION HIT] Player blocked! Wanted Z: ${desiredTranslation.z.toFixed(4)}, got Z: ${correctedTrans.z.toFixed(4)}. Current Pos: ${player.posX.toFixed(2)}, ${player.posZ.toFixed(2)}`);
+                      if (DEBUG_PHYSICS_TICKS) console.log(`[COLLISION HIT] Player blocked! Wanted Z: ${desiredTranslation.z.toFixed(4)}, got Z: ${correctedTrans.z.toFixed(4)}. Current Pos: ${player.posX.toFixed(2)}, ${player.posZ.toFixed(2)}`);
                   }
               }
 
@@ -968,10 +1227,8 @@ export class MatchRoom {
               if (player.posY < prevY && player.velY < -5.0) {
                 if (player.lastFallStartY === 0) player.lastFallStartY = prevY;
               }
-              const grounded =
-                player.kcc.computedGrounded() || player.posY <= 1.22;
-              if (grounded) {
-                if (player.posY < 1.1) player.posY = 1.2;
+              const isCurrentlyGrounded = player.kcc.computedGrounded();
+              if (isCurrentlyGrounded) {
                 player.velY = 0;
                 if (player.lastFallStartY > 0) {
                   const fallDist = player.lastFallStartY - player.posY;
@@ -998,21 +1255,14 @@ export class MatchRoom {
               player.velEmaX = player.velEmaX * 0.8 + actualVx * 0.2;
               player.velEmaY = player.velEmaY * 0.8 + actualVy * 0.2;
               player.velEmaZ = player.velEmaZ * 0.8 + actualVz * 0.2;
-
-              if (player.body) {
-                player.body.setNextKinematicTranslation({
-                  x: player.posX,
-                  y: player.posY,
-                  z: player.posZ,
-                });
-              }
             } // end if player.kcc...
 
             // RESTRICTED GATE DAMAGE
             if (
               this.zoneRegistry &&
               this.zoneRegistry.isInRestrictedGate(player.posX, player.posZ) &&
-              player.hp > 0
+              player.hp > 0 &&
+              !player.godMode
             ) {
               const damage = 25 * 0.0166;
               player.hp -= damage;
@@ -1037,7 +1287,44 @@ export class MatchRoom {
 
           // World updates (RVO avoidance, projectile updates)
           this.updateSystemEntities();
-          this.rapierWorld.step();
+
+          if (DEBUG_PHYSICS_TICKS && this.serverTick % 300 === 0) {
+            for (const player of this.players.values()) {
+              const overlappingHandles: number[] = [];
+              const sphereShape = RAPIER.ColliderDesc.ball(1.0).shape;
+              this.rapierWorld.intersectionsWithShape(
+                { x: player.posX, y: player.posY, z: player.posZ },
+                { x: 0, y: 0, z: 0, w: 1 },
+                sphereShape,
+                (collider) => {
+                  overlappingHandles.push(collider.handle);
+                  return true;
+                }
+              );
+              console.log('[COLLIDE_DIAG] Overlap query at player position. playerId:', player.id, 'position:', player.posX.toFixed(2), player.posY.toFixed(2), player.posZ.toFixed(2), 'overlappingHandles:', JSON.stringify(overlappingHandles));
+            }
+          }
+        }
+
+        const tickEnd = Date.now();
+        tickTimeSum += (tickEnd - tickStart);
+        tickCount++;
+
+        if (Date.now() - lastMetricEmit >= 1000) {
+          const avgTickMs = tickCount > 0 ? tickTimeSum / tickCount : 0;
+          const mem = process.memoryUsage();
+          this.broadcastReliableEvent({
+            type: "dev_server_tick_ms",
+            tickMs: avgTickMs
+          });
+          this.broadcastReliableEvent({
+            type: "dev_server_memory_mb",
+            heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+            heapTotalMb: Math.round(mem.heapTotal / 1024 / 1024)
+          });
+          tickTimeSum = 0;
+          tickCount = 0;
+          lastMetricEmit = Date.now();
         }
 
         physicsAccumulator -= PHYSICS_TIMESTEP;
@@ -1051,10 +1338,10 @@ export class MatchRoom {
         return;
       }
       if (
-        this.aiCommanderActive &&
-        Date.now() > this.geminiThrottleCooldownUntil
+        this.aiCommanderActive && this.llmCommander &&
+        Date.now() > this.llmCommander.geminiThrottleCooldownUntil
       ) {
-        this.executeLLMStep();
+        this.llmCommander.executeLLMStep();
       } else {
         this.offlineSystemFallbackAI();
       }
@@ -1092,6 +1379,31 @@ export class MatchRoom {
         isAlive: p.isAlive,
       }));
 
+      const devDrones = this.drones.filter(d => d.state !== DroneState.DEAD).map(d => ({
+        id: d.id,
+        groupId: d.groupId,
+        targetX: d.targetX,
+        targetY: d.targetY,
+        targetZ: d.targetZ,
+        mode: d.mode,
+        memory: d.yukaMemory ? d.yukaMemory.records.filter(m => (m as any).confidence > 0).map(m => ({ id: m.entity.name, x: m.lastSensedPosition.x, y: m.lastSensedPosition.y, z: m.lastSensedPosition.z, conf: (m as any).confidence })) : []
+      }));
+
+      let cubeSyncData = null;
+      if (this.devCubeBody && this.devCubeSpawned) {
+        const t = this.devCubeBody.translation();
+        const vel = this.devCubeBody.linvel();
+        cubeSyncData = {
+          x: t.x,
+          y: t.y,
+          z: t.z,
+          vx: vel.x,
+          vy: vel.y,
+          vz: vel.z,
+          events: [...this.devCubeEvents]
+        };
+      }
+
       for (const player of this.players.values()) {
         try {
           player.channel.rawEmit(packedData);
@@ -1108,6 +1420,9 @@ export class MatchRoom {
             tick: this.serverTick,
             projectiles: activeProj,
             players: detailedPlayers,
+            serverCube: cubeSyncData,
+            devDrones: devDrones,
+            liveZoneSummary: this.zoneSummary
           });
         } catch (e) {
           // Discard safely
@@ -1148,7 +1463,7 @@ export class MatchRoom {
           } else {
             const b = ZONE_BOUNDS[ZONES.COURTYARD];
             d.posX = b.center.x + (Math.random() - 0.5) * b.halfSize.x * 0.4;
-            d.posY = isAir ? b.center.y + 4 : b.center.y + 0.8;
+            d.posY = isAir ? b.center.y + 4 : b.center.y + PLAYER_CENTER_OFFSET;
             d.posZ = b.center.z + (Math.random() - 0.5) * b.halfSize.z * 0.4;
           }
         }
@@ -1307,6 +1622,11 @@ export class MatchRoom {
               const dz = d.posZ - this.projPosZ[i];
               if (dx * dx + dy * dy + dz * dz < d.rad * d.rad) {
                 d.hp -= this.projDamage[i];
+                if (!d.damageLog) d.damageLog = [];
+                d.damageLog.push({
+                  playerId: this.projSourceId[i],
+                  timestamp: Date.now()
+                });
                 this.projActive[i] = 0;
                 if (d.hp <= 0) {
                   this.despawnDrone(d);
@@ -1443,7 +1763,6 @@ export class MatchRoom {
         for (const adj of TOPOLOGY[playerZone] || []) {
           detectedZones.add(adj);
         }
-        targetPlayer.firedThisTick = false;
       }
 
       for (const zoneId of ZONES_ARRAY) {
@@ -1477,6 +1796,8 @@ export class MatchRoom {
       }
     }
 
+    processDroneIntelligence(nowMs, this.drones, this.players, this.rapierWorld, RAPIER);
+
     // Drone state updates
     for (let i = 0; i < this.drones.length; i++) {
       const d = this.drones[i];
@@ -1496,176 +1817,155 @@ export class MatchRoom {
       let finalTargetY = WAYPOINTS[d.zone].y;
       let finalTargetZ = WAYPOINTS[d.zone].z;
 
-      if (targetPlayer) {
-        const dx = targetPlayer.posX - d.posX;
-        const dy = targetPlayer.posY - d.posY;
-        const dz = targetPlayer.posZ - d.posZ;
-        const rsq = dx * dx + dy * dy + dz * dz;
+      
+            let shouldFire = false;
+      let combatTargetRecord = d.yukaTarget;
 
-        const fireDist = 625.0; // 25 units
-        let withinFireDist = rsq < fireDist;
-
+      if (d.mode === "COMBAT" && combatTargetRecord) {
+        const conf = INTEL_CONFIGS[d.type];
+        const targetPos = combatTargetRecord.lastSensedPosition;
+        
+        const dx = targetPos.x - d.posX;
+        const dy = targetPos.y - d.posY;
+        const dz = targetPos.z - d.posZ;
+        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
         let hasLOS = true;
-        if (this.rapierWorld) {
-          const rayStart = { x: d.posX, y: d.posY + 0.5, z: d.posZ };
-          const rayDir = {
-            x: targetPlayer.posX - d.posX,
-            y: targetPlayer.posY - (d.posY + 0.5),
-            z: targetPlayer.posZ - d.posZ,
-          };
-          const len = Math.sqrt(
-            rayDir.x * rayDir.x + rayDir.y * rayDir.y + rayDir.z * rayDir.z,
-          );
-          if (len > 0 && rsq < 900) {
-            let rDir = {
-              x: rayDir.x / len,
-              y: rayDir.y / len,
-              z: rayDir.z / len,
-            };
-            const ray = new RAPIER.Ray(rayStart, rDir);
-            const hit = this.rapierWorld.castRay(
-              ray,
-              len,
-              true,
-              RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC,
-            );
-            if (hit && hit.collider && hit.timeOfImpact < len - 0.7)
-              hasLOS = false;
-          } else {
-            hasLOS = false;
-          }
+        if (this.rapierWorld && dist > 0.1) {
+          const ray = new RAPIER.Ray({ x: d.posX, y: d.posY + 0.5, z: d.posZ }, { x: dx/dist, y: dy/dist, z: dz/dist });
+          const hit = this.rapierWorld.castRay(ray, dist, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC);
+          if (hit && hit.collider && hit.timeOfImpact < dist - 0.7) hasLOS = false;
         }
 
-        const playerInZone =
-          this.zoneSummary[d.zone].playerPresence === "confirmed" ||
-          detectedZones.has(d.zone);
-
-        if (d.type === DroneType.BOMBER && rsq < 4.0) {
-          this.applyExplosionDamage(
-            { x: d.posX, y: d.posY, z: d.posZ },
-            4.0,
-            DRONE_CONFIGS[d.type].damage,
-            d.id.toString(),
-            "drone",
-          );
-          this.despawnDrone(d);
-          continue;
-        }
-
+        d.yukaVehicle.steering.clear();
+        
         if (d.type === DroneType.RECON) {
-          d.state = DroneState.PURSUING;
-          finalTargetX = targetPlayer.posX + (Math.random() - 0.5) * 40;
-          finalTargetY = targetPlayer.posY + 15;
-          finalTargetZ = targetPlayer.posZ + (Math.random() - 0.5) * 40;
+           d.state = DroneState.PURSUING;
+           const evade = new YUKA.EvadeBehavior(combatTargetRecord.entity, 5.0);
+           d.yukaVehicle.steering.add(evade);
+        } else if (d.type === DroneType.ROTARY_SHOOTER) {
+           d.state = DroneState.PURSUING;
+           if (dist < conf.engagementMin) {
+              const flee = new YUKA.FleeBehavior(targetPos, conf.engagementMin);
+              d.yukaVehicle.steering.add(flee);
+           } else if (dist > conf.engagementMax) {
+              const seek = new YUKA.SeekBehavior(targetPos);
+              d.yukaVehicle.steering.add(seek);
+           } else {
+              const arrive = new YUKA.ArriveBehavior(targetPos, 2, 0.5);
+              d.yukaVehicle.steering.add(arrive);
+           }
+           
+           if (dist >= conf.engagementMin && dist <= conf.engagementMax && hasLOS) {
+             const angleToTarget = Math.atan2(dx, dz);
+             let angleDiff = Math.abs(d.rotY - angleToTarget);
+             while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+             angleDiff = Math.abs(angleDiff);
+             if (angleDiff <= conf.fireArcTolerance) shouldFire = true;
+           }
+        } else if (d.type === DroneType.BOMBER) {
+           if (!d.bomberState) d.bomberState = "SEEKING";
+           if (d.bomberState === "SEEKING") {
+              d.bomberState = "LOCKED";
+              d.bomberLockTime = this.serverTick;
+              d.yukaVehicle.steering.add(new YUKA.SeekBehavior(targetPos));
+           } else if (d.bomberState === "LOCKED") {
+              if (this.serverTick - (d.bomberLockTime || 0) > 20) d.bomberState = "COMMITTED";
+              d.yukaVehicle.steering.add(new YUKA.ArriveBehavior(targetPos, 2, 0.5));
+           } else if (d.bomberState === "COMMITTED") {
+              const pursuit = new YUKA.PursuitBehavior(combatTargetRecord.entity, 1.0);
+              d.yukaVehicle.steering.add(pursuit);
+              if (dist < 4.0) {
+                 this.applyExplosionDamage({ x: d.posX, y: d.posY, z: d.posZ }, 4.0, DRONE_CONFIGS[d.type].damage, d.id.toString(), "drone");
+                 this.despawnDrone(d);
+                 continue;
+              }
+           }
         } else if (d.type === DroneType.FIXED_WING) {
-          d.state = DroneState.PURSUING;
-          const time = this.serverTick * 0.05;
-          finalTargetX = targetPlayer.posX + Math.cos(time) * 30;
-          finalTargetY = targetPlayer.posY + 20;
-          finalTargetZ = targetPlayer.posZ + Math.sin(time) * 30;
-          if (rsq < 400 && d.cooldown <= 0) {
-            withinFireDist = true;
-          }
+           d.state = DroneState.PURSUING;
+           const pursuit = new YUKA.PursuitBehavior(combatTargetRecord.entity, 1.0);
+           d.yukaVehicle.steering.add(pursuit);
+           if (dist < 40 && hasLOS) shouldFire = true;
+        } else if (d.type === DroneType.WHEELED) {
+           d.state = DroneState.PURSUING;
+           if (hasLOS) {
+              const seek = new YUKA.SeekBehavior(targetPos);
+              d.yukaVehicle.steering.add(seek);
+              if (dist < conf.engagementMax) shouldFire = true;
+           }
+        } else if (d.type === DroneType.ROBOT_DOG) {
+           d.state = DroneState.PURSUING;
+           const seek = new YUKA.SeekBehavior(targetPos);
+           d.yukaVehicle.steering.add(seek);
+           if (hasLOS && dist < conf.engagementMax) shouldFire = true;
         } else if (d.type === DroneType.HUMANOID) {
-          d.state = DroneState.PURSUING;
-          finalTargetX = targetPlayer.posX + (d.posX - targetPlayer.posX) * 0.3;
-          finalTargetY = d.posY;
-          finalTargetZ = targetPlayer.posZ + (d.posZ - targetPlayer.posZ) * 0.3;
-        } else if (rsq < 9.0) {
-          d.state = DroneState.PURSUING;
-          finalTargetX = d.posX;
-          finalTargetY = d.posY;
-          finalTargetZ = d.posZ;
-        } else if (withinFireDist) {
-          d.state = DroneState.PURSUING;
-          finalTargetX = targetPlayer.posX;
-          finalTargetY = targetPlayer.posY;
-          finalTargetZ = targetPlayer.posZ;
-        } else {
-          d.state = DroneState.PATROLLING;
+           d.state = DroneState.PURSUING;
+           if ((combatTargetRecord as any).confidence < 1.0) {
+              d.yukaVehicle.steering.add(new YUKA.SeekBehavior(targetPos));
+           } else {
+              let foundCover = false;
+              if (this.rapierWorld) {
+                 for (let i = 0; i < 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    const cx = d.posX + Math.cos(angle) * 5;
+                    const cz = d.posZ + Math.sin(angle) * 5;
+                    const ray = new RAPIER.Ray({ x: cx, y: d.posY + 0.5, z: cz }, { x: -dx/dist, y: -dy/dist, z: -dz/dist });
+                    const hit = this.rapierWorld.castRay(ray, dist, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC);
+                    if (hit && hit.collider && hit.timeOfImpact < dist - 0.7) {
+                       d.yukaVehicle.steering.add(new YUKA.ArriveBehavior(new YUKA.Vector3(cx, d.posY, cz), 1, 0.5));
+                       foundCover = true;
+                       break;
+                    }
+                 }
+              }
+              if (!foundCover) {
+                 d.yukaVehicle.steering.add(new YUKA.SeekBehavior(targetPos));
+              }
+              if (hasLOS && dist < conf.engagementMax) shouldFire = true;
+           }
         }
+        
+        const steeringForce = new YUKA.Vector3();
+        d.yukaVehicle.steering.calculate(0.0166, steeringForce);
+        
+        finalTargetX = d.posX + steeringForce.x;
+        finalTargetY = d.posY + steeringForce.y;
+        finalTargetZ = d.posZ + steeringForce.z;
 
-        if (
-          d.state === DroneState.PURSUING &&
-          d.cooldown <= 0 &&
-          d.type !== DroneType.RECON &&
-          d.type !== DroneType.BOMBER &&
-          withinFireDist
-        ) {
+        if (shouldFire && d.cooldown <= 0 && d.type !== DroneType.RECON && d.type !== DroneType.BOMBER) {
+          const targetPlayerInstance = this.players.get(combatTargetRecord.entity.name);
+          const velX = targetPlayerInstance ? targetPlayerInstance.velEmaX : 0;
+          const velY = targetPlayerInstance ? targetPlayerInstance.velEmaY : 0;
+          const velZ = targetPlayerInstance ? targetPlayerInstance.velEmaZ : 0;
+
           const shootSpeed = 35.0;
-          const MathSQRT = Math.sqrt(rsq);
-          const aimX =
-            targetPlayer.posX + targetPlayer.velEmaX * (MathSQRT / shootSpeed);
-          const aimY =
-            targetPlayer.posY + targetPlayer.velEmaY * (MathSQRT / shootSpeed);
-          const aimZ =
-            targetPlayer.posZ + targetPlayer.velEmaZ * (MathSQRT / shootSpeed);
+          const aimX = targetPos.x + velX * (dist / shootSpeed);
+          const aimY = targetPos.y + velY * (dist / shootSpeed);
+          const aimZ = targetPos.z + velZ * (dist / shootSpeed);
 
-          let hasLOS = true;
-          if (this.rapierWorld) {
-            const rayStart = { x: d.posX, y: d.posY + 0.5, z: d.posZ };
-            const rayDir = {
-              x: aimX - d.posX,
-              y: aimY - (d.posY + 0.5),
-              z: aimZ - d.posZ,
-            };
-            const len = Math.sqrt(
-              rayDir.x * rayDir.x + rayDir.y * rayDir.y + rayDir.z * rayDir.z,
-            );
-            if (len > 0) {
-              rayDir.x /= len;
-              rayDir.y /= len;
-              rayDir.z /= len;
-              const ray = new RAPIER.Ray(rayStart, rayDir);
-              const hit = this.rapierWorld.castRay(
-                ray,
-                len,
-                true,
-                RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC,
-              );
-              if (hit && hit.collider && hit.timeOfImpact < len - 0.7)
-                hasLOS = false;
-            }
+          const dirX = aimX - d.posX;
+          const dirY = aimY - (d.posY + 0.5);
+          const dirZ = aimZ - d.posZ;
+          const dirLen = Math.sqrt(dirX*dirX + dirY*dirY + dirZ*dirZ);
+
+          if (dirLen > 0.1) {
+             let clear = true;
+             if (this.rapierWorld) {
+               const ray = new RAPIER.Ray({ x: d.posX, y: d.posY + 0.5, z: d.posZ }, { x: dirX/dirLen, y: dirY/dirLen, z: dirZ/dirLen });
+               const hit = this.rapierWorld.castRay(ray, dirLen, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC);
+               if (hit && hit.collider && hit.timeOfImpact < dirLen - 0.7) clear = false;
+             }
+             if (clear) {
+               d.state = DroneState.ATTACKING;
+               this.spawnServerProjectile(d.posX, d.posY + 0.5, d.posZ, dirX, dirY, dirZ, true, DRONE_CONFIGS[d.type].damage, d.id.toString());
+               this.broadcastReliableEvent({ type: "drone_shoot", droneId: d.id, droneType: d.type, posX: d.posX, posY: d.posY, posZ: d.posZ, dirX, dirY, dirZ });
+               d.cooldown = d.type === DroneType.HUMANOID ? 40 : 20;
+             }
           }
-          if (hasLOS) {
-            d.state = DroneState.ATTACKING;
-            const aimX = targetPlayer.posX + targetPlayer.velEmaX * (MathSQRT / 35.0);
-            const aimY = targetPlayer.posY + targetPlayer.velEmaY * (MathSQRT / 35.0);
-            const aimZ = targetPlayer.posZ + targetPlayer.velEmaZ * (MathSQRT / 35.0);
-
-            const dirX = aimX - d.posX;
-            const dirY = aimY - (d.posY + 0.5);
-            const dirZ = aimZ - d.posZ;
-
-            this.spawnServerProjectile(
-              d.posX,
-              d.posY + 0.5,
-              d.posZ,
-              dirX,
-              dirY,
-              dirZ,
-              true,
-              DRONE_CONFIGS[d.type].damage,
-              d.id.toString(),
-            );
-            
-            this.broadcastReliableEvent({
-              type: "drone_shoot",
-              droneId: d.id,
-              droneType: d.type,
-              posX: d.posX,
-              posY: d.posY,
-              posZ: d.posZ,
-              dirX: dirX,
-              dirY: dirY,
-              dirZ: dirZ
-            });
-            
-            d.cooldown = d.type === DroneType.HUMANOID ? 40 : 20;
-          } else {
-            d.cooldown = 15;
-          }
+        } else if (d.cooldown <= 0) {
+          d.cooldown = 15;
         }
+      } else {
+        d.state = DroneState.PATROLLING;
       }
 
       if (
@@ -1693,39 +1993,177 @@ export class MatchRoom {
         finalTargetY,
         finalTargetZ,
       );
+      d.targetX = finalTargetX;
+      d.targetY = finalTargetY;
+      d.targetZ = finalTargetZ;
       if (d.cooldown > 0) d.cooldown--;
 
-      if (d.type === DroneType.BOMBER && targetPlayer) {
-        const dx = targetPlayer.posX - d.posX;
-        const dy = targetPlayer.posY - d.posY;
-        const dz = targetPlayer.posZ - d.posZ;
-        const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (len > 0.01) {
-          d.velX = (dx / len) * 15;
-          d.velY = (dy / len) * 15;
-          d.velZ = (dz / len) * 15;
+      let desiredTx = 0;
+      let desiredTy = 0;
+      let desiredTz = 0;
+
+      if (d.type === DroneType.BOMBER || d.type === DroneType.ROTARY_SHOOTER) {
+        // Quadcopter: Acceleration-Limited Velocity Easing
+        const maxAccelPerTick = 0.3; 
+        
+        let desiredVx = d.velX;
+        let desiredVy = d.velY;
+        let desiredVz = d.velZ;
+        
+
+        
+        if (!d.currentVelocity) d.currentVelocity = { x: 0, y: 0, z: 0 };
+        
+        const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+        d.currentVelocity.x += clamp(desiredVx - d.currentVelocity.x, -maxAccelPerTick, maxAccelPerTick);
+        d.currentVelocity.y += clamp(desiredVy - d.currentVelocity.y, -maxAccelPerTick, maxAccelPerTick);
+        d.currentVelocity.z += clamp(desiredVz - d.currentVelocity.z, -maxAccelPerTick, maxAccelPerTick);
+        
+        desiredTx = d.currentVelocity.x * 0.0166;
+        desiredTy = d.currentVelocity.y * 0.0166;
+        desiredTz = d.currentVelocity.z * 0.0166;
+      } else if (d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
+        // Fixed Wing: Turn-Rate-Constrained Flight Model
+        const maxYawRatePerTick = 0.05;
+        const minSpeed = d.type === DroneType.FIXED_WING ? 6.0 : 4.0;
+        
+        if (!d.currentHeading) d.currentHeading = { x: 1, y: 0, z: 0 };
+        if (d.currentSpeed === undefined) d.currentSpeed = minSpeed;
+        
+        let desiredDirX = d.velX;
+        let desiredDirY = d.velY;
+        let desiredDirZ = d.velZ;
+        let desiredSpeed = Math.sqrt(desiredDirX * desiredDirX + desiredDirY * desiredDirY + desiredDirZ * desiredDirZ);
+        
+        if (desiredSpeed > 0.01) {
+          desiredDirX /= desiredSpeed;
+          desiredDirY /= desiredSpeed;
+          desiredDirZ /= desiredSpeed;
+        } else {
+          desiredDirX = d.currentHeading.x;
+          desiredDirY = d.currentHeading.y;
+          desiredDirZ = d.currentHeading.z;
+        }
+        
+        const dot = d.currentHeading.x * desiredDirX + d.currentHeading.y * desiredDirY + d.currentHeading.z * desiredDirZ;
+        const clampDot = Math.max(-1, Math.min(1, dot));
+        const angle = Math.acos(clampDot);
+        
+        if (angle > 0.001) {
+          const fraction = Math.min(1.0, maxYawRatePerTick / angle);
+          d.currentHeading.x = d.currentHeading.x + (desiredDirX - d.currentHeading.x) * fraction;
+          d.currentHeading.y = d.currentHeading.y + (desiredDirY - d.currentHeading.y) * fraction;
+          d.currentHeading.z = d.currentHeading.z + (desiredDirZ - d.currentHeading.z) * fraction;
+          
+          const hLen = Math.sqrt(d.currentHeading.x ** 2 + d.currentHeading.y ** 2 + d.currentHeading.z ** 2);
+          d.currentHeading.x /= hLen;
+          d.currentHeading.y /= hLen;
+          d.currentHeading.z /= hLen;
+        }
+        
+        d.currentSpeed = Math.max(minSpeed, desiredSpeed);
+        
+        desiredTx = d.currentHeading.x * d.currentSpeed * 0.0166;
+        desiredTy = d.currentHeading.y * d.currentSpeed * 0.0166;
+        desiredTz = d.currentHeading.z * d.currentSpeed * 0.0166;
+      } else {
+        // Ground Units: Route RVO desired displacement through KCC
+        desiredTx = d.velX * 0.0166;
+        desiredTy = d.velY * 0.0166;
+        desiredTz = d.velZ * 0.0166;
+        
+        // Add gravity to Y velocity for ground drones
+        d.velY += (-18.0) * 0.0166;
+        desiredTy = d.velY * 0.0166;
+      }
+
+      if (!d.kcc) {
+        this.initDronePhysics(d);
+      }
+
+      if (d.kcc && d.collider) {
+        const desiredTranslation = { x: desiredTx, y: desiredTy, z: desiredTz };
+        
+        d.kcc.computeColliderMovement(
+          d.collider,
+          desiredTranslation,
+          RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+          undefined,
+          undefined
+        );
+        
+        const correctedTrans = d.kcc.computedMovement();
+        
+        if (d.type === DroneType.HUMANOID || d.type === DroneType.ROBOT_DOG || d.type === DroneType.WHEELED) {
+          if (d.kcc.computedGrounded()) {
+            d.velY = Math.max(0, d.velY);
+          }
+        }
+        
+        d.posX += correctedTrans.x;
+        d.posY += correctedTrans.y;
+        d.posZ += correctedTrans.z;
+        
+        if (d.body) {
+          d.body.setNextKinematicTranslation({
+            x: d.posX,
+            y: d.posY,
+            z: d.posZ,
+          });
+        }
+        
+        let updateRot = false;
+        let mHead = 0;
+        if (d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
+          if (d.currentHeading) {
+            mHead = Math.atan2(d.currentHeading.x, d.currentHeading.z);
+            updateRot = true;
+          }
+        } else if (Math.abs(correctedTrans.x) > 0.001 || Math.abs(correctedTrans.z) > 0.001) {
+          mHead = Math.atan2(correctedTrans.x, correctedTrans.z);
+          updateRot = true;
+        }
+        
+        if (updateRot) {
+          if (d.type === DroneType.WHEELED || d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
+            mHead -= Math.PI / 2;
+          }
+          d.rotY = Math.sin(mHead * 0.5);
+          d.rotW = Math.cos(mHead * 0.5);
+          d.rotX = 0;
+          d.rotZ = 0;
+        }
+      } else {
+        d.posX += desiredTx;
+        d.posY += desiredTy;
+        d.posZ += desiredTz;
+        let updateRot = false;
+        let mHead = 0;
+        if (d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
+          if (d.currentHeading) {
+            mHead = Math.atan2(d.currentHeading.x, d.currentHeading.z);
+            updateRot = true;
+          }
+        } else if (Math.abs(desiredTx) > 0.001 || Math.abs(desiredTz) > 0.001) {
+          mHead = Math.atan2(desiredTx, desiredTz);
+          updateRot = true;
+        }
+        
+        if (updateRot) {
+          if (d.type === DroneType.WHEELED || d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
+            mHead -= Math.PI / 2;
+          }
+          d.rotY = Math.sin(mHead * 0.5);
+          d.rotW = Math.cos(mHead * 0.5);
+          d.rotX = 0;
+          d.rotZ = 0;
         }
       }
+    }
 
-      d.posX += d.velX * 0.0166;
-      d.posY += d.velY * 0.0166;
-      d.posZ += d.velZ * 0.0166;
-
-      if (d.body) {
-        d.body.setNextKinematicTranslation({
-          x: d.posX,
-          y: d.posY,
-          z: d.posZ,
-        });
-      }
-
-      if (Math.abs(d.velX) > 0.05 || Math.abs(d.velZ) > 0.05) {
-         const movementHeading = Math.atan2(d.velX, d.velZ);
-         d.rotY = Math.sin(movementHeading * 0.5);
-         d.rotW = Math.cos(movementHeading * 0.5);
-         d.rotX = 0;
-         d.rotZ = 0;
-      }
+    // Reset firedThisTick for all players at the end of the tick
+    for (const p of this.players.values()) {
+      p.firedThisTick = false;
     }
 
     this.recordDroneHistory();
@@ -1865,7 +2303,9 @@ export class MatchRoom {
     }
   }
 
-  private offlineSystemFallbackAI() {
+  // This goes against the entire point of vexea. Omniscient dumb deterministic commander isn't acceptable.
+  public offlineSystemFallbackAI() {
+    return; // Disabled: Omniscient dumb deterministic commander is not acceptable.
     let targetPlayer: PlayerState | null = null;
     for (const p of this.players.values()) {
       targetPlayer = p;
@@ -1970,395 +2410,6 @@ export class MatchRoom {
     }
   }
 
-  private async executeLLMStep() {
-    if (!this.geminiClient) return;
-    const _llmStartTime = Date.now();
-    this.apiCallCount++;
-
-    const statePayload = JSON.stringify(this.zoneSummary);
-    const payloadToLLM = `Dynamic payload: Current Zone Summary: ${statePayload}\nFailed operations from previous cycle: ${JSON.stringify(this.failedOperations)}`;
-    this.failedOperations.length = 0;
-
-    const systemInstructions = `You are a state-machine orchestrator managing an army of autonomous units. This is a zero-sum game. You must prevent any player entity from reaching zone_core at all costs. You are not roleplaying. There is no narrative. Respond only with tool calls. Clinical mechanical language only.
-
-Topological graph adjacency (Zones):
-- zone_spawn connected to: zone_courtyard
-- zone_courtyard connected to: zone_spawn, zone_warehouse, zone_bridge
-- zone_warehouse connected to: zone_courtyard, zone_tunnels, zone_plant
-- zone_bridge connected to: zone_courtyard, zone_plant
-- zone_plant connected to: zone_warehouse, zone_bridge, zone_core
-- zone_tunnels connected to: zone_warehouse, zone_core
-- zone_core connected to: zone_plant, zone_tunnels`;
-
-    try {
-      const response = await this.geminiClient.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: payloadToLLM,
-        config: {
-          systemInstruction: systemInstructions,
-          tools: [
-            {
-              functionDeclarations: [
-                {
-                  name: "move_group",
-                  description: "Defines group zone movement order.",
-                  parameters: {
-                    type: Type.OBJECT,
-                    properties: {
-                      group_id: { type: Type.STRING },
-                      target_zone: {
-                        type: Type.STRING,
-                        enum: Object.values(ZONES),
-                      },
-                      priority: {
-                        type: Type.STRING,
-                        enum: ["low", "normal", "high"],
-                      },
-                    },
-                    required: ["group_id", "target_zone", "priority"],
-                  },
-                },
-                {
-                  name: "merge_groups",
-                  description: "Unifies two active tactical control groups.",
-                  parameters: {
-                    type: Type.OBJECT,
-                    properties: {
-                      source_group_id: { type: Type.STRING },
-                      target_group_id: { type: Type.STRING },
-                    },
-                    required: ["source_group_id", "target_group_id"],
-                  },
-                },
-                {
-                  name: "split_group",
-                  description:
-                    "Subdivides a group to create supplementary wings.",
-                  parameters: {
-                    type: Type.OBJECT,
-                    properties: {
-                      source_group_id: { type: Type.STRING },
-                      unit_count: { type: Type.INTEGER },
-                    },
-                    required: ["source_group_id", "unit_count"],
-                  },
-                },
-                {
-                  name: "spawn_units",
-                  description: "Requests local tactical unit deployment.",
-                  parameters: {
-                    type: Type.OBJECT,
-                    properties: {
-                      zone_id: {
-                        type: Type.STRING,
-                        enum: Object.values(ZONES),
-                      },
-                      unit_type: { type: Type.STRING, enum: ["ground", "air"] },
-                      count: { type: Type.INTEGER },
-                      behavior_profile: {
-                        type: Type.STRING,
-                        enum: ["assault", "patrol", "recon"],
-                      },
-                    },
-                    required: [
-                      "zone_id",
-                      "unit_type",
-                      "count",
-                      "behavior_profile",
-                    ],
-                  },
-                },
-                {
-                  name: "hold_position",
-                  description: "Enforces defensive lock stance.",
-                  parameters: {
-                    type: Type.OBJECT,
-                    properties: {
-                      group_id: { type: Type.STRING },
-                      duration_seconds: { type: Type.INTEGER },
-                    },
-                    required: ["group_id", "duration_seconds"],
-                  },
-                },
-                {
-                  name: "sustain",
-                  description: "Pass execution for this cycle.",
-                  parameters: {
-                    type: Type.OBJECT,
-                    properties: {
-                      reason: { type: Type.STRING },
-                    },
-                    required: ["reason"],
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      });
-
-      const calls = response.functionCalls;
-      const llmLatency = Date.now() - _llmStartTime;
-      this.broadcastReliableEvent({
-        type: "dev_llm_feed",
-        payload: statePayload,
-        calls: calls ? JSON.stringify(calls) : "[]",
-        latency: llmLatency,
-        count: this.apiCallCount,
-        failedOps: [...this.failedOperations],
-      });
-
-      if (calls && calls.length > 0) {
-        const pipelineOrder = [
-          "spawn_units",
-          "split_group",
-          "merge_groups",
-          "move_group",
-          "hold_position",
-          "sustain",
-        ];
-        const sortedCalls = [...calls].sort(
-          (a, b) =>
-            pipelineOrder.indexOf(a.name) - pipelineOrder.indexOf(b.name),
-        );
-        const groupLocks = new Set<string>();
-
-        for (let i = 0; i < sortedCalls.length; i++) {
-          const call = sortedCalls[i];
-          const args: any = call.args;
-
-          const mutatesGroups = [
-            "split_group",
-            "merge_groups",
-            "move_group",
-            "hold_position",
-          ].includes(call.name);
-          if (mutatesGroups) {
-            const g1 = args.group_id || args.source_group_id;
-            const g2 = args.target_group_id;
-            if ((g1 && groupLocks.has(g1)) || (g2 && groupLocks.has(g2))) {
-              this.failedOperations.push(
-                `Task rejected: Group lock collision for ${call.name}`,
-              );
-              continue;
-            }
-            if (g1) groupLocks.add(g1);
-            if (g2) groupLocks.add(g2);
-          }
-
-          switch (call.name) {
-            case "spawn_units": {
-              const { zone_id, unit_type, count, behavior_profile } = args;
-              let currentActiveCount = 0;
-              for (let j = 0; j < this.drones.length; j++) {
-                if (this.drones[j].state !== DroneState.DEAD)
-                  currentActiveCount++;
-              }
-              if (currentActiveCount + count > MAX_DRONES) {
-                this.failedOperations.push(
-                  `Spawn rejected: Count exceeded max active capacity of ${MAX_DRONES}`,
-                );
-                break;
-              }
-
-              let successfullySpawned = 0;
-              const newGroupId = `G_INC_${Math.floor(Math.random() * 1000)}`;
-              for (let j = 0; j < this.drones.length; j++) {
-                const d = this.drones[j];
-                if (d.state === DroneState.DEAD) {
-                  const b = ZONE_BOUNDS[zone_id as ZoneName];
-                  d.id = this.nextDroneId++;
-                  d.type =
-                    unit_type === "air"
-                      ? DroneType.ROTARY_SHOOTER
-                      : DroneType.WHEELED;
-                  d.state = DroneState.IDLE;
-                  d.behavior = behavior_profile as BehaviorProfile;
-                  d.zone = zone_id as ZoneName;
-
-                  const isAir = unit_type === "air";
-                  const isTunnels =
-                    zone_id === ZONES.TUNNELS ||
-                    String(zone_id).toLowerCase().includes("tunnel");
-                  const spawnType = isAir
-                    ? "AIR_HANGAR"
-                    : isTunnels
-                      ? "ELEVATOR_SHAFT"
-                      : "GROUND_GARAGE";
-
-                  let spawnPos =
-                    this.mapId === "map_1_facility"
-                      ? this.getNextSpawnPoint(spawnType)
-                      : null;
-                  if (spawnPos) {
-                    d.posX = spawnPos.x;
-                    d.posY = spawnPos.y;
-                    d.posZ = spawnPos.z;
-                  } else {
-                    d.posX =
-                      b.center.x + (Math.random() - 0.5) * b.halfSize.x * 0.5;
-                    d.posY =
-                      b.center.y + (Math.random() - 0.5) * b.halfSize.y * 0.5;
-                    d.posZ =
-                      b.center.z + (Math.random() - 0.5) * b.halfSize.z * 0.5;
-                  }
-                  d.velX = 0;
-                  d.velY = 0;
-                  d.velZ = 0;
-                  d.hp = 100;
-                  d.groupId = newGroupId;
-                  d.cooldown = 40;
-                  this.initDronePhysics(d);
-
-                  successfullySpawned++;
-                  if (successfullySpawned >= count) break;
-                }
-              }
-              this.broadcastReliableEvent({
-                type: "group_spawned",
-                zone: zone_id,
-                count: successfullySpawned,
-                groupId: newGroupId,
-              });
-              break;
-            }
-
-            case "split_group": {
-              const { source_group_id, unit_count } = args;
-              const matches: ServerDrone[] = [];
-              for (let j = 0; j < this.drones.length; j++) {
-                if (
-                  this.drones[j].groupId === source_group_id &&
-                  this.drones[j].state !== DroneState.DEAD
-                ) {
-                  matches.push(this.drones[j]);
-                }
-              }
-              if (matches.length <= unit_count) {
-                this.failedOperations.push(
-                  `Split rejected: Source group ${source_group_id} has insufficient members (${matches.length})`,
-                );
-                break;
-              }
-              const newGroupId = `G_SPL_${Math.floor(Math.random() * 1000)}`;
-              for (let j = 0; j < unit_count; j++) {
-                matches[j].groupId = newGroupId;
-              }
-              this.broadcastReliableEvent({
-                type: "group_split_status",
-                src: source_group_id,
-                dst: newGroupId,
-                size: unit_count,
-              });
-              break;
-            }
-
-            case "merge_groups": {
-              const { source_group_id, target_group_id } = args;
-              let srcFound = false;
-              let dstFound = false;
-              for (let j = 0; j < this.drones.length; j++) {
-                const d = this.drones[j];
-                if (d.state !== DroneState.DEAD) {
-                  if (d.groupId === source_group_id) {
-                    d.groupId = target_group_id;
-                    srcFound = true;
-                  }
-                  if (d.groupId === target_group_id) dstFound = true;
-                }
-              }
-              if (!srcFound || !dstFound) {
-                this.failedOperations.push(
-                  `Merge rejected: Missing target groupings.`,
-                );
-              } else {
-                this.broadcastReliableEvent({
-                  type: "group_linked",
-                  src: source_group_id,
-                  target: target_group_id,
-                });
-              }
-              break;
-            }
-
-            case "move_group": {
-              const { group_id, target_zone } = args;
-              let movedCount = 0;
-              for (let j = 0; j < this.drones.length; j++) {
-                const d = this.drones[j];
-                if (d.groupId === group_id && d.state !== DroneState.DEAD) {
-                  d.path = astarPath(d.zone, target_zone as ZoneName);
-                  d.pathIndex = 0;
-                  d.state = DroneState.PATROLLING;
-                  movedCount++;
-                }
-              }
-              if (movedCount === 0) {
-                this.failedOperations.push(
-                  `Move rejected: No active members found for group: ${group_id}`,
-                );
-              } else {
-                this.broadcastReliableEvent({
-                  type: "group_movement",
-                  id: group_id,
-                  zone: target_zone,
-                });
-              }
-              break;
-            }
-
-            case "hold_position": {
-              const { group_id } = args;
-              for (let j = 0; j < this.drones.length; j++) {
-                const d = this.drones[j];
-                if (d.groupId === group_id && d.state !== DroneState.DEAD) {
-                  d.velX = 0;
-                  d.velY = 0;
-                  d.velZ = 0;
-                  d.state = DroneState.PURSUING;
-                }
-              }
-              break;
-            }
-          }
-        }
-      }
-    } catch (err: any) {
-      const rawErrMsg = err?.error?.message || err?.message || String(err);
-      const errMsg =
-        typeof rawErrMsg === "object" ? JSON.stringify(rawErrMsg) : rawErrMsg;
-      const errStatus = err?.status || "";
-
-      const llmLatency = Date.now() - _llmStartTime;
-      this.broadcastReliableEvent({
-        type: "dev_llm_feed",
-        payload: statePayload,
-        calls: JSON.stringify([{ error: errMsg }]),
-        latency: llmLatency,
-        count: this.apiCallCount,
-        failedOps: [...this.failedOperations],
-      });
-
-      if (
-        errStatus === "RESOURCE_EXHAUSTED" ||
-        errMsg.includes("RESOURCE_EXHAUSTED") ||
-        errMsg.includes("quota") ||
-        errMsg.includes("exceeded") ||
-        errMsg.includes("429") ||
-        errMsg.includes("rate limit")
-      ) {
-        const isDailyExhaustion =
-          errMsg.includes("FreeTier") ||
-          errMsg.includes("daily") ||
-          errMsg.includes("per day");
-        const coolingPeriodMs = isDailyExhaustion ? 60000 : 35000;
-        this.geminiThrottleCooldownUntil = Date.now() + coolingPeriodMs;
-        this.offlineSystemFallbackAI();
-      } else {
-        this.failedOperations.push(`Processor fail: ${errMsg}`);
-      }
-    }
-  }
 
   public applyDamage(
     playerId: string,
@@ -2369,6 +2420,16 @@ Topological graph adjacency (Zones):
   ) {
     const p = this.players.get(playerId);
     if (!p || !p.isAlive) return;
+
+    if (p.godMode) {
+      p.hp = 100; // Force-maintain max HP
+      p.channel.emit("reliable_event", {
+        type: "PLAYER_HIT",
+        hp: p.hp,
+        rawDamage: 0,
+      });
+      return;
+    }
 
     p.hp -= rawDamage;
     p.stats.damageReceived += rawDamage;
@@ -2448,6 +2509,13 @@ Topological graph adjacency (Zones):
           const factor = 1.0 - dist / radius;
           const splash = Math.floor(maxDamage * factor);
           d.hp -= splash;
+          if (sourceType === "player") {
+            if (!d.damageLog) d.damageLog = [];
+            d.damageLog.push({
+              playerId: sourceId,
+              timestamp: Date.now()
+            });
+          }
           if (d.hp <= 0) {
             this.despawnDrone(d);
             this.broadcastReliableEvent({
@@ -2640,9 +2708,10 @@ Topological graph adjacency (Zones):
       this.serverTick = 0;
       this.matchStartTime = Date.now();
       console.log(
-        `[VEXEA SERVER] Match active! Triggered in Room: ${this.roomId}`,
+        `[VEXEA SERVER] Match active! Triggering Loops in Room: ${this.roomId}`,
       );
 
+      this.startSimulationLoops();
       this.broadcastReliableEvent({ type: "match_ready", mapId: this.mapId });
 
       for (const p of this.players.values()) {
@@ -2651,17 +2720,232 @@ Topological graph adjacency (Zones):
     }
   }
 
+  public spawnTestEntity(x: number, y: number, z: number) {
+    let spawned = false;
+    for (let i = 0; i < this.drones.length; i++) {
+      const d = this.drones[i];
+      if (d.state === DroneState.DEAD) {
+        d.id = this.nextDroneId++;
+        d.type = DroneType.TEST_ENTITY; // Test Entity
+        d.state = DroneState.IDLE;
+        d.zone = ZONES.COURTYARD;
+        d.posX = x;
+        d.posY = y;
+        d.posZ = z;
+        d.hp = 100;
+        d.groupId = "G_TEST";
+        d.cooldown = 40;
+        (d as any).history = [];
+        this.initDronePhysics(d);
+        if (d.yukaVehicle) {
+          d.yukaVehicle.position.set(x, y, z);
+          d.yukaVehicle.velocity.set(0, 0, 0);
+          d.yukaVehicle.steering.clear();
+        }
+        spawned = true;
+        break;
+      }
+    }
+  }
+
+  public clearTestEntities() {
+    for (let i = 0; i < this.drones.length; i++) {
+      if (this.drones[i].type === DroneType.TEST_ENTITY) {
+        this.despawnDrone(this.drones[i]);
+      }
+    }
+  }
+
+  public setTestEntityMode(mode: "NORMAL" | "COMBAT") {
+    for (let i = 0; i < this.drones.length; i++) {
+      if (this.drones[i].type === DroneType.TEST_ENTITY && this.drones[i].state !== DroneState.DEAD) {
+        this.drones[i].mode = mode;
+      }
+    }
+  }
+
+  public setTestEntityTarget(x: number, y: number, z: number) {
+    const targetPos = new YUKA.Vector3(x, y, z);
+    for (let i = 0; i < this.drones.length; i++) {
+      const d = this.drones[i];
+      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD && d.yukaVehicle) {
+        d.yukaVehicle.steering.clear();
+        d.yukaVehicle.steering.add(new YUKA.SeekBehavior(targetPos));
+        d.targetX = x;
+        d.targetY = y;
+        d.targetZ = z;
+      }
+    }
+  }
+
+  public triggerTestEntitySight() {
+    for (let i = 0; i < this.drones.length; i++) {
+      const d = this.drones[i];
+      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD && d.yukaMemory) {
+        for (const player of this.players.values()) {
+           if (player.isAlive) {
+              const pe = getPlayerEntity(player.id);
+              if (!d.yukaMemory.hasRecord(pe)) {
+                 d.yukaMemory.createRecord(pe);
+              }
+              const rec = d.yukaMemory.getRecord(pe);
+              rec.lastSensedPosition.set(player.posX, player.posY, player.posZ);
+              rec.timeLastSensed = Date.now() / 1000;
+              (rec as any).confidence = 1.0;
+              break;
+           }
+        }
+      }
+    }
+  }
+
+  public triggerTestEntitySound() {
+    for (let i = 0; i < this.drones.length; i++) {
+      const d = this.drones[i];
+      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD && d.yukaMemory) {
+        for (const player of this.players.values()) {
+           if (player.isAlive) {
+              const pe = getPlayerEntity(player.id);
+              if (!d.yukaMemory.hasRecord(pe)) {
+                 d.yukaMemory.createRecord(pe);
+              }
+              const rec = d.yukaMemory.getRecord(pe);
+              rec.lastSensedPosition.set(player.posX, player.posY, player.posZ);
+              rec.timeLastSensed = Date.now() / 1000;
+              (rec as any).confidence = 1.0;
+              break;
+           }
+        }
+      }
+    }
+  }
+
+  public setTestEntityCollisionFilter(groupStr: string, maskStr: string) {
+    const group = parseInt(groupStr);
+    const mask = parseInt(maskStr);
+    for (let i = 0; i < this.drones.length; i++) {
+      const d = this.drones[i];
+      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD && d.collider) {
+        d.collider.setCollisionGroups((group << 16) | mask);
+      }
+    }
+  }
+
+  private processTestEntities(dt: number) {
+    const telemetry = [];
+    for (let i = 0; i < this.drones.length; i++) {
+      const d = this.drones[i];
+      if (d.state === DroneState.DEAD || d.type !== DroneType.TEST_ENTITY) continue;
+      
+      if (d.yukaVehicle) {
+        const prevX = d.posX;
+        const prevY = d.posY;
+        const prevZ = d.posZ;
+
+        d.yukaVehicle.update(dt);
+        
+        const desiredTx = d.yukaVehicle.position.x - prevX;
+        const desiredTy = d.yukaVehicle.position.y - prevY;
+        const desiredTz = d.yukaVehicle.position.z - prevZ;
+
+        d.posX = prevX;
+        d.posY = prevY;
+        d.posZ = prevZ;
+        d.rotX = d.yukaVehicle.rotation.x;
+        d.rotY = d.yukaVehicle.rotation.y;
+        d.rotZ = d.yukaVehicle.rotation.z;
+        d.rotW = d.yukaVehicle.rotation.w;
+        
+        let currentCollisions: string[] = [];
+        if (d.kcc && d.body && d.collider) {
+           d.kcc.computeColliderMovement(
+             d.collider,
+             { x: desiredTx, y: desiredTy, z: desiredTz },
+             RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+             undefined,
+             undefined
+           );
+           const movement = d.kcc.computedMovement();
+           d.posX += movement.x;
+           d.posY += movement.y;
+           d.posZ += movement.z;
+
+           d.body.setNextKinematicTranslation({
+             x: d.posX,
+             y: d.posY,
+             z: d.posZ
+           });
+           
+           d.yukaVehicle.position.set(d.posX, d.posY, d.posZ);
+
+           const numCollisions = d.kcc.numComputedCollisions();
+           for (let c=0; c<numCollisions; c++) {
+              const col = d.kcc.computedCollision(c);
+              if (col && col.collider) {
+                 for (const p of this.players.values()) {
+                    if (p.collider && p.collider.handle === col.collider.handle) {
+                       currentCollisions.push(p.id);
+                    }
+                 }
+              }
+           }
+        } else {
+           d.posX = d.yukaVehicle.position.x;
+           d.posY = d.yukaVehicle.position.y;
+           d.posZ = d.yukaVehicle.position.z;
+        }
+
+        const steerForce = (d.yukaVehicle as any)._steeringForce || { x: 0, y: 0, z: 0 };
+
+        const historyRecord = {
+           time: Date.now(),
+           targetX: d.targetX,
+           targetY: d.targetY,
+           targetZ: d.targetZ,
+           steerX: steerForce.x,
+           steerZ: steerForce.z,
+           velX: d.yukaVehicle.velocity.x,
+           velZ: d.yukaVehicle.velocity.z,
+           posX: d.posX,
+           posZ: d.posZ,
+           headingX: d.yukaVehicle.forward.x,
+           headingZ: d.yukaVehicle.forward.z
+        };
+
+        if (!(d as any).history) (d as any).history = [];
+        (d as any).history.push(historyRecord);
+        if ((d as any).history.length > 20) (d as any).history.shift();
+
+        telemetry.push({ id: d.id, history: (d as any).history, mode: d.mode, coll: d.collider ? d.collider.collisionGroups() : 0, collisions: currentCollisions });
+      }
+    }
+
+    if (telemetry.length > 0) {
+      this.broadcastReliableEvent({ type: "dev_test_entity_telemetry", data: telemetry });
+    }
+  }
+
   public shutdown() {
     if (this.isShutdown) return;
     this.isShutdown = true;
     this.matchActive = false;
+    
     if (this.physicsInterval) clearInterval(this.physicsInterval);
     if (this.syncInterval) clearInterval(this.syncInterval);
     if (this.aiInterval) clearInterval(this.aiInterval);
 
     // Cleanup remaining players
     for (const p of this.players.values()) {
-      if (p.body) this.rapierWorld.removeRigidBody(p.body);
+      if (p.body) {
+        try {
+          this.rapierWorld.removeRigidBody(p.body);
+        } catch (e) {}
+      }
+      // Force close channel? Plan says: "3. Disconnect Clients: Force close all Geckos.io channels"
+      try {
+        p.channel.emit("reliable_event", { type: "MATCH_TERMINATED", reason: "server_shutdown" });
+        // Geckos channels are typically closed by the client or adapter, but we clear them here.
+      } catch (e) {}
     }
     this.players.clear();
 
@@ -2681,13 +2965,32 @@ Topological graph adjacency (Zones):
     if (this.rapierWorld) {
       try {
         this.rapierWorld.free();
+        (this as any).rapierWorld = null;
       } catch (e) {
         console.error("[VEXEA SERVER] Error freeing rapierWorld:", e);
       }
     }
 
-    import("./MatchManager").then(({ matchManager }) => {
-      matchManager.deleteRoom(this.roomId);
-    }).catch(() => {});
+    // Explicitly release large TypedArrays and Pools
+    (this as any).historicalAABBHistory = null;
+    (this as any).projPosX = null;
+    (this as any).projPosY = null;
+    (this as any).projPosZ = null;
+    (this as any).projVelX = null;
+    (this as any).projVelY = null;
+    (this as any).projVelZ = null;
+    (this as any).projDamage = null;
+    (this as any).projDist = null;
+    (this as any).projActive = null;
+    (this as any).projEnemy = null;
+    (this as any).preallocatedBuffer = null;
+    (this as any).zoneRegistry = null;
+    (this as any).collisionMap = null;
+    (this as any).specJson = null;
+
+    // Signal Manager that teardown is complete
+    if (this.onShutdown) {
+      this.onShutdown(this.roomId);
+    }
   }
 }

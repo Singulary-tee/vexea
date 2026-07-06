@@ -32,6 +32,8 @@ import {
 export const HISTORICAL_SAMPLES_MAX = 120;
 export const HISTORIC_BLOCK_SIZE = 2 + MAX_DRONES * 4;
 
+export const IS_DEV = true; // Master toggle to easily disable all development cheats/commands on the server for production.
+
 dotenv.config();
 
 export const globalChannels: any[] = [];
@@ -403,6 +405,7 @@ io.onConnection((channel: ChannelAdapter) => {
     "lobby",
     process.env.GEMINI_API_KEY,
   );
+  currentRoom.triggerStartMatch();
   let pState = currentRoom.registerPlayer(playerId, channel, null);
 
   // Store MatchInProgress initially so it counts as pending
@@ -469,6 +472,36 @@ io.onConnection((channel: ChannelAdapter) => {
     currentRoom.spawnTestBots(count);
   });
 
+  channel.on("dev_spawn_cube", (args: any) => {
+    currentRoom.devSpawnCube(pState.id, args);
+  });
+
+  channel.on("dev_clear_cube", () => {
+    currentRoom.devClearCube();
+  });
+
+  channel.on("dev_set_gravity_y", (args: any) => {
+    if (args && typeof args.gravityY === "number") {
+      currentRoom.setDevPhysicsGravityY(args.gravityY);
+    }
+  });
+
+  channel.on("dev_set_speed_multiplier", (args: any) => {
+    if (args && typeof args.speedMultiplier === "number") {
+      currentRoom.setDevPhysicsSpeedMultiplier(args.speedMultiplier);
+    }
+  });
+
+  channel.on("dev_set_paused", (args: any) => {
+    if (args && typeof args.paused === "boolean") {
+      currentRoom.setDevPhysicsPaused(args.paused);
+    }
+  });
+
+  channel.on("dev_step_once", () => {
+    currentRoom.setDevPhysicsStepOnce();
+  });
+
   channel.on("dev_spawn_drone", (args: any) => {
     const type = typeof args.type === "number" ? args.type : Number(args.type);
     const pos = (args.x !== undefined && args.y !== undefined && args.z !== undefined) ? 
@@ -481,6 +514,35 @@ io.onConnection((channel: ChannelAdapter) => {
       currentRoom.drones[i].state = DroneState.DEAD;
     }
   });
+
+  channel.on("dev_spawn_test_entity", (args: any) => {
+    currentRoom.spawnTestEntity(args.x, args.y, args.z);
+  });
+
+  channel.on("dev_clear_test_entities", () => {
+    currentRoom.clearTestEntities();
+  });
+
+  channel.on("dev_test_entity_mode", (args: any) => {
+    currentRoom.setTestEntityMode(args.mode);
+  });
+
+  channel.on("dev_test_entity_target", (args: any) => {
+    currentRoom.setTestEntityTarget(args.x, args.y, args.z);
+  });
+
+  channel.on("dev_test_entity_sight", () => {
+    currentRoom.triggerTestEntitySight();
+  });
+
+  channel.on("dev_test_entity_sound", () => {
+    currentRoom.triggerTestEntitySound();
+  });
+
+  channel.on("dev_test_entity_collision_filter", (args: any) => {
+    currentRoom.setTestEntityCollisionFilter(args.group, args.mask);
+  });
+
 
   channel.on("dev_toggle_llm", (args: any) => {
     currentRoom.llmCommanderDisabled = !!args?.disabled;
@@ -508,6 +570,7 @@ io.onConnection((channel: ChannelAdapter) => {
   });
 
   channel.on("dev_set_position", (args: any) => {
+    if (!IS_DEV) return;
     console.log(`[SERVER DEV EVENT] Received dev_set_position:`, args, "pState exists:", !!pState);
     if (args.position && pState) {
       pState.posX = args.position.x;
@@ -521,6 +584,65 @@ io.onConnection((channel: ChannelAdapter) => {
         });
       }
       console.log(`[DEV DEBUG] Force positioned player ${pState.id} to:`, args.position);
+    }
+  });
+
+  channel.on("dev_toggle_god_mode", (args: any) => {
+    if (!IS_DEV) return;
+    if (pState) {
+      pState.godMode = !!args?.godMode;
+      console.log(`[SERVER DEV EVENT] Player ${pState.id} God Mode toggled:`, pState.godMode);
+    }
+  });
+
+  channel.on("dev_toggle_infinite_ammo", (args: any) => {
+    if (!IS_DEV) return;
+    if (pState) {
+      pState.infiniteAmmo = !!args?.infiniteAmmo;
+      console.log(`[SERVER DEV EVENT] Player ${pState.id} Infinite Ammo toggled:`, pState.infiniteAmmo);
+    }
+  });
+
+  channel.on("dev_set_hp", (args: any) => {
+    if (!IS_DEV) return;
+    if (pState && typeof args?.hp === "number") {
+      pState.hp = args.hp;
+      pState.channel.emit("reliable_event", {
+        type: "PLAYER_HIT",
+        hp: pState.hp,
+        rawDamage: 0,
+      });
+      console.log(`[SERVER DEV EVENT] Player ${pState.id} HP set to:`, pState.hp);
+    }
+  });
+
+  channel.on("dev_nuke_drones", () => {
+    if (!IS_DEV) return;
+    if (currentRoom) {
+      console.log(`[SERVER DEV EVENT] Nuking all active drones on map`);
+      for (let i = 0; i < currentRoom.drones.length; i++) {
+        currentRoom.drones[i].hp = 0;
+        currentRoom.drones[i].state = DroneState.DEAD;
+      }
+    }
+  });
+
+  channel.on("ping", () => {
+    channel.emit("pong", {});
+  });
+
+  channel.on("latency_report", (args: any) => {
+    if (pState && typeof args?.latency === "number") {
+      pState.ping = args.latency;
+    }
+  });
+
+  channel.on("dev_force_match_end", (args: any) => {
+    if (!IS_DEV) return;
+    if (currentRoom) {
+      const result = args?.result === "win" ? "win" : "loss";
+      console.log(`[SERVER DEV EVENT] Forcing match end with result:`, result);
+      (currentRoom as any).handleMatchEnd(result);
     }
   });
 
@@ -619,9 +741,15 @@ io.onConnection((channel: ChannelAdapter) => {
       if (leakyUpdate < weaponStats.capacity) {
         wState.leakyBucket = leakyUpdate + 1;
         wState.lastConfirmedShotT = now;
-        wState.currentMag--;
+        pState.firedThisTick = true;
+        
+        if (pState.infiniteAmmo) {
+          wState.currentMag = weaponStats.capacity; // keep full
+        } else {
+          wState.currentMag--;
+        }
 
-        if (wState.currentMag === 0 && wState.reserve > 0) {
+        if (wState.currentMag === 0 && wState.reserve > 0 && !pState.infiniteAmmo) {
           wState.isReloading = true;
           wState.reloadTimer = isPrimary ? 150 : 120;
         }
@@ -811,6 +939,9 @@ io.onConnection((channel: ChannelAdapter) => {
               type: "HIT_CONFIRMED",
               droneId: bestHitDrone.id,
               droneHp: 0,
+              originX: args.origin.x,
+              originY: args.origin.y,
+              originZ: args.origin.z,
               impactX,
               impactY,
               impactZ,
@@ -829,6 +960,9 @@ io.onConnection((channel: ChannelAdapter) => {
               type: "HIT_CONFIRMED",
               droneId: bestHitDrone.id,
               droneHp: bestHitDrone.hp,
+              originX: args.origin.x,
+              originY: args.origin.y,
+              originZ: args.origin.z,
               impactX,
               impactY,
               impactZ,
@@ -880,6 +1014,9 @@ io.onConnection((channel: ChannelAdapter) => {
           ) {
             pState.channel.emit("reliable_event", {
               type: "HIT_ENVIRONMENT",
+              originX: args.origin.x,
+              originY: args.origin.y,
+              originZ: args.origin.z,
               impactX,
               impactY,
               impactZ,
@@ -915,7 +1052,7 @@ const serveApp = async () => {
   await RAPIER.init();
 
   // Start listening for incoming network transport only after Rapier is fully ready
-  io.listen(PORT, server);
+  if (!process.env.TEST_MODE) io.listen(PORT, server);
 
   app.use("/shared", express.static(path.join(process.cwd(), "shared")));
 
@@ -933,7 +1070,7 @@ const serveApp = async () => {
     });
   }
 
-  server.listen(PORT, "0.0.0.0", () => {
+  if (!process.env.TEST_MODE) server.listen(PORT, "0.0.0.0", () => {
     console.log(
       `[VEXEA SERVER CORE] Authoritative Room-Scoping engine listening on Port ${PORT}`,
     );

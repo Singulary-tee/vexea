@@ -2,11 +2,11 @@ import { MapRegistryEntry } from "../../../shared/maps/map-registry";
 import { LoadingScreen } from "../ui/LoadingScreen";
 import { getMissingFilesForMap, downloadMapAssets } from "../../asset-cache";
 import { MapLoader } from "./MapLoader";
-import { scene } from "../../main";
+import * as THREE from "three";
 
-export async function orchestrateMatchLoad(mapEntry: MapRegistryEntry, channel: any): Promise<void> {
+export async function orchestrateMatchLoad(mapEntry: MapRegistryEntry, channel: any, targetScene: THREE.Scene): Promise<void> {
   const loadingScreen = new LoadingScreen();
-  const mapLoader = new MapLoader(scene);
+  const mapLoader = new MapLoader(targetScene);
 
   loadingScreen.show();
 
@@ -44,6 +44,10 @@ export async function orchestrateMatchLoad(mapEntry: MapRegistryEntry, channel: 
 
 async function waitForServerReady(channel: any): Promise<void> {
   if ((window as any)._serverMatchReady) return Promise.resolve();
+  if (!channel || typeof channel.on !== 'function') {
+    console.warn('[LOADING] No valid channel provided — proceeding without confirmation');
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
     const handleMatchReady = () => {
       resolve();

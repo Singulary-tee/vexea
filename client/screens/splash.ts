@@ -21,7 +21,7 @@ const IMAGES_TO_PRELOAD = [
 ];
 
 const VIDEOS_TO_PRELOAD = [
-  'Mainvideo1.mp4', 'Mainvideo2.mp4', 'Mainvideo3.mp4'
+  'Mainvideo1.mp4'
 ];
 
 // The rest of the game assets

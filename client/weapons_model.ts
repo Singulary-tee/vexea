@@ -17,6 +17,17 @@ export let pistolGroup: THREE.Group | null = null;
 // Animation stuff
 export let rifleMixer: THREE.AnimationMixer | null = null;
 export let pistolMixer: THREE.AnimationMixer | null = null;
+
+// Explicit mapping for SMG animations to friendly internal keys
+const SMG_ANIM_MAP = {
+  idle: "Rig|KDW_DPose_Idle",
+  walk: "Rig|KDW_Walk",
+  shoot: "Rig|KDW_Shot",
+  reload_fast: "Rig|KDW_Reload_fast",
+  reload_full: "Rig|KDW_Reload_full",
+  draw: "Rig|KDW_Draw"
+};
+
 export const weaponActions = {
   rifle: {} as Record<string, THREE.AnimationAction>,
   pistol: {} as Record<string, THREE.AnimationAction>
@@ -27,34 +38,56 @@ export const WEAPON_SWITCH_DURATION = 0.4; // 400ms switch cooldown
 
 export const DEV_WEAPON_OFFSETS = {
   rifle: {
-    hip: new THREE.Vector3(0, 0, 0),
-    ads: new THREE.Vector3(0, 0, 0),
-    muzzle: new THREE.Vector3(0, 0, -0.5)
+    hip: new THREE.Vector3(0.025, -0.49, 0.05),
+    ads: new THREE.Vector3(-0.075, -0.42, 0),
+    muzzle: new THREE.Vector3(0, 0, -0.5),
+    adsTilt: -0.05 // Corrective tilt for SMG ADS alignment
   },
   pistol: {
-    hip: new THREE.Vector3(0, 0, 0),
-    ads: new THREE.Vector3(0, 0, 0),
-    muzzle: new THREE.Vector3(0, 0, -0.2)
+    hip: new THREE.Vector3(0.005, -0.16, -0.185),
+    ads: new THREE.Vector3(0, -0.135, -0.06),
+    muzzle: new THREE.Vector3(-0.115, -0.2, -0.2),
+    adsTilt: 0
   }
 };
 (window as any).DEV_WEAPON_OFFSETS = DEV_WEAPON_OFFSETS;
 
-// Weapon State Tracker (Zero heap allocations at runtime)
-export const weaponVisualState = {
-  activeSlot: 1,            // 1 = Rifle/SMG, 2 = Pistol
-  switchTimer: 0.0,         // Decays from WEAPON_SWITCH_DURATION to 0
-  pendingSlot: 0,           // The weapon we are switching to
+export enum WeaponAnimState {
+    IDLE = 'idle',
+    WALK = 'walk',
+    SHOOT = 'shoot',
+    RELOAD = 'reload',
+    DRAW = 'draw',
+    ADS_IDLE = 'ads_idle'
+}
 
-  // Smooth Recoil Drift (decays back to zero)
-  recoilZ: 0.0,             
-  recoilPitch: 0.0,         
-  recoilYaw: 0.0,           
+export interface WeaponVisualState {
+  activeSlot: number;            // 1 = Rifle/SMG, 2 = Pistol
+  switchTimer: number;           // Decays from WEAPON_SWITCH_DURATION to 0
+  pendingSlot: number;           // The weapon we are switching to
+  recoilZ: number;             
+  recoilPitch: number;         
+  recoilYaw: number;           
+  swayCycle: number;
+  currentState: WeaponAnimState;
+}
 
-  // Breathing Sway variables
+export const weaponVisualState: WeaponVisualState = {
+  activeSlot: 1,
+  switchTimer: 0.0,
+  pendingSlot: 0,
+  recoilZ: 0.0,
+  recoilPitch: 0.0,
+  recoilYaw: 0.0,
   swayCycle: 0.0,
+  currentState: WeaponAnimState.IDLE
 };
 
-export function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera): THREE.Group {
+// Internal tracking for transition logic
+let lastBaseState: WeaponAnimState = WeaponAnimState.IDLE;
+let isWeaponReloading = false;
+
+export async function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera): Promise<THREE.Group> {
   weaponsContainer = new THREE.Group();
   weaponsContainer.name = "WeaponsContainer";
   scene.add(weaponsContainer);
@@ -71,16 +104,36 @@ export function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera): THR
   const loader = new GLTFLoader();
 
   // Load SMG (Rifle slot)
-  getCachedOrFetchUrl("smg_fps_animations.glb", "Asset").then((url) => {
-    loader.load(url, (gltf) => {
+  const loadRiflePromise = (async () => {
+    try {
+      const url = await getCachedOrFetchUrl("smg_fps_animations.glb", "Asset");
+      const gltf = await loader.loadAsync(url);
       rifleGroup!.add(gltf.scene);
       rifleMixer = new THREE.AnimationMixer(gltf.scene);
+      
+      // Explicitly map rifle animations to internal friendly keys
       gltf.animations.forEach((clip) => {
-        weaponActions.rifle[clip.name.toLowerCase()] = rifleMixer!.clipAction(clip);
+        const name = clip.name;
+        if (name === SMG_ANIM_MAP.idle) weaponActions.rifle['idle'] = rifleMixer!.clipAction(clip);
+        if (name === SMG_ANIM_MAP.walk) weaponActions.rifle['walk'] = rifleMixer!.clipAction(clip);
+        if (name === SMG_ANIM_MAP.shoot) weaponActions.rifle['shoot'] = rifleMixer!.clipAction(clip);
+        if (name === SMG_ANIM_MAP.reload_fast) weaponActions.rifle['reload'] = rifleMixer!.clipAction(clip);
+        if (name === SMG_ANIM_MAP.reload_full) weaponActions.rifle['reload_full'] = rifleMixer!.clipAction(clip);
+        if (name === SMG_ANIM_MAP.draw) weaponActions.rifle['draw'] = rifleMixer!.clipAction(clip);
       });
+
       // Try play idle
-      const idle = Object.keys(weaponActions.rifle).find(n => n.includes('idle'));
-      if (idle) weaponActions.rifle[idle].play();
+      if (weaponActions.rifle['idle']) {
+         weaponActions.rifle['idle'].play();
+         weaponVisualState.currentState = WeaponAnimState.IDLE;
+      }
+
+      // Smooth blending fallback back to base movement animation on action completion
+      rifleMixer.addEventListener('finished', (e: any) => {
+          if (e.action.loop === THREE.LoopOnce) {
+              transitionToState(lastBaseState, true);
+          }
+      });
 
       // Find muzzle node or create one
       let muzzleNode = gltf.scene.getObjectByName('Muzzle') || gltf.scene.getObjectByName('muzzle');
@@ -110,20 +163,50 @@ export function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera): THR
       }
       (rifleGroup as any).muzzleNode = muzzleNode;
       console.log("[WEAPONS] SMG Loaded, Animations:", Object.keys(weaponActions.rifle));
-    });
-  });
+    } catch (e) {
+      console.error("[WEAPONS] Failed to load SMG:", e);
+    }
+  })();
 
   // Load Pistol
-  getCachedOrFetchUrl("animated_pistol.glb", "Asset").then((url) => {
-    loader.load(url, (gltf) => {
+  const loadPistolPromise = (async () => {
+    try {
+      const url = await getCachedOrFetchUrl("animated_pistol.glb", "Asset");
+      const gltf = await loader.loadAsync(url);
       pistolGroup!.add(gltf.scene);
       pistolMixer = new THREE.AnimationMixer(gltf.scene);
-      gltf.animations.forEach((clip) => {
-        weaponActions.pistol[clip.name.toLowerCase()] = pistolMixer!.clipAction(clip);
-      });
+
+      // Extract sub-clips from single track "allanimations" (8.8s total duration @ 30fps)
+      const originalClip = gltf.animations.find(c => c.name.toLowerCase() === "allanimations") || gltf.animations[0];
+      if (originalClip) {
+          const fps = 30;
+          // Precision mapping for (shoot, reload, shoot, reload, reload, walk)
+          const shootClip = THREE.AnimationUtils.subclip(originalClip, "shoot", 0, 12, fps);
+          const reloadClip = THREE.AnimationUtils.subclip(originalClip, "reload", 80, 175, fps); // Adjusted to skip leading shooting frames
+          const walkClip = THREE.AnimationUtils.subclip(originalClip, "walk", 230, 264, fps);
+          const idleClip = THREE.AnimationUtils.subclip(originalClip, "idle", 0, 1, fps); 
+
+          const clips = [idleClip, walkClip, shootClip, reloadClip];
+          clips.forEach(clip => {
+              weaponActions.pistol[clip.name] = pistolMixer!.clipAction(clip);
+          });
+      } else {
+          gltf.animations.forEach((clip) => {
+              weaponActions.pistol[clip.name.toLowerCase()] = pistolMixer!.clipAction(clip);
+          });
+      }
+
       // Try play idle
-      const idle = Object.keys(weaponActions.pistol).find(n => n.includes('idle'));
-      if (idle) weaponActions.pistol[idle].play();
+      if (weaponActions.pistol['idle']) {
+         weaponActions.pistol['idle'].play();
+      }
+
+      // Smooth blending fallback back to base movement animation on action completion
+      pistolMixer.addEventListener('finished', (e: any) => {
+          if (e.action.loop === THREE.LoopOnce) {
+              transitionToState(lastBaseState, true);
+          }
+      });
 
       let muzzleNode = gltf.scene.getObjectByName('Muzzle') || gltf.scene.getObjectByName('muzzle');
       if (!muzzleNode) {
@@ -152,31 +235,83 @@ export function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera): THR
       }
       (pistolGroup as any).muzzleNode = muzzleNode;
       console.log("[WEAPONS] Pistol Loaded, Animations:", Object.keys(weaponActions.pistol));
-    });
-  });
+    } catch (e) {
+      console.error("[WEAPONS] Failed to load Pistol:", e);
+    }
+  })();
+
+  await Promise.all([loadRiflePromise, loadPistolPromise]);
 
   return weaponsContainer;
 }
 
-export function playWeaponAnimation(animName: string, loop: boolean = true) {
+// Module-level tracking for active clips per slot to prevent frame pops and redundant resets
+export const currentActiveClipKeys: Record<number, string | null> = {
+  1: null,
+  2: null
+};
+
+export let lastBaseAnim = 'idle';
+
+export function transitionToState(state: WeaponAnimState, force: boolean = false) {
     const slot = weaponVisualState.activeSlot;
     const actions = slot === 1 ? weaponActions.rifle : weaponActions.pistol;
-    if (!actions) return;
     
-    // Play named animation. To do it properly, cross-fade.
-    const clipName = Object.keys(actions).find(n => n.includes(animName.toLowerCase()));
-    if (clipName && actions[clipName]) {
-        const action = actions[clipName];
-        action.reset();
-        if (!loop) {
-            action.setLoop(THREE.LoopOnce, 1);
-            action.clampWhenFinished = true;
-        } else {
-            action.setLoop(THREE.LoopRepeat, Infinity);
+    // Find animation key (ADS_IDLE maps to IDLE frozen)
+    let clipKey = state === WeaponAnimState.ADS_IDLE ? 'idle' : state.toString();
+    const targetAction = actions[clipKey];
+    
+    // Interrupt Schema: Shoot/Reload have high priority and lock movement updates
+    const currentActionKey = weaponVisualState.currentState === WeaponAnimState.ADS_IDLE ? 'idle' : weaponVisualState.currentState;
+    const currentAction = actions[currentActionKey];
+    
+    if (!force && currentAction && currentAction.isRunning() && currentAction.loop === THREE.LoopOnce) {
+        // Queue movement for after the action finishes
+        if (state === WeaponAnimState.IDLE || state === WeaponAnimState.WALK || state === WeaponAnimState.ADS_IDLE) {
+            lastBaseState = state;
+            return;
         }
-        action.play();
-        // Crossfade from others if needed
     }
+
+    if (!force && weaponVisualState.currentState === state) return;
+
+    // Update state even if clip is missing (e.g. pistol draw) to ensure downstream gating logic holds
+    weaponVisualState.currentState = state;
+
+    if (!targetAction) return;
+
+    const isLooping = (state === WeaponAnimState.IDLE || state === WeaponAnimState.WALK || state === WeaponAnimState.ADS_IDLE);
+    const fadeDuration = 0.15;
+
+    targetAction.reset();
+    targetAction.setLoop(isLooping ? THREE.LoopRepeat : THREE.LoopOnce, isLooping ? Infinity : 1);
+    targetAction.clampWhenFinished = !isLooping;
+    targetAction.enabled = true;
+    targetAction.timeScale = state === WeaponAnimState.ADS_IDLE ? 0 : 1; // Freeze for ADS stability
+    targetAction.fadeIn(fadeDuration);
+    targetAction.play();
+    
+    // Crossfade: Fade out all other actions
+    Object.keys(actions).forEach(key => {
+        if (key !== clipKey) {
+            const act = actions[key];
+            if (act && act.isRunning()) {
+                act.fadeOut(fadeDuration);
+            }
+        }
+    });
+
+    if (isLooping) {
+        lastBaseState = state;
+    }
+}
+
+export function resetWeaponAnimations() {
+    [rifleMixer, pistolMixer].forEach(m => m?.stopAllAction());
+    weaponVisualState.currentState = WeaponAnimState.IDLE;
+    lastBaseState = WeaponAnimState.IDLE;
+    transitionToState(WeaponAnimState.IDLE, true);
+    isWeaponReloading = false;
 }
 
 export function applyWeaponRecoil(upForce: number, sideForce: number): void {
@@ -184,9 +319,10 @@ export function applyWeaponRecoil(upForce: number, sideForce: number): void {
   weaponVisualState.recoilPitch = Math.min(0.35, weaponVisualState.recoilPitch + upForce * 3.5);
   weaponVisualState.recoilYaw += (Math.random() - 0.5) * sideForce * 3.0;
 
-  // Attempt to play a shoot animation if it exists
-  playWeaponAnimation('shoot', false);
-  playWeaponAnimation('fire', false);
+  // High-priority interrupt - but cannot interrupt a reload in progress
+  if (!isWeaponReloading) {
+      transitionToState(WeaponAnimState.SHOOT, true);
+  }
 }
 
 export function switchActiveWeaponModel(slot: number): void {
@@ -227,21 +363,14 @@ export function getMuzzleWorldPosition(outVec: THREE.Vector3, camera: THREE.Came
   }
 }
 
-export let isWeaponReloading = false;
 export function setWeaponReloading(val: boolean) {
   if (isWeaponReloading !== val) {
     isWeaponReloading = val;
     if (val) {
-        // Find a reload animation
-        playWeaponAnimation('reload', false);
-    } else {
-        // Revert to idle or run
-        playWeaponAnimation('idle', true);
+        transitionToState(WeaponAnimState.RELOAD);
     }
   }
 }
-
-let lastAnimState = 'idle';
 
 export function updateWeaponsContainer(
   dt: number,
@@ -252,22 +381,30 @@ export function updateWeaponsContainer(
 ): void {
   if (!weaponsContainer || !rifleGroup || !pistolGroup) return;
 
-  if (rifleMixer) rifleMixer.update(dt);
-  if (pistolMixer) pistolMixer.update(dt);
+  const slot = weaponVisualState.activeSlot;
+  
+  // Downstream Gating: Only update the mixer of the active weapon
+  if (slot === 1 && rifleMixer) rifleMixer.update(dt);
+  if (slot === 2 && pistolMixer) pistolMixer.update(dt);
 
-  // Animation State Machine
-  let desiredAnim = 'idle';
-  if (isWeaponReloading) {
-     desiredAnim = 'reload';
-  } else if (isMoving) {
-     desiredAnim = isADS ? 'walk' : 'run';
-  } else {
-     desiredAnim = isADS ? 'idle' : 'idle'; 
+  const actions = slot === 1 ? weaponActions.rifle : weaponActions.pistol;
+
+  // Schema-driven state determination
+  if (weaponVisualState.currentState !== WeaponAnimState.SHOOT && weaponVisualState.currentState !== WeaponAnimState.RELOAD) {
+      let desired = WeaponAnimState.IDLE;
+      if (isADS) {
+          desired = WeaponAnimState.ADS_IDLE; // Dead still
+      } else if (isMoving) {
+          desired = WeaponAnimState.WALK;
+      }
+      transitionToState(desired);
   }
 
-  if (desiredAnim !== lastAnimState && !isWeaponReloading) {
-     lastAnimState = desiredAnim;
-     playWeaponAnimation(desiredAnim, true);
+  // Handle Sprint speed scaling on the WALK animation (RUN animation is forbidden)
+  const walkAction = actions[WeaponAnimState.WALK];
+  if (walkAction) {
+     const isSprinting = isMoving && !isADS; 
+     walkAction.timeScale = isSprinting ? 1.5 : 1.0;
   }
 
   // Switch logic
@@ -279,7 +416,7 @@ export function updateWeaponsContainer(
       weaponVisualState.activeSlot = weaponVisualState.pendingSlot;
       rifleGroup.visible = (weaponVisualState.activeSlot === 1);
       pistolGroup.visible = (weaponVisualState.activeSlot === 2);
-      playWeaponAnimation('draw', false); // Play draw animation on switch
+      transitionToState(WeaponAnimState.DRAW, true);
     }
   }
 
@@ -293,7 +430,8 @@ export function updateWeaponsContainer(
 
 
   weaponVisualState.swayCycle += dt * stats.swaySpeed;
-  const swayIntensity = currentAdsLerp * stats.swayAmplitude * 6.5; 
+  // Procedural sway is disabled during ADS to prevent weapon flailing as requested
+  const swayIntensity = (1.0 - currentAdsLerp) * stats.swayAmplitude * 2.0; 
   const swayX = Math.sin(weaponVisualState.swayCycle) * swayIntensity;
   const swayY = Math.cos(weaponVisualState.swayCycle * 2.0) * swayIntensity * 0.5;
 
@@ -313,7 +451,7 @@ export function updateWeaponsContainer(
   const baseTargetZ = hipZ + (adsZ - hipZ) * currentAdsLerp;
 
   const finalX = baseTargetX + swayX + (weaponVisualState.recoilYaw * 0.05);
-  const finalY = baseTargetY + swayY + switchYOffset + (weaponVisualState.recoilPitch * 0.12);
+  const finalY = baseTargetY + switchYOffset + (weaponVisualState.recoilPitch * 0.12);
   const finalZ = baseTargetZ - weaponVisualState.recoilZ; 
 
   weaponsContainer.position.copy(camera.position);
@@ -323,13 +461,16 @@ export function updateWeaponsContainer(
   // Apply recoil rotation relative to the camera
   weaponsContainer.rotateX(weaponVisualState.recoilPitch + (swayY * 1.5));
   weaponsContainer.rotateY(-weaponVisualState.recoilYaw + (swayX * 1.5));
-  weaponsContainer.rotateZ(-swayX * 4.0);
+  
+  // Apply sway roll and ADS corrective tilt
+  const adsTilt = (offsets as any).adsTilt || 0;
+  weaponsContainer.rotateZ((-swayX * 4.0) + (adsTilt * currentAdsLerp));
   
   // Model files are facing +Z instead of -Z, so spin them 180 on Y
   weaponsContainer.rotateY(Math.PI);
 
   // Apply translational offsets (X and Z inverted because we just spun 180 degrees)
   weaponsContainer.translateX(-finalX);
-  weaponsContainer.translateY(finalY);
-  weaponsContainer.translateZ(-finalZ);
+  weaponsContainer.translateY(finalY + swayY);
+  weaponsContainer.translateZ(-finalZ + swayX);
 }

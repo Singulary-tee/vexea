@@ -153,6 +153,7 @@ export async function launchMapEditor(mapId: string) {
             // 2. Draw Buildings
             if (spec.buildings) {
                 for (const b of spec.buildings) {
+                    if (!b || !b.position || !b.size) continue;
                     const bx = b.position.x * scale;
                     const bz = b.position.z * scale;
                     const bw = b.size.x * (b.scale?.x || 1) * scale;
@@ -183,6 +184,7 @@ export async function launchMapEditor(mapId: string) {
             // 3. Draw Spawn Points
             if (spec.spawnPoints) {
                 for (const sp of spec.spawnPoints) {
+                    if (!sp || !sp.position) continue;
                     const sx = sp.position.x * scale;
                     const sz = sp.position.z * scale;
 
@@ -203,6 +205,7 @@ export async function launchMapEditor(mapId: string) {
             // 4. Draw Restricted Gates
             if (spec.restrictedGates) {
                 for (const rg of spec.restrictedGates) {
+                    if (!rg || !rg.position) continue;
                     const rx = rg.position.x * scale;
                     const rz = rg.position.z * scale;
                     const kRadius = rg.killZoneRadius * scale;

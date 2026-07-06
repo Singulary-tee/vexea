@@ -1,114 +1,543 @@
 {
   "assets": [
-    { "name": "StreetLightPoles.glb", "category": "Model", "source": "Release" },
-    { "name": "StreetLightPoles.gltf", "category": "Model", "source": "Release" },
-    { "name": "StreetLightPoles.bin", "category": "Model", "source": "Release" },
-    { "name": "animated_drone.glb", "category": "Model", "source": "Release" },
-    { "name": "animated_recon_fixed-wing.glb", "category": "Model", "source": "Release" },
-    { "name": "grenade.glb", "category": "Model", "source": "Release" },
-    { "name": "bpre_rifleman.glb", "category": "Model", "source": "Release" },
-    { "name": "concrete_block_low_poly.glb", "category": "Model", "source": "Release" },
-    { "name": "concrete_fence_low-poly.glb", "category": "Model", "source": "Release" },
-    { "name": "double-arm_BaseColor.jpg", "category": "Texture", "source": "Release" },
-    { "name": "double-arm_Emission.jpg", "category": "Texture", "source": "Release" },
-    { "name": "double-arm_Metalness.jpg", "category": "Texture", "source": "Release" },
-    { "name": "double-arm_Normal.jpg", "category": "Texture", "source": "Release" },
-    { "name": "double-arm_Roughness.jpg", "category": "Texture", "source": "Release" },
-    { "name": "double-arm_Transmission.jpg", "category": "Texture", "source": "Release" },
-    { "name": "qwantani_dusk_2_puresky_4k.hdr", "category": "EnvironmentMap", "source": "Release" },
-    { "name": "single_arm_BaseColor.jpg", "category": "Texture", "source": "Release" },
-    { "name": "single_arm_Emission.jpg", "category": "Texture", "source": "Release" },
-    { "name": "single_arm_Metalness.jpg", "category": "Texture", "source": "Release" },
-    { "name": "single_arm_Normal.jpg", "category": "Texture", "source": "Release" },
-    { "name": "single_arm_Roughness.jpg", "category": "Texture", "source": "Release" },
-    { "name": "single_arm_Transmission.jpg", "category": "Texture", "source": "Release" },
-    { "name": "Tiles106_1K-JPG_AmbientOcclusion.jpg", "category": "Texture", "source": "Release" },
-    { "name": "Tiles106_1K-JPG_Color.jpg", "category": "Texture", "source": "Release" },
-    { "name": "Tiles106_1K-JPG_Displacement.jpg", "category": "Texture", "source": "Release" },
-    { "name": "Tiles106_1K-JPG_NormalDX.jpg", "category": "Texture", "source": "Release" },
-    { "name": "Tiles106_1K-JPG_NormalGL.jpg", "category": "Texture", "source": "Release" },
-    { "name": "Tiles106_1K-JPG_Roughness.jpg", "category": "Texture", "source": "Release" },
-    { "name": "Server_rack.gltf", "category": "Model", "source": "ImageOnly" },
-    { "name": "T_AntennaTower_D.png", "category": "Texture", "source": "ImageOnly" },
-    { "name": "T_AntennaTower_N.png", "category": "Texture", "source": "ImageOnly" },
-    { "name": "T_AntennaTower_S.png", "category": "Texture", "source": "ImageOnly" },
-    { "name": "Ground067_1K-JPG_AmbientOcclusion.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "Ground067_1K-JPG_Color.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "Ground067_1K-JPG_Displacement.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "Ground067_1K-JPG_NormalDX.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "Ground067_1K-JPG_NormalGL.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "Ground067_1K-JPG_Roughness.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "VB100.BX_DOOR_2.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "VB100.DX_2_DOOR_1.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "VB100.DX_2_DOOR_5.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "VB100.DX_Case_1.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "VB100.DX_Case_2.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "VB100.DX_Case_3.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "VB100.DX_Case_5.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "VB100.DX_DOOR_1.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "VB100.DX_DOOR_3.jpg", "category": "Texture", "source": "ImageOnly" },
-    { "name": "animated_pistol.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "antenna.tower.gltf", "category": "Model", "source": "ImageOnly" },
-    { "name": "industrial_asset_pack_free.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "low_poly_rusty_metal_drum.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "model.bin", "category": "Model", "source": "ImageOnly" },
-    { "name": "security_camera_01_1k.gltf.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "security_camera_02_1k.gltf.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "small_warehouse.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "smg_fps_animations.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "tree_animate.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "utility_box_02_1k.gltf.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "warehouse_building.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "wheeled_drone-rigged-animated.glb", "category": "Model", "source": "ImageOnly" },
-    { "name": "asphalt_02.bin", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "asphalt_02_1k.gltf", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "asphalt_02_arm_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "asphalt_02_diff_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "asphalt_02_nor_gl_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "concrete_tiles_02.bin", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "concrete_tiles_02_1k.gltf", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "concrete_tiles_02_arm_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "concrete_tiles_02_diff_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "concrete_tiles_02_nor_gl_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "red_brick_03.bin", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "red_brick_03_1k.gltf", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "red_brick_03_arm_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "red_brick_03_diff_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "red_brick_03_nor_gl_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocks_ground_01.bin", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocks_ground_01_1k.gltf", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocks_ground_01_arm_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocks_ground_01_diff_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocks_ground_01_nor_gl_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocky_trail.bin", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocky_trail_1k.gltf", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocky_trail_arm_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocky_trail_diff_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "rocky_trail_nor_gl_1k.jpg", "category": "Texture", "source": "TexturesFolder" },
-    { "name": "Blueprint.png", "category": "Image", "source": "Release" },
-    { "name": "Surface_Impact.png", "category": "Image", "source": "Release" },
-    { "name": "feedback_card.png", "category": "Image", "source": "Release" },
-    { "name": "file_00000000cdd071f48495d22753c89fa1.png", "category": "Image", "source": "Release" },
-    { "name": "multiplayer_card.png", "category": "Image", "source": "Release" },
-    { "name": "slopInc_card.png", "category": "Image", "source": "Release" },
-    { "name": "splash_screen.png", "category": "Image", "source": "Release" },
-    { "name": "statistics_card.png", "category": "Image", "source": "Release" },
-    { "name": "store_card.png", "category": "Image", "source": "Release" },
-    { "name": "vibeCo_card.png", "category": "Image", "source": "Release" }
+    {
+      "name": "quadcopter_camera.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "quadcopter_rifle.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "quadcopter_bomb.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "wheeled_drone.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "fixed_wing_drone.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "StreetLightPoles.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "StreetLightPoles.gltf",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "StreetLightPoles.bin",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "grenade.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "bpre_rifleman.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "concrete_block_low_poly.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "concrete_fence_low-poly.glb",
+      "category": "Model",
+      "source": "Release"
+    },
+    {
+      "name": "double-arm_BaseColor.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "double-arm_Emission.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "double-arm_Metalness.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "double-arm_Normal.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "double-arm_Roughness.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "double-arm_Transmission.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "qwantani_dusk_2_puresky_4k.hdr",
+      "category": "EnvironmentMap",
+      "source": "Release"
+    },
+    {
+      "name": "single_arm_BaseColor.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "single_arm_Emission.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "single_arm_Metalness.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "single_arm_Normal.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "single_arm_Roughness.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "single_arm_Transmission.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "Tiles106_1K-JPG_AmbientOcclusion.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "Tiles106_1K-JPG_Color.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "Tiles106_1K-JPG_Displacement.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "Tiles106_1K-JPG_NormalDX.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "Tiles106_1K-JPG_NormalGL.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "Tiles106_1K-JPG_Roughness.jpg",
+      "category": "Texture",
+      "source": "Release"
+    },
+    {
+      "name": "Server_rack.gltf",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "T_AntennaTower_D.png",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "T_AntennaTower_N.png",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "T_AntennaTower_S.png",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "Ground067_1K-JPG_AmbientOcclusion.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "Ground067_1K-JPG_Color.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "Ground067_1K-JPG_Displacement.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "Ground067_1K-JPG_NormalDX.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "Ground067_1K-JPG_NormalGL.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "Ground067_1K-JPG_Roughness.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "VB100.BX_DOOR_2.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "VB100.DX_2_DOOR_1.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "VB100.DX_2_DOOR_5.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "VB100.DX_Case_1.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "VB100.DX_Case_2.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "VB100.DX_Case_3.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "VB100.DX_Case_5.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "VB100.DX_DOOR_1.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "VB100.DX_DOOR_3.jpg",
+      "category": "Texture",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "animated_pistol.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "antenna.tower.gltf",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "industrial_asset_pack_free.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "low_poly_rusty_metal_drum.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "model.bin",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "security_camera_01_1k.gltf.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "security_camera_02_1k.gltf.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "small_warehouse.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "smg_fps_animations.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "tree_animate.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "utility_box_02_1k.gltf.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "warehouse_building.glb",
+      "category": "Model",
+      "source": "ImageOnly"
+    },
+    {
+      "name": "asphalt_02.bin",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "asphalt_02_1k.gltf",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "asphalt_02_arm_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "asphalt_02_diff_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "asphalt_02_nor_gl_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "concrete_tiles_02.bin",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "concrete_tiles_02_1k.gltf",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "concrete_tiles_02_arm_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "concrete_tiles_02_diff_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "concrete_tiles_02_nor_gl_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "red_brick_03.bin",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "red_brick_03_1k.gltf",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "red_brick_03_arm_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "red_brick_03_diff_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "red_brick_03_nor_gl_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocks_ground_01.bin",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocks_ground_01_1k.gltf",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocks_ground_01_arm_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocks_ground_01_diff_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocks_ground_01_nor_gl_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocky_trail.bin",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocky_trail_1k.gltf",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocky_trail_arm_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocky_trail_diff_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "rocky_trail_nor_gl_1k.jpg",
+      "category": "Texture",
+      "source": "TexturesFolder"
+    },
+    {
+      "name": "Blueprint.png",
+      "category": "Image",
+      "source": "Release"
+    },
+    {
+      "name": "Surface_Impact.png",
+      "category": "Image",
+      "source": "Release"
+    },
+    {
+      "name": "feedback_card.png",
+      "category": "Image",
+      "source": "Release"
+    },
+    {
+      "name": "file_00000000cdd071f48495d22753c89fa1.png",
+      "category": "Image",
+      "source": "Release"
+    },
+    {
+      "name": "multiplayer_card.png",
+      "category": "Image",
+      "source": "Release"
+    },
+    {
+      "name": "slopInc_card.png",
+      "category": "Image",
+      "source": "Release"
+    },
+    {
+      "name": "splash_screen.png",
+      "category": "Image",
+      "source": "Release"
+    },
+    {
+      "name": "statistics_card.png",
+      "category": "Image",
+      "source": "Release"
+    },
+    {
+      "name": "store_card.png",
+      "category": "Image",
+      "source": "Release"
+    },
+    {
+      "name": "vibeCo_card.png",
+      "category": "Image",
+      "source": "Release"
+    }
   ],
   "sounds": [
-    { "name": "bass_scratch.mp3", "category": "Audio" },
-    { "name": "click.mp3", "category": "Audio" },
-    { "name": "concrete_run.mp3", "category": "Audio" },
-    { "name": "concrete_walk.mp3", "category": "Audio" },
-    { "name": "error.mp3", "category": "Audio" },
-    { "name": "iron_march.mp3", "category": "Audio" },
-    { "name": "metal_ricochet.mp3", "category": "Audio" },
-    { "name": "pistol_fire.mp3", "category": "Audio" },
-    { "name": "pistol_reload.mp3", "category": "Audio" },
-    { "name": "rifle_fire.mp3", "category": "Audio" },
-    { "name": "rifle_reload.mp3", "category": "Audio" },
-    { "name": "vexea_theme.mp3", "category": "Audio" },
-    { "name": "wood_walk.mp3", "category": "Audio" }
+    {
+      "name": "bass_scratch.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "click.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "concrete_run.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "concrete_walk.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "error.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "iron_march.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "metal_ricochet.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "pistol_fire.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "pistol_reload.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "rifle_fire.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "rifle_reload.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "vexea_theme.mp3",
+      "category": "Audio"
+    },
+    {
+      "name": "wood_walk.mp3",
+      "category": "Audio"
+    }
   ]
 }

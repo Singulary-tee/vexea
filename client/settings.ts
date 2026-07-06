@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { DS } from './design-system';
+import { listCachedFiles, deleteCachedFile, clearCache } from './asset-cache';
 
 export interface VexeaSettingsData {
     joySens: number;
@@ -9,6 +10,9 @@ export interface VexeaSettingsData {
     fpsCap: number; // 30 or 60
     fxaa: boolean;
     masterVolume: number;
+    musicVolume: number;
+    sfxVolume: number;
+    uiVolume: number;
     spatialAudio: boolean;
     music: boolean;
     uiSounds: boolean;
@@ -19,6 +23,7 @@ export interface VexeaSettingsData {
     lodLow: number;
     lodBillboard: number;
     fov: number;
+    rendererType: 'auto' | 'webgpu' | 'webgl';
     fullscreen: boolean;
     serverUrl: string;
 }
@@ -31,6 +36,9 @@ const DEFAULT_SETTINGS: VexeaSettingsData = {
     fpsCap: 60,
     fxaa: false,
     masterVolume: 1.0,
+    musicVolume: 0.7,
+    sfxVolume: 1.0,
+    uiVolume: 0.8,
     spatialAudio: true,
     music: true,
     uiSounds: true,
@@ -41,6 +49,7 @@ const DEFAULT_SETTINGS: VexeaSettingsData = {
     lodLow: 30,
     lodBillboard: 60,
     fov: 75,
+    rendererType: 'auto',
     fullscreen: false,
     serverUrl: ""
 };
@@ -101,6 +110,9 @@ export function applySettings(s: VexeaSettingsData) {
         if (Array.isArray(W.uiHowls)) {
             W.uiHowls.forEach((h: any) => h.mute(!s.uiSounds));
         }
+    }
+    if (W.audioManager && typeof W.audioManager.updateVolumes === 'function') {
+        W.audioManager.updateVolumes(s);
     }
     if (W.audioListener) {
         W.audioListener.setMasterVolume(s.masterVolume);
@@ -165,6 +177,7 @@ function createOverlayHTML() {
             <button class="settings-tab" data-tab="AUDIO">AUDIO</button>
             <button class="settings-tab" data-tab="ACCESSIBILITY">ACCESSIBILITY</button>
             <button class="settings-tab" data-tab="SERVER">SERVER</button>
+            <button class="settings-tab" data-tab="DEV" id="btn-tab-dev">DEV</button>
             <button class="settings-tab" data-tab="LEGAL">LEGAL</button>
             <div class="flex-1"></div>
             <button id="btn-close-settings-overlay" style="background:${DS.colors.danger}; font-family:${DS.typography.fontFamily}; font-weight:bold; letter-spacing:2px; font-size:14px; padding:10px 20px; border-radius:4px; margin-top:20px; cursor:pointer; color:white; border:${DS.glass.border}; box-shadow:${DS.glass.glowInner}; transition: background 150ms ease;">CLOSE</button>
@@ -199,6 +212,14 @@ function createOverlayHTML() {
                     <span id="val-fov" class="ml-2"></span>
                 </div>
                 <div class="mb-4">
+                    <label class="block mb-1">Renderer Engine (Requires Reload)</label>
+                    <select id="inp-rendererType" style="width:100%; max-width:300px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.15); padding:10px; border-radius:4px; color:white; font-family:inherit; outline:none;">
+                        <option value="auto">Auto-Detect (Preferred)</option>
+                        <option value="webgpu" id="opt-webgpu">WebGPU Only</option>
+                        <option value="webgl">WebGL Only</option>
+                    </select>
+                </div>
+                <div class="mb-4">
                     <button id="btn-fullscreen" class="p-3 border border-gray-500 rounded bg-gray-800">Toggle Fullscreen</button>
                 </div>
                 <div class="flex gap-4">
@@ -231,6 +252,21 @@ function createOverlayHTML() {
                     <label class="block mb-1">Master Volume</label>
                     <input type="range" id="inp-vol" min="0" max="1" step="0.05" style="width:100%;max-width:300px;">
                     <span id="val-vol" class="ml-2"></span>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1">Music Volume</label>
+                    <input type="range" id="inp-musicVol" min="0" max="1" step="0.05" style="width:100%;max-width:300px;">
+                    <span id="val-musicVol" class="ml-2"></span>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1">SFX Volume</label>
+                    <input type="range" id="inp-sfxVol" min="0" max="1" step="0.05" style="width:100%;max-width:300px;">
+                    <span id="val-sfxVol" class="ml-2"></span>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1">UI/Voice Volume</label>
+                    <input type="range" id="inp-uiVol" min="0" max="1" step="0.05" style="width:100%;max-width:300px;">
+                    <span id="val-uiVol" class="ml-2"></span>
                 </div>
                 <div class="mb-4 flex items-center gap-2">
                     <label>Spatial Audio (HRTF)</label>
@@ -285,6 +321,20 @@ function createOverlayHTML() {
                     <p class="text-xs text-gray-500" style="color: ${DS.colors.accent};">Note: Reconnecting will trigger a full page reload to safely establish WebSocket & RTC sockets.</p>
                 </div>
                 <button id="btn-save-server" class="preset-btn p-3 border border-gray-500 rounded bg-gray-800" style="padding: 10px 20px; font-weight: bold; width: 100%; max-width: 300px; border-color: ${DS.colors.accent} !important; color: ${DS.colors.accent} !important;">APPLY & RECONNECT</button>
+            </div>
+
+            <div id="tab-DEV" class="settings-page hidden">
+                <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">DEVELOPER UTILS</h3>
+                <div class="mb-6">
+                    <p class="text-sm text-gray-400 mb-4">Local asset cache management. Clear specific files to force the engine to refetch the latest versions from the CDN.</p>
+                    <button id="btn-clear-cache" class="preset-btn p-3 border border-red-500 rounded bg-red-900/20 text-red-500 font-bold w-full max-w-[300px]" style="border-color: #ff4444 !important; color: #ff4444 !important;">CLEAR ENTIRE CACHE</button>
+                </div>
+                <div class="border-t border-gray-700 pt-4">
+                    <h4 class="text-lg font-bold mb-4" style="color: ${DS.colors.accent};">CACHED ASSETS</h4>
+                    <div id="dev-file-list" class="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-2" style="scrollbar-width: thin; scrollbar-color: ${DS.colors.accent} transparent;">
+                        <p class="text-gray-500 italic">Scanning local IndexedDB...</p>
+                    </div>
+                </div>
             </div>
             
             <div id="tab-LEGAL" class="settings-page hidden">
@@ -445,10 +495,16 @@ export function openSettings() {
     invY.checked = s.invertY;
     
     let vol = document.getElementById('inp-vol') as HTMLInputElement;
+    let musicVol = document.getElementById('inp-musicVol') as HTMLInputElement;
+    let sfxVol = document.getElementById('inp-sfxVol') as HTMLInputElement;
+    let uiVol = document.getElementById('inp-uiVol') as HTMLInputElement;
     let spatial = document.getElementById('inp-spatial') as HTMLInputElement;
     let music = document.getElementById('inp-music') as HTMLInputElement;
     let ui = document.getElementById('inp-uiSounds') as HTMLInputElement;
     vol.value = s.masterVolume.toString();
+    musicVol.value = s.musicVolume.toString();
+    sfxVol.value = s.sfxVolume.toString();
+    uiVol.value = s.uiVolume.toString();
     spatial.checked = s.spatialAudio;
     music.checked = s.music;
     ui.checked = s.uiSounds;
@@ -462,6 +518,26 @@ export function openSettings() {
 
     let fxaa = document.getElementById('inp-fxaa') as HTMLInputElement;
     fxaa.checked = s.fxaa;
+
+    let rendType = document.getElementById('inp-rendererType') as HTMLSelectElement;
+    if (rendType) {
+        rendType.value = s.rendererType;
+        const webgpuSupported = typeof navigator !== 'undefined' && (navigator as any).gpu !== undefined;
+        const webgpuOpt = document.getElementById('opt-webgpu') as HTMLOptionElement;
+        if (webgpuOpt) {
+            if (!webgpuSupported) {
+                webgpuOpt.disabled = true;
+                webgpuOpt.innerText = "WebGPU Only (Not Supported)";
+                if (s.rendererType === 'webgpu') {
+                    // Fallback visual selection if saved setting is WebGPU but browser doesn't support it
+                    rendType.value = 'auto';
+                }
+            } else {
+                webgpuOpt.disabled = false;
+                webgpuOpt.innerText = "WebGPU Only";
+            }
+        }
+    }
 
     const radios = document.querySelectorAll('input[name="fps"]');
     radios.forEach(r => {
@@ -492,12 +568,16 @@ export function openSettings() {
         s.invertY = invY.checked;
         s.fxaa = fxaa.checked;
         s.masterVolume = parseFloat(vol.value);
+        s.musicVolume = parseFloat(musicVol.value);
+        s.sfxVolume = parseFloat(sfxVol.value);
+        s.uiVolume = parseFloat(uiVol.value);
         s.spatialAudio = spatial.checked;
         s.music = music.checked;
         s.uiSounds = ui.checked;
         s.hudScale = parseFloat(hud.value);
         s.crosshairSize = parseFloat(crossSize.value);
         s.fov = parseInt(fov.value);
+        if (rendType) s.rendererType = rendType.value as any;
         
         let checkedFps = document.querySelector('input[name="fps"]:checked') as HTMLInputElement;
         if(checkedFps) s.fpsCap = parseInt(checkedFps.value);
@@ -505,6 +585,9 @@ export function openSettings() {
         document.getElementById('val-joySens')!.innerText = s.joySens.toFixed(1);
         document.getElementById('val-camSens')!.innerText = s.camSens.toFixed(1);
         document.getElementById('val-vol')!.innerText = s.masterVolume.toFixed(2);
+        document.getElementById('val-musicVol')!.innerText = s.musicVolume.toFixed(2);
+        document.getElementById('val-sfxVol')!.innerText = s.sfxVolume.toFixed(2);
+        document.getElementById('val-uiVol')!.innerText = s.uiVolume.toFixed(2);
         document.getElementById('val-hud')!.innerText = s.hudScale.toFixed(2);
         document.getElementById('val-crossSize')!.innerText = s.crosshairSize + 'px';
         document.getElementById('val-fov')!.innerText = s.fov.toString();
@@ -513,9 +596,10 @@ export function openSettings() {
         applySettings(s);
     };
 
-    [joySens, camSens, invY, fxaa, vol, spatial, music, ui, hud, crossSize, fov].forEach(el => {
-        bind(el, 'input', triggerApply);
-        bind(el, 'change', triggerApply);
+    [joySens, camSens, invY, fxaa, vol, musicVol, sfxVol, uiVol, spatial, music, ui, hud, crossSize, fov, rendType].forEach(el => {
+        if (!el) return;
+        bind(el as HTMLElement, 'input', triggerApply);
+        bind(el as HTMLElement, 'change', triggerApply);
     });
 
     radios.forEach(r => bind(r as HTMLElement, 'change', triggerApply));
@@ -601,6 +685,94 @@ export function openSettings() {
                 W.vexeaEditUI();
             }
         });
+    }
+
+    const devTabBtn = document.getElementById("btn-tab-dev");
+    if (devTabBtn) {
+        if (matchActiveInSettings) {
+            devTabBtn.style.display = 'none';
+        } else {
+            devTabBtn.style.display = 'block';
+            
+            // Logic for the Dev tab
+            const clearCacheBtn = document.getElementById("btn-clear-cache");
+            if (clearCacheBtn) {
+                bind(clearCacheBtn, 'click', async () => {
+                    if (confirm("Are you sure you want to clear the entire local cache? All assets will be redownloaded.")) {
+                        await clearCache();
+                        refreshDevFileList();
+                    }
+                });
+            }
+
+            const refreshDevFileList = async () => {
+                const listEl = document.getElementById("dev-file-list");
+                if (!listEl) return;
+                listEl.innerHTML = '<p class="text-gray-500 italic">Scanning local IndexedDB...</p>';
+                
+                const files = await listCachedFiles();
+                if (files.length === 0) {
+                    listEl.innerHTML = '<p class="text-gray-500 italic">No files in cache.</p>';
+                    return;
+                }
+
+                // Sort by name
+                files.sort((a, b) => a.filename.localeCompare(b.filename));
+
+                listEl.innerHTML = "";
+                files.forEach(f => {
+                    const row = document.createElement("div");
+                    Object.assign(row.style, {
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "8px 12px", background: "rgba(255,255,255,0.03)",
+                        border: "1px solid rgba(255,255,255,0.05)", borderRadius: "4px"
+                    });
+
+                    const info = document.createElement("div");
+                    info.style.display = "flex";
+                    info.style.flexDirection = "column";
+                    
+                    const name = document.createElement("span");
+                    name.textContent = f.filename;
+                    name.style.fontSize = "14px";
+                    name.style.fontWeight = "bold";
+                    name.style.color = "#E8E8E8";
+
+                    const meta = document.createElement("span");
+                    const sizeKB = (f.size / 1024).toFixed(1);
+                    const date = new Date(f.timestamp).toLocaleDateString();
+                    meta.textContent = `${sizeKB} KB | ${date}`;
+                    meta.style.fontSize = "11px";
+                    meta.style.color = "#888";
+
+                    info.appendChild(name);
+                    info.appendChild(meta);
+
+                    const delBtn = document.createElement("button");
+                    delBtn.textContent = "DELETE";
+                    Object.assign(delBtn.style, {
+                        padding: "4px 8px", background: "rgba(255,0,0,0.1)",
+                        border: "1px solid rgba(255,0,0,0.3)", color: "#FF6666",
+                        fontSize: "10px", fontWeight: "bold", cursor: "pointer",
+                        borderRadius: "2px"
+                    });
+                    delBtn.onclick = async (e) => {
+                        e.stopPropagation();
+                        await deleteCachedFile(f.filename);
+                        refreshDevFileList();
+                    };
+
+                    row.appendChild(info);
+                    row.appendChild(delBtn);
+                    listEl.appendChild(row);
+                });
+            };
+
+            // Initial load when tab is clicked
+            bind(devTabBtn, 'click', () => {
+                refreshDevFileList();
+            });
+        }
     }
 
     if (matchActiveInSettings) {
@@ -732,6 +904,15 @@ export function injectMatchTab(): void {
         matchActiveInSettings = true;
         if (overlayEl) {
             _injectMatchTabDOM();
+            
+            const devBtn = document.getElementById("btn-tab-dev");
+            if (devBtn) {
+                devBtn.style.display = 'none';
+                if (devBtn.classList.contains('active')) {
+                    const controlsBtn = document.querySelector('.settings-tab[data-tab="CONTROLS"]') as HTMLElement;
+                    if (controlsBtn) controlsBtn.click();
+                }
+            }
         }
     }
 }
@@ -743,6 +924,9 @@ export function removeMatchTab(): void {
         const page = document.getElementById('tab-MATCH');
         if (btn) btn.remove();
         if (page) page.remove();
+
+        const devBtn = document.getElementById("btn-tab-dev");
+        if (devBtn) devBtn.style.display = 'block';
 
         // if we removed the active tab, switch back to controls
         if (btn?.classList.contains('active')) {

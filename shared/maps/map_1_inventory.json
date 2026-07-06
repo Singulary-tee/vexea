@@ -68,8 +68,8 @@
     ]
   },
   {
-    "filename": "animated_drone.glb",
-    "originalFile": "animated_drone.glb",
+    "filename": "quadcopter_rifle.glb",
+    "originalFile": "quadcopter_rifle.glb",
     "boundingBox": {
       "x": -0.12674179747532754,
       "y": 0.00013278318272270592,
@@ -161,8 +161,8 @@
     ]
   },
   {
-    "filename": "animated_recon_fixed-wing.glb",
-    "originalFile": "animated_recon_fixed-wing.glb",
+    "filename": "quadcopter_camera.glb",
+    "originalFile": "quadcopter_camera.glb",
     "boundingBox": {
       "x": -68.29408836364746,
       "y": 0,

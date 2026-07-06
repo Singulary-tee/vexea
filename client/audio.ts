@@ -2,6 +2,24 @@ import { Howl, Howler } from 'howler';
 import * as THREE from 'three';
 import { getCachedOrFetchUrl } from "./asset-cache";
 
+const SOUND_CATEGORIES: Record<string, 'music' | 'sfx' | 'ui'> = {
+    vexea_theme: 'music',
+    bass_scratch: 'music',
+    iron_march: 'music',
+    click: 'ui',
+    error: 'ui',
+    metal_ricochet: 'sfx',
+    wood_walk: 'sfx',
+    concrete_run: 'sfx',
+    concrete_walk: 'sfx',
+    rifle_reload: 'sfx',
+    pistol_reload: 'sfx',
+    pistol_fire: 'sfx',
+    rifle_fire: 'sfx',
+    hit_confirmed: 'sfx',
+    drone_death: 'sfx'
+};
+
 class AudioManager {
     private assetsLoaded = 0;
     private totalAssets = 0;
@@ -19,6 +37,21 @@ class AudioManager {
     
     // Footstep state
     private activeFootstepKey: string | null = null;
+
+    public updateVolumes(s: any) {
+        Object.entries(this.sounds).forEach(([key, howl]) => {
+            const category = SOUND_CATEGORIES[key] || 'sfx';
+            let vol = 1.0;
+            if (category === 'music') {
+                vol = s.music ? s.musicVolume : 0;
+            } else if (category === 'ui') {
+                vol = s.uiSounds ? s.uiVolume : 0;
+            } else if (category === 'sfx') {
+                vol = s.sfxVolume;
+            }
+            howl.volume(vol);
+        });
+    }
 
     public async loadAll(): Promise<void> {
         const audioFiles = {
@@ -71,6 +104,19 @@ class AudioManager {
                     }
                 });
                 this.sounds[key] = howl;
+                const s = (window as any).vexeaSettings;
+                if (s) {
+                    const category = SOUND_CATEGORIES[key] || 'sfx';
+                    let vol = 1.0;
+                    if (category === 'music') {
+                        vol = s.music ? s.musicVolume : 0;
+                    } else if (category === 'ui') {
+                        vol = s.uiSounds ? s.uiVolume : 0;
+                    } else if (category === 'sfx') {
+                        vol = s.sfxVolume;
+                    }
+                    howl.volume(vol);
+                }
             });
         });
 

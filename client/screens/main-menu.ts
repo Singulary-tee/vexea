@@ -187,7 +187,7 @@ export function initMainMenu() {
   loopBg.setAttribute('muted', 'true');
   el.appendChild(loopBg);
 
-  const menuVideos = ['Mainvideo1.mp4', 'Mainvideo2.mp4', 'Mainvideo3.mp4'];
+  const menuVideos = ['Mainvideo1.mp4'];
   const videoUrls: string[] = [];
   let currentVideoIndex = -1;
 

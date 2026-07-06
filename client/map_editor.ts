@@ -6,7 +6,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 export const initMapEditor = (
     scene: THREE.Scene, 
     camera: THREE.PerspectiveCamera, 
-    renderer: THREE.WebGLRenderer, 
+    renderer: any, 
     canvasContainer: HTMLDivElement
 ) => {
     // Editor State

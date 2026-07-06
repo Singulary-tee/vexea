@@ -1,5 +1,10 @@
 # VEXEA Assets & Sounds Tracker
 
+> [!WARNING]
+> **CRITICAL REPOSITORY RULE (DISCLAIMER):**
+> This Asset Tracker was explicitly created and added to the workspace to **strictly forbid** the direct uploading of massive `.glb` files, textures, audio, or other heavy binary assets to this git repository. Large media files **do not belong in this codebase repository**.
+> All heavy assets MUST be hosted remotely (such as in external release packages or a CDN) and dynamically retrieved by the client loading sequence, rather than being committed to the git repository. Under no circumstances should AI coding assistants upload or generate large GLB or binary assets in the workspace.
+
 This document tracks all the 3D models, textures, environment maps, and audio assets for **VEXEA**, separating them by category and noting their preservation and remote loading state.
 
 ## 1. 3D Models & Game Assets (`/` Root & Image)
@@ -11,8 +16,11 @@ The following assets have been completely cleaned out of the direct workspace fi
 | `StreetLightPoles.glb` | Model | Root Directory | `Asset` Release Package |
 | `StreetLightPoles.gltf` | Model | Root Directory | `Asset` Release Package |
 | `StreetLightPoles.bin` | Model | Root Directory | `Asset` Release Package |
-| `animated_drone.glb` | Model | Root Directory | `Asset` Release Package |
-| `animated_recon_fixed-wing.glb` | Model | Root Directory | `Asset` Release Package |
+| `quadcopter_camera.glb` | Model | Root Directory | `Asset` Release Package |
+| `quadcopter_rifle.glb` | Model | Root Directory | `Asset` Release Package |
+| `quadcopter_bomb.glb` | Model | Root Directory | `Asset` Release Package |
+| `wheeled_drone.glb` | Model | Root Directory | `Asset` Release Package |
+| `fixed_wing_drone.glb` | Model | Root Directory | `Asset` Release Package |
 | `grenade.glb` | Model | Root Directory (Grenade Prop) | `Asset` Release Package |
 | `bpre_rifleman.glb` | Model | Root Directory | `Asset` Release Package |
 | `concrete_block_low_poly.glb` | Model | Root Directory | `Asset` Release Package |
@@ -67,7 +75,6 @@ The following assets have been completely cleaned out of the direct workspace fi
 | `tree_animate.glb` | Model | Reference Image Only | `Asset` Release Package |
 | `utility_box_02_1k.gltf.glb` | Model | Reference Image Only | `Asset` Release Package |
 | `warehouse_building.glb` | Model | Reference Image Only | `Asset` Release Package |
-| `wheeled_drone-rigged-animated.glb` | Model | Reference Image Only | `Asset` Release Package |
 
 ---
 

@@ -12,6 +12,13 @@ class MatchManager {
     if (!room) {
       console.log(`[MATCH MANAGER] Creating new MatchRoom: ${roomId} (Requested Map: ${mapId || 'none'})`);
       room = new MatchRoom(roomId, geminiKey, mapId);
+      
+      // Phase 4: Signal Manager when teardown is complete
+      room.onShutdown = (id) => {
+        console.log(`[MATCH MANAGER] Room ${id} signaled shutdown. Removing from activeRooms.`);
+        this.activeRooms.delete(id);
+      };
+
       this.activeRooms.set(roomId, room);
     }
     return room;
@@ -23,7 +30,7 @@ class MatchManager {
    */
   public findMatchmakingRoom(geminiKey?: string): MatchRoom {
     for (const room of this.activeRooms.values()) {
-      if (!room.matchActive && room.players.size < 10) {
+      if (!room.matchActive && room.players.size < 10 && room.roomId !== "lobby") {
         console.log(`[MATCH MANAGER] Matchmaking found open room: ${room.roomId} (${room.players.size}/10)`);
         return room;
       }
@@ -40,8 +47,8 @@ class MatchManager {
   public deleteRoom(roomId: string) {
     const room = this.activeRooms.get(roomId);
     if (room) {
-      console.log(`[MATCH MANAGER] Shutting down empty Room: ${roomId}`);
-      this.activeRooms.delete(roomId);
+      console.log(`[MATCH MANAGER] Requesting shutdown for Room: ${roomId}`);
+      // activeRooms.delete(roomId) happens in the onShutdown callback
       room.shutdown();
     }
   }

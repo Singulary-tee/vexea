@@ -155,6 +155,7 @@ export class MapLoader {
         // But the spec JSON has y=0 and z=tunnels/depth. Wait, the spec has 'y' as elevation. e.g. position: x:40, y:0, z:200.
         cp.rotation.y = b.rotation.y ? b.rotation.y * Math.PI / 180 : 0;
         this.scene.add(cp);
+        this.mergedMeshes.push(cp as any);
       } else if (b.meshFile && this.loadedAssets.has(b.meshFile)) {
         const asset = this.loadedAssets.get(b.meshFile)!;
         const clone = asset.clone();
@@ -234,6 +235,9 @@ export class MapLoader {
           const boxHelper = new THREE.Box3Helper(box3, new THREE.Color(0x0000ff));
           this.scene.add(boxHelper);
           this.mergedMeshes.push(boxHelper as any);
+          (window as any).buildingColliders = (window as any).buildingColliders || [];
+          (window as any).buildingColliders.push(boxHelper);
+          boxHelper.visible = (window as any).GlobalState?.visDiag?.colliders || false;
         }
       }
     }
@@ -327,6 +331,7 @@ export class MapLoader {
     groundMesh.castShadow = false;
     groundMesh.receiveShadow = false;
     this.scene.add(groundMesh);
+    this.mergedMeshes.push(groundMesh);
 
     // HDR skybox
     const rgbeLoader = new HDRLoader();
@@ -350,9 +355,11 @@ export class MapLoader {
     // Ambient + directional light simulating dusk HDR
     const ambient = new THREE.AmbientLight(0xffffff, 0.4);
     this.scene.add(ambient);
+    this.mergedMeshes.push(ambient as any);
     const dirLight = new THREE.DirectionalLight(0xffddbb, 0.6);
     dirLight.position.set(100, 200, 50); 
     this.scene.add(dirLight);
+    this.mergedMeshes.push(dirLight as any);
   }
 
   private buildCenterpiece(): THREE.Group {
@@ -443,6 +450,16 @@ export class MapLoader {
   dispose(): void {
     for (const mesh of this.mergedMeshes) {
       this.scene.remove(mesh);
+      mesh.traverse((child: any) => {
+        if (child.isMesh) {
+          if (child.geometry) child.geometry.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m: any) => m.dispose());
+          } else if (child.material) {
+            child.material.dispose();
+          }
+        }
+      });
       if (mesh.geometry) mesh.geometry.dispose();
       if (Array.isArray(mesh.material)) {
         mesh.material.forEach(m => m.dispose());

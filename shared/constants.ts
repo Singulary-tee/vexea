@@ -19,13 +19,13 @@ export type ZoneName = typeof ZONES[keyof typeof ZONES];
 export const ZONES_ARRAY = Object.values(ZONES);
 
 export const WAYPOINTS: Record<ZoneName, { x: number; y: number; z: number }> = {
-  [ZONES.SPAWN]: { x: 0, y: 1.2, z: 120 },
-  [ZONES.COURTYARD]: { x: 0, y: 1.2, z: 50 },
-  [ZONES.WAREHOUSE]: { x: -40, y: 1.2, z: 0 },
-  [ZONES.BRIDGE]: { x: 40, y: 5.2, z: 0 },
-  [ZONES.PLANT]: { x: 0, y: 1.2, z: -50 },
-  [ZONES.TUNNELS]: { x: -40, y: -5.0, z: -50 },
-  [ZONES.CORE]: { x: 0, y: 1.2, z: -100 }
+  [ZONES.SPAWN]: { x: 64, y: 1.2, z: 704 },
+  [ZONES.COURTYARD]: { x: 144, y: 1.2, z: 496 },
+  [ZONES.WAREHOUSE]: { x: 144, y: 1.2, z: 240 },
+  [ZONES.BRIDGE]: { x: 288, y: 5.2, z: 496 },
+  [ZONES.PLANT]: { x: 528, y: 1.2, z: 448 },
+  [ZONES.TUNNELS]: { x: 448, y: -20.0, z: 64 },
+  [ZONES.CORE]: { x: 384, y: 1.2, z: 384 }
 };
 
 
@@ -46,13 +46,13 @@ export interface ZoneBounds {
 }
 
 export const ZONE_BOUNDS: Record<ZoneName, ZoneBounds> = {
-  [ZONES.SPAWN]: { center: { x: 0, y: 0, z: 0 }, halfSize: { x: 20, y: 10, z: 20 } },
-  [ZONES.COURTYARD]: { center: { x: 0, y: 0, z: 50 }, halfSize: { x: 60, y: 10, z: 30 } },
-  [ZONES.WAREHOUSE]: { center: { x: -50, y: 0, z: 120 }, halfSize: { x: 30, y: 10, z: 40 } },
-  [ZONES.BRIDGE]: { center: { x: 0, y: 0, z: 110 }, halfSize: { x: 20, y: 10, z: 30 } },
-  [ZONES.PLANT]: { center: { x: 20, y: 0, z: 180 }, halfSize: { x: 40, y: 10, z: 40 } },
-  [ZONES.TUNNELS]: { center: { x: -50, y: 0, z: 200 }, halfSize: { x: 30, y: 10, z: 40 } },
-  [ZONES.CORE]: { center: { x: 0, y: 0, z: 250 }, halfSize: { x: 40, y: 10, z: 30 } }
+  [ZONES.SPAWN]: { center: { x: 64, y: 0, z: 704 }, halfSize: { x: 64, y: 30, z: 64 } },
+  [ZONES.COURTYARD]: { center: { x: 144, y: 0, z: 496 }, halfSize: { x: 144, y: 30, z: 144 } },
+  [ZONES.WAREHOUSE]: { center: { x: 144, y: 0, z: 240 }, halfSize: { x: 144, y: 30, z: 112 } },
+  [ZONES.BRIDGE]: { center: { x: 288, y: 5.2, z: 496 }, halfSize: { x: 40, y: 30, z: 40 } },
+  [ZONES.PLANT]: { center: { x: 528, y: 0, z: 448 }, halfSize: { x: 240, y: 30, z: 320 } },
+  [ZONES.TUNNELS]: { center: { x: 448, y: -10, z: 64 }, halfSize: { x: 320, y: 25, z: 64 } },
+  [ZONES.CORE]: { center: { x: 384, y: 0, z: 384 }, halfSize: { x: 64, y: 30, z: 64 } }
 };
 
 // Drone Behaviour Profiles and States
@@ -74,8 +74,15 @@ export enum DroneType {
   FIXED_WING = 3,
   WHEELED = 4,
   ROBOT_DOG = 5,
-  HUMANOID = 6
+  HUMANOID = 6,
+  TEST_ENTITY = 99
 }
+
+// Numerical limits and Network constraints
+export const RECOIL_ANGLE_KICK = 0.05;
+export const WEAPON_COOLDOWN = 0.12;
+export const DRONE_RENDER_INTERPOLATION_DELAY_MS = 100;
+export const MAX_REWIND_VALIDATION_TOLERANCE_MS = 200;
 
 export interface DroneConfig {
   type: DroneType;
@@ -96,7 +103,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
   [DroneType.FIXED_WING]: { type: DroneType.FIXED_WING, hp: 60, maxHp: 60, damage: 15, speed: 25, apCost: 5, isAirUnit: true, groupSizeMin: 1, groupSizeMax: 1 },
   [DroneType.WHEELED]: { type: DroneType.WHEELED, hp: 80, maxHp: 80, damage: 12, speed: 8, apCost: 3, isAirUnit: false, groupSizeMin: 2, groupSizeMax: 3 },
   [DroneType.ROBOT_DOG]: { type: DroneType.ROBOT_DOG, hp: 150, maxHp: 150, damage: 18, speed: 5, apCost: 4, isAirUnit: false, groupSizeMin: 1, groupSizeMax: 2 },
-  [DroneType.HUMANOID]: { type: DroneType.HUMANOID, hp: 200, maxHp: 200, damage: 20, speed: 3, apCost: 6, isAirUnit: false, groupSizeMin: 1, groupSizeMax: 1 }
+  [DroneType.HUMANOID]: { type: DroneType.HUMANOID, hp: 200, maxHp: 200, damage: 20, speed: 3, apCost: 6, isAirUnit: false, groupSizeMin: 1, groupSizeMax: 1 },
+  [DroneType.TEST_ENTITY]: { type: DroneType.TEST_ENTITY, hp: 100, maxHp: 100, damage: 0, speed: 10, apCost: 0, isAirUnit: false, groupSizeMin: 1, groupSizeMax: 1 }
 };
 
 export const HEADER_SIZE = 8; // Tick(4), DroneCount(2), CameraCount(2)
@@ -105,6 +113,15 @@ export const CAMERA_STRUCT_SIZE = 4;
 export const MAX_DRONES = 50;
 export const MAX_CAMERAS = 20;
 export const TOTAL_STATE_BUFFER_SIZE = HEADER_SIZE + DRONE_STRUCT_SIZE * MAX_DRONES + CAMERA_STRUCT_SIZE * MAX_CAMERAS;
+
+// Player Physics & Dimensions
+export const PLAYER_RADIUS = 0.4;
+export const PLAYER_CAPSULE_HALF_HEIGHT = 0.5; // Dist between spheres: Total height 1.8m (2*0.5 + 2*0.4)
+export const PLAYER_CAPSULE_HALF_HEIGHT_CROUCH = 0.15; // Total height 1.1m (2*0.15 + 2*0.4)
+export const PLAYER_TOTAL_HEIGHT = 1.8;
+export const PLAYER_CENTER_OFFSET = PLAYER_TOTAL_HEIGHT / 2; // 0.9m
+export const PLAYER_EYE_LEVEL = 1.6;
+export const PLAYER_EYE_LEVEL_CROUCH = 1.0;
 
 export interface DroneNetworkData {
   id: number;

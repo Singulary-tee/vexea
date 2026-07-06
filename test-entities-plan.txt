@@ -1,0 +1,5 @@
+1. Add test entities array to MatchRoom.ts: public testEntities: ServerTestEntity[] = [];
+2. MatchRoom.ts processTestEntities() tick.
+3. Send test entities to client via network.
+Wait, if I use the existing Drone struct, I don't need a separate array. I can just spawn them into `this.drones` with `type = 99`.
+Then in `processDroneIntelligence()`, I can skip `type === 99`!

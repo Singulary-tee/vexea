@@ -1,0 +1,86 @@
+import { MatchController } from "../../MatchController";
+
+export class HUDSystem {
+  private match: MatchController;
+
+  constructor(match: MatchController) {
+    this.match = match;
+  }
+
+  public init() {
+    this.updateHUD();
+  }
+
+  public updateHUD() {
+    const match = this.match;
+    const hBar = document.getElementById("health-bar-fill");
+    const hpVal = document.getElementById("health-text");
+    const scoreVal = document.getElementById("score-val");
+    
+    if (hBar) hBar.style.width = `${match.playerHP}%`;
+    if (hpVal) hpVal.innerText = `${Math.floor(match.playerHP)}/100`;
+    if (scoreVal) scoreVal.innerText = `${match.playerScore}`;
+  }
+
+  public updateAmmo(primary?: { currentMag: number, reserve: number, isReloading: boolean }, secondary?: { currentMag: number, reserve: number, isReloading: boolean }) {
+    const a1 = document.getElementById("weapon-1-ammo");
+    const a2 = document.getElementById("weapon-2-ammo");
+    
+    if (a1 && primary) {
+      a1.innerText = primary.isReloading
+        ? "RELOADING"
+        : `${primary.currentMag.toString().padStart(2, "0")}/${primary.reserve}`;
+    }
+    
+    if (a2 && secondary) {
+      a2.innerText = secondary.isReloading
+        ? "RELOADING"
+        : `${secondary.currentMag.toString().padStart(2, "0")}/${secondary.reserve}`;
+    }
+  }
+
+  public updateTimer(tick: number) {
+    const elapsedSeconds = Math.floor(tick / 60);
+    const minutes = Math.floor(elapsedSeconds / 60).toString().padStart(2, "0");
+    const seconds = (elapsedSeconds % 60).toString().padStart(2, "0");
+    const elapsedVal = document.getElementById("hud-timer");
+    if (elapsedVal) elapsedVal.innerText = `TURN TIMER: ${minutes}:${seconds}`;
+  }
+
+  public triggerUIFlash(color: string = "255, 0, 0", duration: number = 0.5) {
+    let flashDiv = document.getElementById("ui-damage-flash");
+    if (!flashDiv) {
+      flashDiv = document.createElement("div");
+      flashDiv.id = "ui-damage-flash";
+      Object.assign(flashDiv.style, {
+        position: "absolute",
+        inset: "0",
+        pointerEvents: "none",
+        zIndex: "999",
+        transition: "opacity 0.1s ease-out",
+      });
+      document.body.appendChild(flashDiv);
+    }
+    flashDiv.style.background = `rgba(${color}, 0.3)`;
+    flashDiv.style.opacity = "1";
+
+    setTimeout(() => {
+      if (flashDiv) {
+        flashDiv.style.transition = `opacity ${duration}s ease-out`;
+        flashDiv.style.opacity = "0";
+      }
+    }, 100);
+  }
+
+  public showDeathOverlay(show: boolean, respawnTimer?: number) {
+    const overlay = document.getElementById("death-overlay");
+    const countdown = document.getElementById("death-countdown");
+    if (overlay) overlay.style.display = show ? "flex" : "none";
+    if (countdown && respawnTimer !== undefined) countdown.innerText = String(respawnTimer);
+  }
+
+  public updateRespawnCountdown(remaining: number) {
+    const countdown = document.getElementById("death-countdown");
+    if (countdown) countdown.innerText = String(remaining);
+  }
+}
