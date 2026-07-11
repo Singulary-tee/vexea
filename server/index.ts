@@ -1079,10 +1079,10 @@ const serveApp = async () => {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    // In production, the server and client live on completely different machines.
+    // The server is compiled into dist/server/server.cjs and does not have the client assets.
+    app.get("/", (req, res) => {
+      res.json({ status: "online", service: "Vexea Game Server" });
     });
   }
 
