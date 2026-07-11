@@ -39,6 +39,11 @@
     "top": "240px",
     "scale": 0.6
   },
+  "btn-sprint": {
+    "left": "7.14vw",
+    "top": "16.56vh",
+    "scale": 1
+  },
   "btn-fire-left": {
     "left": "20px",
     "top": "160px",

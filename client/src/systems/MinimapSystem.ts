@@ -32,20 +32,27 @@ export class MinimapSystem {
     const ctx = this.ctx;
     const mmCanvas = this.canvas;
 
-    // Ensure native canvas resolution matches CSS
+    // Ensure native canvas resolution matches CSS with devicePixelRatio for sharpness
+    const dpr = window.devicePixelRatio || 1;
     const rect = mmCanvas.getBoundingClientRect();
-    const targetW = rect.width > 0 ? rect.width : 300;
-    const targetH = rect.height > 0 ? rect.height : 300;
+    const w = rect.width > 0 ? rect.width : 300;
+    const h = rect.height > 0 ? rect.height : 300;
+    const targetW = w * dpr;
+    const targetH = h * dpr;
+    
     if (mmCanvas.width !== targetW) mmCanvas.width = targetW;
     if (mmCanvas.height !== targetH) mmCanvas.height = targetH;
 
     // Update range based on map spec
-    this.rangeX = spec ? spec.worldSize.x : 160;
-    this.rangeZ = spec ? spec.worldSize.z : 300;
+    const zoomFactor = 2.5;
+    this.rangeX = spec ? spec.worldSize.x / zoomFactor : 160 / zoomFactor;
+    this.rangeZ = spec ? spec.worldSize.z / zoomFactor : 300 / zoomFactor;
 
     ctx.clearRect(0, 0, mmCanvas.width, mmCanvas.height);
-    const w = mmCanvas.width;
-    const h = mmCanvas.height;
+    
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    
     const cx = w / 2;
     const cy = h / 2;
     
@@ -56,7 +63,7 @@ export class MinimapSystem {
 
     if (this.playerArrow) {
       this.playerArrow.style.display = "flex";
-      this.playerArrow.style.transform = `rotate(${-playerYaw}rad)`;
+      this.playerArrow.style.transform = `rotate(\${-playerYaw}rad)`;
     }
 
     if (spec) {
@@ -70,8 +77,8 @@ export class MinimapSystem {
           const zHeight = zone.bounds.zMax - zone.bounds.zMin;
           const zx = cx + (zone.bounds.xMin - px) * scaleX;
           const zz = cy + (zone.bounds.zMin - pz) * scaleZ;
-          ctx.fillStyle = "rgba(80, 150, 200, 0.2)";
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+          ctx.fillStyle = "rgba(50,50,50,0.2)";
+          ctx.strokeStyle = "rgba(255,255,255,0.05)";
           ctx.lineWidth = 1;
           ctx.fillRect(zx, zz, zWidth * scaleX, zHeight * scaleZ);
           ctx.strokeRect(zx, zz, zWidth * scaleX, zHeight * scaleZ);
@@ -86,9 +93,9 @@ export class MinimapSystem {
           const bw = b.size.x * (b.scale?.x || 1) * scaleX;
           const bh = b.size.z * (b.scale?.z || 1) * scaleZ;
 
-          ctx.fillStyle = "rgba(200, 200, 200, 0.6)";
-          ctx.strokeStyle = "#fff";
-          ctx.lineWidth = 1;
+          ctx.fillStyle = "rgba(150,150,150,0.3)";
+          ctx.strokeStyle = "rgba(255,255,255,0.85)";
+          ctx.lineWidth = 0.5;
 
           ctx.save();
           ctx.translate(bx, bz);
@@ -97,12 +104,6 @@ export class MinimapSystem {
           }
           ctx.fillRect(-bw / 2, -bh / 2, bw, bh);
           ctx.strokeRect(-bw / 2, -bh / 2, bw, bh);
-
-          ctx.fillStyle = "#000";
-          ctx.font = "8px monospace";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(b.id || "B", 0, 0);
           ctx.restore();
         }
       }
@@ -113,7 +114,7 @@ export class MinimapSystem {
       const head = buffer.states[(buffer.head - 1 + 3) % 3];
       if (!head || head.state === DroneState.DEAD) return;
 
-      let color = "#FF8800"; // Ground
+      let color = "#CFCFCF"; // Ground
       if (head.type === 0 || head.type === 1 || head.type === 3)
         color = "#00AAFF"; // Air
       else if (head.type === 2) color = "#FFFF00"; // Recon
@@ -121,11 +122,20 @@ export class MinimapSystem {
       const dx = cx + (head.posX - px) * (w / this.rangeX);
       const dz = cy + (head.posZ - pz) * (h / this.rangeZ);
 
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(dx, dz, 4, 0, Math.PI * 2);
+      ctx.arc(dx, dz, 4.5, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
     });
+    
+    ctx.restore();
   }
 
   public dispose() {

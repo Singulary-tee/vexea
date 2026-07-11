@@ -1,6 +1,8 @@
 import * as THREE from "three/webgpu";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { getCachedOrFetchUrl } from "./asset-cache";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
+import { DRONE_CONFIGS, DroneType } from "../shared/constants";
 
 function countMeshesInScene(scene: THREE.Object3D): number {
   let count = 0;
@@ -18,6 +20,8 @@ export interface DroneNode {
   localMatrix: THREE.Matrix4;
   parentName: string | null;
   meshIndex: number; // -1 if not a mesh
+  pivot?: THREE.Vector3;
+  localPivot?: THREE.Vector3;
 }
 
 export async function initDroneModels(scene: THREE.Scene): Promise<void> {
@@ -35,13 +39,45 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
           new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout loading " + urlName)), 2000))
       ]) as any;
 
+      if (urlName === "fixed_wing_drone.glb" && gltf && gltf.animations) {
+         (window as any).fixedWingAnimations = gltf.animations;
+      }
+
       const nodes: DroneNode[] = [];
       if (gltf && gltf.scene) {
+        if (gltf.animations && gltf.animations.length > 0) {
+            const mixer = new THREE.AnimationMixer(gltf.scene);
+            const action = mixer.clipAction(gltf.animations[0]);
+            action.play();
+            mixer.setTime(14/30);
+            mixer.update(0);
+        }
         gltf.scene.updateMatrixWorld(true);
+        
+        const box = new THREE.Box3().setFromObject(gltf.scene);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        
+        gltf.scene.children.forEach((child: any) => {
+           child.position.sub(center);
+        });
+        gltf.scene.updateMatrixWorld(true);
+
         let meshCounter = 0;
         
         gltf.scene.traverse((child: any) => {
           if (child === gltf.scene) return;
+          
+          let pivot = new THREE.Vector3();
+          const box = new THREE.Box3().setFromObject(child);
+          if (!box.isEmpty()) {
+              box.getCenter(pivot);
+          }
+          let localPivot = pivot.clone();
+          if (child.matrixWorld) {
+              const invWorld = child.matrixWorld.clone().invert();
+              localPivot.applyMatrix4(invWorld);
+          }
           
           let geom = null;
           let mat = null;
@@ -59,11 +95,13 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
             material: mat,
             localMatrix: child.matrix.clone(),
             parentName: child.parent && child.parent !== gltf.scene ? child.parent.name : null,
-            meshIndex: mIndex
+            meshIndex: mIndex,
+            pivot,
+            localPivot
           });
         });
       }
-      return nodes;
+      if (urlName === "fixed_wing_drone.glb") (window as any).rawFwGLTF = gltf; return nodes;
     } catch(e) {
       console.warn("Failed to load drone model:", urlName, e);
     }
@@ -183,7 +221,10 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
          name: n.name,
          parentName: n.parentName,
          localMatrix: n.localMatrix.clone(),
-         meshIndex: n.meshIndex
+         baseLocalMatrix: n.localMatrix.clone(),
+         meshIndex: n.meshIndex,
+         pivot: n.pivot ? n.pivot.clone() : new THREE.Vector3(),
+          localPivot: (n as any).localPivot ? (n as any).localPivot.clone() : new THREE.Vector3()
        }))
      };
   };
@@ -205,27 +246,17 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
 
   const fixedWingGroup = new THREE.Group();
   fixedWingGroup.name = "FixedWingStandalone";
-  const fwMeshes = new Map<string, THREE.Mesh | THREE.Group>();
-  
-  fixedWingParts.forEach(p => {
-      let obj = p.isMesh ? new THREE.Mesh(p.geom!, p.material || tMatAir) : new THREE.Group();
-      obj.name = p.name;
-      obj.applyMatrix4(p.localMatrix);
-      fwMeshes.set(p.name, obj);
-  });
   
   const offsetGroup = new THREE.Group();
-  offsetGroup.rotation.y = Math.PI; // 180 degrees to flip forward axis
+  const fwOffset = DRONE_CONFIGS[DroneType.FIXED_WING].orientationOffset || [0, 0, 0];
+  offsetGroup.rotation.set(fwOffset[0], fwOffset[1], fwOffset[2]);
   fixedWingGroup.add(offsetGroup);
 
-  fixedWingParts.forEach(p => {
-      let obj = fwMeshes.get(p.name);
-      if (p.parentName && fwMeshes.has(p.parentName)) {
-          fwMeshes.get(p.parentName)!.add(obj!);
-      } else {
-          offsetGroup.add(obj!);
-      }
-  });
+  const gltf = (window as any).rawFwGLTF;
+  if (gltf && gltf.scene) {
+      const clone = SkeletonUtils.clone(gltf.scene);
+      offsetGroup.add(clone);
+  }
   
   let scaleFactorFW = 1.0;
   let bodyFW = fixedWingParts.find(p => p.isMesh && (p.name === 'body' || p.name.toLowerCase().includes('body'))) || fixedWingParts.find(p=>p.isMesh);
@@ -238,4 +269,78 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
   fixedWingGroup.scale.set(scaleFactorFW, scaleFactorFW, scaleFactorFW);
   
   (window as any).fixedWingModel = fixedWingGroup;
+  setTimeout(() => {
+     let logs = [];
+     if (fixedWingGroup) {
+         let sceneObj = (window as any).rawFwScene;
+         if (sceneObj && sceneObj.animations && sceneObj.animations.length > 0) {
+             const mixer = new THREE.AnimationMixer(sceneObj);
+             const action = mixer.clipAction(sceneObj.animations[0]);
+             action.play();
+             mixer.setTime(14/30);
+             sceneObj.updateMatrixWorld(true);
+         }
+         fixedWingGroup.updateMatrixWorld(true);
+         let fwB = new THREE.Box3();
+         fixedWingGroup.traverse((n: any) => {
+             if (n.isMesh && !n.name.includes("AGM") && !n.name.includes("MBDA")) {
+                 if (n.geometry) {
+                     if (!n.geometry.boundingBox) n.geometry.computeBoundingBox();
+                     let b = n.geometry.boundingBox.clone();
+                     b.applyMatrix4(n.matrixWorld);
+                     fwB.expandByPoint(b.min);
+                     fwB.expandByPoint(b.max);
+                 }
+             }
+         });
+         logs.push("FW Frame 14 scaled width: " + (fwB.max.x - fwB.min.x) + " height: " + (fwB.max.y - fwB.min.y) + " depth: " + (fwB.max.z - fwB.min.z));
+         fetch("/api/log", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(logs) });
+     }
+  }, 3000);
 }
+
+setTimeout(() => {
+    let logs = [];
+    const gltf = (window as any).rawFwGLTF;
+    if (gltf && gltf.scene && gltf.animations && gltf.animations.length > 0) {
+        const mixer = new THREE.AnimationMixer(gltf.scene);
+        const action = mixer.clipAction(gltf.animations[0]);
+        action.play();
+        mixer.setTime(14/30);
+        gltf.scene.updateMatrixWorld(true);
+        let fwB = new THREE.Box3();
+        gltf.scene.traverse((n: any) => {
+            if (n.isMesh && !n.name.includes("AGM") && !n.name.includes("MBDA")) {
+                if (n.geometry) {
+                    if (!n.geometry.boundingBox) n.geometry.computeBoundingBox();
+                    let b = n.geometry.boundingBox.clone();
+                    b.applyMatrix4(n.matrixWorld);
+                    fwB.expandByPoint(b.min);
+                    fwB.expandByPoint(b.max);
+                }
+            }
+        });
+        
+        // calculate scale Factor for FW
+        let bodyFW = null;
+        gltf.scene.traverse((n: any) => {
+           if (n.isMesh && (n.name === 'body' || n.name.toLowerCase().includes('body'))) bodyFW = n;
+        });
+        if (!bodyFW) {
+           gltf.scene.traverse((n: any) => { if (n.isMesh && !bodyFW) bodyFW = n; });
+        }
+        let sf = 1.0;
+        if (bodyFW) {
+            bodyFW.geometry.computeBoundingBox();
+            const sphere = new THREE.Sphere();
+            bodyFW.geometry.boundingBox.getBoundingSphere(sphere);
+            sf = 1.5 / (sphere.radius || 1.0);
+        }
+        
+        logs.push("FW Frame 14 SCALED Width (x): " + (fwB.max.x - fwB.min.x) * sf);
+        logs.push("FW Frame 14 SCALED Height (y): " + (fwB.max.y - fwB.min.y) * sf);
+        logs.push("FW Frame 14 SCALED Depth (z): " + (fwB.max.z - fwB.min.z) * sf);
+        
+        fetch("/api/log", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(logs) });
+    }
+}, 3000);

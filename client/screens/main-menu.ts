@@ -422,6 +422,20 @@ export function initMainMenu() {
       screenManager.showDevMapEditor();
     }, true);
     leftColumn.appendChild(mapEditorBtn);
+
+    const devEntitiesBtn = createNavCard('DEV_ENTITIES', 'DEV ENTITIES').card;
+    Object.assign(devEntitiesBtn.style, {
+      background: 'rgba(255,0,100,0.15)', border: '1px solid rgba(255,0,100,0.4)',
+      borderLeft: '3px solid #FF0064'
+    });
+    (devEntitiesBtn.firstChild as HTMLElement).style.color = '#FF0064';
+    devEntitiesBtn.addEventListener('click', (e) => {
+      console.log("[MainMenu] Dev Entities button clicked");
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      screenManager.showDevEntities();
+    }, true);
+    leftColumn.appendChild(devEntitiesBtn);
   }
 
   const backBtn = document.createElement('div');

@@ -6,7 +6,7 @@ export interface VexeaSettingsData {
     joySens: number;
     camSens: number;
     invertY: boolean;
-    graphicsPreset: 'Low' | 'Medium' | 'High';
+    graphicsPreset: 'Low' | 'Medium' | 'High' | 'Custom';
     fpsCap: number; // 30 or 60
     fxaa: boolean;
     masterVolume: number;
@@ -26,6 +26,23 @@ export interface VexeaSettingsData {
     rendererType: 'auto' | 'webgpu' | 'webgl';
     fullscreen: boolean;
     serverUrl: string;
+
+    // Custom Graphics Controls
+    shadows: boolean;
+    ssao: boolean;
+    bloom: boolean;
+    bloomStrength: number;
+    bloomRadius: number;
+    bloomThreshold: number;
+    vignette: boolean;
+    vignetteIntensity: number;
+    chromaticAberration: boolean;
+    chromaticAberrationIntensity: number;
+    toneMapping: 'none' | 'linear' | 'reinhard' | 'cineon' | 'aces';
+    exposure: number;
+    parallaxOcclusion: boolean;
+    pbrMaterials: boolean;
+    instancedProps: boolean;
 }
 
 const DEFAULT_SETTINGS: VexeaSettingsData = {
@@ -51,7 +68,24 @@ const DEFAULT_SETTINGS: VexeaSettingsData = {
     fov: 75,
     rendererType: 'auto',
     fullscreen: false,
-    serverUrl: ""
+    serverUrl: "",
+
+    // Graphics defaults
+    shadows: true,
+    ssao: false,
+    bloom: true,
+    bloomStrength: 1.0,
+    bloomRadius: 0.5,
+    bloomThreshold: 0.5,
+    vignette: true,
+    vignetteIntensity: 0.5,
+    chromaticAberration: false,
+    chromaticAberrationIntensity: 0.005,
+    toneMapping: 'aces',
+    exposure: 1.0,
+    parallaxOcclusion: true,
+    pbrMaterials: true,
+    instancedProps: true
 };
 
 export const getSettings = (): VexeaSettingsData => {
@@ -85,7 +119,40 @@ export function applySettings(s: VexeaSettingsData) {
         } else {
             W.renderer.setPixelRatio(window.devicePixelRatio);
         }
+
+        // Apply Tone Mapping & Exposure
+        let tm = 0; // THREE.NoToneMapping
+        if (s.toneMapping === 'linear') tm = 1; // THREE.LinearToneMapping
+        else if (s.toneMapping === 'reinhard') tm = 2; // THREE.ReinhardToneMapping
+        else if (s.toneMapping === 'cineon') tm = 3; // THREE.CineonToneMapping
+        else if (s.toneMapping === 'aces') tm = 4; // THREE.ACESFilmicToneMapping
+        W.renderer.toneMapping = tm;
+        W.renderer.toneMappingExposure = s.exposure;
+
+        // Apply Shadow Map settings
+        W.renderer.shadowMap.enabled = s.shadows;
     }
+
+    // Apply TSL graphics uniforms
+    const uniforms = W.vexGraphicsUniforms;
+    if (uniforms) {
+        uniforms.bloomEnabled.value = s.bloom ? 1.0 : 0.0;
+        uniforms.bloomStrength.value = s.bloomStrength;
+        uniforms.bloomRadius.value = s.bloomRadius;
+        uniforms.bloomThreshold.value = s.bloomThreshold;
+        uniforms.vignetteEnabled.value = s.vignette ? 1.0 : 0.0;
+        uniforms.vignetteIntensity.value = s.vignetteIntensity;
+        uniforms.chromaticAberrationEnabled.value = s.chromaticAberration ? 1.0 : 0.0;
+        uniforms.chromaticAberrationIntensity.value = s.chromaticAberrationIntensity;
+        uniforms.ssaoEnabled.value = s.ssao ? 1.0 : 0.0;
+        uniforms.pomScale.value = s.parallaxOcclusion ? 0.025 : 0.0;
+        uniforms.pbrNormalScale.value = s.pbrMaterials ? 1.0 : 0.0;
+        uniforms.pbrDetailsEnabled.value = s.pbrMaterials ? 1.0 : 0.0;
+        uniforms.instancedPropsEnabled.value = s.instancedProps ? 1.0 : 0.0;
+    }
+
+    // Trigger prop visibility or custom rendering updates
+    document.dispatchEvent(new CustomEvent("VEXEA_GRAPHICS_CHANGED", { detail: s }));
     
     // FXAA
     if (W.fxaaPass) {
@@ -206,28 +273,130 @@ function createOverlayHTML() {
 
             <div id="tab-GRAPHICS" class="settings-page hidden">
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">GRAPHICS</h3>
-                <div class="mb-4">
-                    <label class="block mb-1">Field of View</label>
-                    <input type="range" id="inp-fov" min="60" max="120" step="1" style="width:100%;max-width:300px;">
-                    <span id="val-fov" class="ml-2"></span>
+                
+                <!-- Presets -->
+                <div class="mb-6">
+                    <label class="block mb-2 font-bold text-gray-300">Overall Quality Preset</label>
+                    <div class="flex gap-3">
+                        <button class="preset-btn px-4 py-2 border rounded font-bold" data-val="Low" style="border-color:${DS.colors.accent}; font-family:${DS.typography.fontFamily}; letter-spacing:1px; cursor:pointer;">LOW</button>
+                        <button class="preset-btn px-4 py-2 border rounded font-bold" data-val="Medium" style="border-color:${DS.colors.accent}; font-family:${DS.typography.fontFamily}; letter-spacing:1px; cursor:pointer;">MEDIUM</button>
+                        <button class="preset-btn px-4 py-2 border rounded font-bold" data-val="High" style="border-color:${DS.colors.accent}; font-family:${DS.typography.fontFamily}; letter-spacing:1px; cursor:pointer;">HIGH</button>
+                        <button class="preset-btn px-4 py-2 border rounded font-bold" data-val="Custom" style="border-color:${DS.colors.accent}; font-family:${DS.typography.fontFamily}; letter-spacing:1px; cursor:pointer;" disabled>CUSTOM</button>
+                    </div>
+                    <p id="graphics-desc" class="mt-2 text-xs text-gray-400 font-mono"></p>
                 </div>
-                <div class="mb-4">
-                    <label class="block mb-1">Renderer Engine (Requires Reload)</label>
-                    <select id="inp-rendererType" style="width:100%; max-width:300px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.15); padding:10px; border-radius:4px; color:white; font-family:inherit; outline:none;">
-                        <option value="auto">Auto-Detect (Preferred)</option>
-                        <option value="webgpu" id="opt-webgpu">WebGPU Only</option>
-                        <option value="webgl">WebGL Only</option>
-                    </select>
+
+                <!-- Custom options panel -->
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; border-top:1px solid rgba(255,255,255,0.1); pt-4;">
+                    <!-- Column 1: Engine & Materials -->
+                    <div class="flex flex-col gap-4">
+                        <h4 class="font-bold text-sm text-blue-400 uppercase tracking-widest border-b border-gray-800 pb-1">Engine & Geometry</h4>
+                        <div>
+                            <label class="block text-sm mb-1 text-gray-300">Field of View</label>
+                            <input type="range" id="inp-fov" min="60" max="120" step="1" style="width:100%;">
+                            <span id="val-fov" class="text-xs text-gray-400 font-mono"></span>
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1 text-gray-300">Renderer Engine (Requires Reload)</label>
+                            <select id="inp-rendererType" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15); padding:8px; border-radius:4px; color:white; font-family:inherit; outline:none;">
+                                <option value="auto">Auto-Detect (Preferred)</option>
+                                <option value="webgpu" id="opt-webgpu">WebGPU Only</option>
+                                <option value="webgl">WebGL Only</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between" style="padding:4px 0;">
+                            <label for="inp-shadows" class="text-sm text-gray-300">Real-Time Shadows</label>
+                            <input type="checkbox" id="inp-shadows" style="width:20px;height:20px;cursor:pointer;">
+                        </div>
+                        <div class="flex items-center justify-between" style="padding:4px 0;">
+                            <label for="inp-pbrMaterials" class="text-sm text-gray-300">PBR Texture Details</label>
+                            <input type="checkbox" id="inp-pbrMaterials" style="width:20px;height:20px;cursor:pointer;">
+                        </div>
+                        <div class="flex items-center justify-between" style="padding:4px 0;">
+                            <label for="inp-parallaxOcclusion" class="text-sm text-gray-300">Parallax Mapping (POM)</label>
+                            <input type="checkbox" id="inp-parallaxOcclusion" style="width:20px;height:20px;cursor:pointer;">
+                        </div>
+                        <div class="flex items-center justify-between" style="padding:4px 0;">
+                            <label for="inp-instancedProps" class="text-sm text-gray-300">Instance Random Props</label>
+                            <input type="checkbox" id="inp-instancedProps" style="width:20px;height:20px;cursor:pointer;">
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Lighting & Post-Processing -->
+                    <div class="flex flex-col gap-4">
+                        <h4 class="font-bold text-sm text-blue-400 uppercase tracking-widest border-b border-gray-800 pb-1">Lighting & Effects</h4>
+                        <div class="flex items-center justify-between" style="padding:4px 0;">
+                            <label for="inp-ssao" class="text-sm text-gray-300">Screen Space AO (GTAO)</label>
+                            <input type="checkbox" id="inp-ssao" style="width:20px;height:20px;cursor:pointer;">
+                        </div>
+                        
+                        <!-- Bloom block -->
+                        <div class="border border-gray-800 p-2 rounded" style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.05);">
+                            <div class="flex items-center justify-between mb-2">
+                                <label for="inp-bloom" class="font-bold text-sm text-gray-300">Bloom Post-Processing</label>
+                                <input type="checkbox" id="inp-bloom" style="width:20px;height:20px;cursor:pointer;">
+                            </div>
+                            <div class="flex flex-col gap-2 pl-2">
+                                <div>
+                                    <label class="text-xs text-gray-400 block">Bloom Strength</label>
+                                    <input type="range" id="inp-bloomStrength" min="0.1" max="3.0" step="0.1" style="width:100%;">
+                                    <span id="val-bloomStrength" class="text-xs font-mono text-gray-500 block text-right"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Vignette block -->
+                        <div class="border border-gray-800 p-2 rounded" style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.05);">
+                            <div class="flex items-center justify-between mb-2">
+                                <label for="inp-vignette" class="font-bold text-sm text-gray-300">Vignette Shading</label>
+                                <input type="checkbox" id="inp-vignette" style="width:20px;height:20px;cursor:pointer;">
+                            </div>
+                            <div class="flex flex-col gap-2 pl-2">
+                                <div>
+                                    <label class="text-xs text-gray-400 block">Vignette Intensity</label>
+                                    <input type="range" id="inp-vignetteIntensity" min="0.1" max="2.0" step="0.1" style="width:100%;">
+                                    <span id="val-vignetteIntensity" class="text-xs font-mono text-gray-500 block text-right"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chromatic Aberration block -->
+                        <div class="border border-gray-800 p-2 rounded" style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.05);">
+                            <div class="flex items-center justify-between mb-2">
+                                <label for="inp-chromaticAberration" class="font-bold text-sm text-gray-300">Chromatic Aberration</label>
+                                <input type="checkbox" id="inp-chromaticAberration" style="width:20px;height:20px;cursor:pointer;">
+                            </div>
+                            <div class="flex flex-col gap-2 pl-2">
+                                <div>
+                                    <label class="text-xs text-gray-400 block">Aberration Intensity</label>
+                                    <input type="range" id="inp-chromaticAberrationIntensity" min="0.001" max="0.020" step="0.001" style="width:100%;">
+                                    <span id="val-chromaticAberrationIntensity" class="text-xs font-mono text-gray-500 block text-right"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tone Mapping -->
+                        <div>
+                            <label class="block text-sm mb-1 text-gray-300">Tone Mapping</label>
+                            <select id="inp-toneMapping" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15); padding:8px; border-radius:4px; color:white; font-family:inherit; outline:none;">
+                                <option value="none">None</option>
+                                <option value="linear">Linear</option>
+                                <option value="reinhard">Reinhard</option>
+                                <option value="cineon">Cineon</option>
+                                <option value="aces">ACES Filmic (Cinematic)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1 text-gray-300">Camera Exposure</label>
+                            <input type="range" id="inp-exposure" min="0.1" max="3.0" step="0.1" style="width:100%;">
+                            <span id="val-exposure" class="text-xs text-gray-400 font-mono block text-right"></span>
+                        </div>
+                    </div>
                 </div>
-                <div class="mb-4">
-                    <button id="btn-fullscreen" class="p-3 border border-gray-500 rounded bg-gray-800">Toggle Fullscreen</button>
+
+                <div class="mt-4 flex justify-between items-center">
+                    <button id="btn-fullscreen" class="p-3 border rounded bg-gray-800" style="border-color:${DS.colors.accent}; font-family:${DS.typography.fontFamily}; letter-spacing:1px; cursor:pointer;">TOGGLE FULLSCREEN</button>
                 </div>
-                <div class="flex gap-4">
-                    <button class="preset-btn p-3 border border-gray-500 rounded bg-gray-800" data-val="Low">Low</button>
-                    <button class="preset-btn p-3 border border-gray-500 rounded bg-gray-800" data-val="Medium">Medium</button>
-                    <button class="preset-btn p-3 border border-gray-500 rounded bg-gray-800" data-val="High">High</button>
-                </div>
-                <p id="graphics-desc" class="mt-4 text-sm text-gray-400"></p>
             </div>
 
             <div id="tab-FRAME RATE" class="settings-page hidden">
@@ -562,6 +731,51 @@ export function openSettings() {
         });
     }
 
+    // Advanced Custom Graphics DOM elements
+    const shadows = document.getElementById('inp-shadows') as HTMLInputElement;
+    const pbrMaterials = document.getElementById('inp-pbrMaterials') as HTMLInputElement;
+    const parallaxOcclusion = document.getElementById('inp-parallaxOcclusion') as HTMLInputElement;
+    const instancedProps = document.getElementById('inp-instancedProps') as HTMLInputElement;
+    const ssao = document.getElementById('inp-ssao') as HTMLInputElement;
+    const bloom = document.getElementById('inp-bloom') as HTMLInputElement;
+    const bloomStrength = document.getElementById('inp-bloomStrength') as HTMLInputElement;
+    const vignette = document.getElementById('inp-vignette') as HTMLInputElement;
+    const vignetteIntensity = document.getElementById('inp-vignetteIntensity') as HTMLInputElement;
+    const chromaticAberration = document.getElementById('inp-chromaticAberration') as HTMLInputElement;
+    const chromaticAberrationIntensity = document.getElementById('inp-chromaticAberrationIntensity') as HTMLInputElement;
+    const toneMapping = document.getElementById('inp-toneMapping') as HTMLSelectElement;
+    const exposure = document.getElementById('inp-exposure') as HTMLInputElement;
+
+    const populateUIFromSettings = () => {
+        if (shadows) shadows.checked = s.shadows;
+        if (pbrMaterials) pbrMaterials.checked = s.pbrMaterials;
+        if (parallaxOcclusion) parallaxOcclusion.checked = s.parallaxOcclusion;
+        if (instancedProps) instancedProps.checked = s.instancedProps;
+        if (ssao) ssao.checked = s.ssao;
+        if (bloom) bloom.checked = s.bloom;
+        if (bloomStrength) bloomStrength.value = s.bloomStrength.toString();
+        if (vignette) vignette.checked = s.vignette;
+        if (vignetteIntensity) vignetteIntensity.value = s.vignetteIntensity.toString();
+        if (chromaticAberration) chromaticAberration.checked = s.chromaticAberration;
+        if (chromaticAberrationIntensity) chromaticAberrationIntensity.value = s.chromaticAberrationIntensity.toString();
+        if (toneMapping) toneMapping.value = s.toneMapping;
+        if (exposure) exposure.value = s.exposure.toString();
+
+        if (document.getElementById('val-bloomStrength')) {
+            document.getElementById('val-bloomStrength')!.innerText = s.bloomStrength.toFixed(1);
+        }
+        if (document.getElementById('val-vignetteIntensity')) {
+            document.getElementById('val-vignetteIntensity')!.innerText = s.vignetteIntensity.toFixed(1);
+        }
+        if (document.getElementById('val-chromaticAberrationIntensity')) {
+            document.getElementById('val-chromaticAberrationIntensity')!.innerText = s.chromaticAberrationIntensity.toFixed(3);
+        }
+        if (document.getElementById('val-exposure')) {
+            document.getElementById('val-exposure')!.innerText = s.exposure.toFixed(1);
+        }
+    };
+    populateUIFromSettings();
+
     const triggerApply = () => {
         s.joySens = parseFloat(joySens.value);
         s.camSens = parseFloat(camSens.value);
@@ -582,15 +796,44 @@ export function openSettings() {
         let checkedFps = document.querySelector('input[name="fps"]:checked') as HTMLInputElement;
         if(checkedFps) s.fpsCap = parseInt(checkedFps.value);
 
-        document.getElementById('val-joySens')!.innerText = s.joySens.toFixed(1);
-        document.getElementById('val-camSens')!.innerText = s.camSens.toFixed(1);
-        document.getElementById('val-vol')!.innerText = s.masterVolume.toFixed(2);
-        document.getElementById('val-musicVol')!.innerText = s.musicVolume.toFixed(2);
-        document.getElementById('val-sfxVol')!.innerText = s.sfxVolume.toFixed(2);
-        document.getElementById('val-uiVol')!.innerText = s.uiVolume.toFixed(2);
-        document.getElementById('val-hud')!.innerText = s.hudScale.toFixed(2);
-        document.getElementById('val-crossSize')!.innerText = s.crosshairSize + 'px';
-        document.getElementById('val-fov')!.innerText = s.fov.toString();
+        // Read advanced graphics
+        if (shadows) s.shadows = shadows.checked;
+        if (pbrMaterials) s.pbrMaterials = pbrMaterials.checked;
+        if (parallaxOcclusion) s.parallaxOcclusion = parallaxOcclusion.checked;
+        if (instancedProps) s.instancedProps = instancedProps.checked;
+        if (ssao) s.ssao = ssao.checked;
+        if (bloom) s.bloom = bloom.checked;
+        if (bloomStrength) s.bloomStrength = parseFloat(bloomStrength.value);
+        if (vignette) s.vignette = vignette.checked;
+        if (vignetteIntensity) s.vignetteIntensity = parseFloat(vignetteIntensity.value);
+        if (chromaticAberration) s.chromaticAberration = chromaticAberration.checked;
+        if (chromaticAberrationIntensity) s.chromaticAberrationIntensity = parseFloat(chromaticAberrationIntensity.value);
+        if (toneMapping) s.toneMapping = toneMapping.value as any;
+        if (exposure) s.exposure = parseFloat(exposure.value);
+
+        // Update labels
+        if (document.getElementById('val-joySens')) document.getElementById('val-joySens')!.innerText = s.joySens.toFixed(1);
+        if (document.getElementById('val-camSens')) document.getElementById('val-camSens')!.innerText = s.camSens.toFixed(1);
+        if (document.getElementById('val-vol')) document.getElementById('val-vol')!.innerText = s.masterVolume.toFixed(2);
+        if (document.getElementById('val-musicVol')) document.getElementById('val-musicVol')!.innerText = s.musicVolume.toFixed(2);
+        if (document.getElementById('val-sfxVol')) document.getElementById('val-sfxVol')!.innerText = s.sfxVolume.toFixed(2);
+        if (document.getElementById('val-uiVol')) document.getElementById('val-uiVol')!.innerText = s.uiVolume.toFixed(2);
+        if (document.getElementById('val-hud')) document.getElementById('val-hud')!.innerText = s.hudScale.toFixed(2);
+        if (document.getElementById('val-crossSize')) document.getElementById('val-crossSize')!.innerText = s.crosshairSize + 'px';
+        if (document.getElementById('val-fov')) document.getElementById('val-fov')!.innerText = s.fov.toString();
+
+        if (document.getElementById('val-bloomStrength')) {
+            document.getElementById('val-bloomStrength')!.innerText = s.bloomStrength.toFixed(1);
+        }
+        if (document.getElementById('val-vignetteIntensity')) {
+            document.getElementById('val-vignetteIntensity')!.innerText = s.vignetteIntensity.toFixed(1);
+        }
+        if (document.getElementById('val-chromaticAberrationIntensity')) {
+            document.getElementById('val-chromaticAberrationIntensity')!.innerText = s.chromaticAberrationIntensity.toFixed(3);
+        }
+        if (document.getElementById('val-exposure')) {
+            document.getElementById('val-exposure')!.innerText = s.exposure.toFixed(1);
+        }
 
         saveSettings(s);
         applySettings(s);
@@ -600,6 +843,25 @@ export function openSettings() {
         if (!el) return;
         bind(el as HTMLElement, 'input', triggerApply);
         bind(el as HTMLElement, 'change', triggerApply);
+    });
+
+    // Bind custom graphics controls. Changing any shifts preset to 'Custom'
+    const customGraphicsControls = [
+        shadows, pbrMaterials, parallaxOcclusion, instancedProps, ssao, bloom, bloomStrength,
+        vignette, vignetteIntensity, chromaticAberration, chromaticAberrationIntensity, toneMapping, exposure
+    ];
+    customGraphicsControls.forEach(el => {
+        if (!el) return;
+        bind(el as HTMLElement, 'change', () => {
+            s.graphicsPreset = 'Custom';
+            syncPresets();
+            triggerApply();
+        });
+        bind(el as HTMLElement, 'input', () => {
+            s.graphicsPreset = 'Custom';
+            syncPresets();
+            triggerApply();
+        });
     });
 
     radios.forEach(r => bind(r as HTMLElement, 'change', triggerApply));
@@ -619,20 +881,73 @@ export function openSettings() {
         if (desc) {
             if (s.graphicsPreset === 'Low') {
                 s.particleCount = 0; s.lodBillboard = 20; s.lodLow = 10;
-                desc.innerText = "Low: Normal maps disabled, particles off, aggressive LOD (billboards at 20 units).";
+                desc.innerText = "Low: Shadows off, particles off, normal maps disabled, post-effects disabled. (60 FPS focus)";
             } else if (s.graphicsPreset === 'Medium') {
                 s.particleCount = 50; s.lodBillboard = 60; s.lodLow = 30;
-                desc.innerText = "Medium: Normal maps enabled, 50% particles, standard LOD thresholds.";
-            } else {
+                desc.innerText = "Medium: Shadows, Bloom, Vignette, and normal maps enabled. (Balanced)";
+            } else if (s.graphicsPreset === 'High') {
                 s.particleCount = 100; s.lodBillboard = 60; s.lodLow = 30;
-                desc.innerText = "High: Full PBR textures, 100% particles, visual fidelity prioritized.";
+                desc.innerText = "High: GTAO Ambient Occlusion, Bloom, Vignette, Chromatic Aberration, POM, and shadows active. (Max Visuals)";
+            } else {
+                desc.innerText = "Custom Settings: Quality components modified individually.";
             }
         }
     };
     
     presets.forEach(p => {
         bind(p as HTMLElement, 'click', () => {
-            s.graphicsPreset = p.getAttribute('data-val') as any;
+            const val = p.getAttribute('data-val') as any;
+            if (val === 'Custom') return;
+            s.graphicsPreset = val;
+
+            if (val === 'Low') {
+                s.shadows = false;
+                s.ssao = false;
+                s.bloom = false;
+                s.bloomStrength = 0.0;
+                s.vignette = false;
+                s.vignetteIntensity = 0.0;
+                s.chromaticAberration = false;
+                s.chromaticAberrationIntensity = 0.0;
+                s.toneMapping = 'none';
+                s.exposure = 1.0;
+                s.parallaxOcclusion = false;
+                s.pbrMaterials = false;
+                s.instancedProps = false;
+                s.fxaa = false;
+            } else if (val === 'Medium') {
+                s.shadows = true;
+                s.ssao = false;
+                s.bloom = true;
+                s.bloomStrength = 1.0;
+                s.vignette = true;
+                s.vignetteIntensity = 0.5;
+                s.chromaticAberration = false;
+                s.chromaticAberrationIntensity = 0.005;
+                s.toneMapping = 'aces';
+                s.exposure = 1.0;
+                s.parallaxOcclusion = true;
+                s.pbrMaterials = true;
+                s.instancedProps = true;
+                s.fxaa = false;
+            } else if (val === 'High') {
+                s.shadows = true;
+                s.ssao = true;
+                s.bloom = true;
+                s.bloomStrength = 1.5;
+                s.vignette = true;
+                s.vignetteIntensity = 0.8;
+                s.chromaticAberration = true;
+                s.chromaticAberrationIntensity = 0.010;
+                s.toneMapping = 'aces';
+                s.exposure = 1.1;
+                s.parallaxOcclusion = true;
+                s.pbrMaterials = true;
+                s.instancedProps = true;
+                s.fxaa = true;
+            }
+
+            populateUIFromSettings();
             syncPresets();
             triggerApply();
         });

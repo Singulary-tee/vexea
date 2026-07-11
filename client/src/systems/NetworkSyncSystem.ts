@@ -21,7 +21,7 @@ class PositionalAudioPool {
   private geom = new THREE.BoxGeometry(0.1, 0.1, 0.1);
   private mat = new THREE.MeshBasicMaterial({ visible: false });
 
-  public play(scene: THREE.Scene, listener: THREE.AudioListener, buffer: any, mPos: THREE.Vector3, volume: number) {
+  public play(scene: THREE.Scene, listener: THREE.AudioListener, buffer: any, mPos: THREE.Vector3, volume: number, playbackRate = 1.0) {
     let item = this.pool.find(i => !i.active);
     
     if (!item && this.pool.length < this.max_size) {
@@ -53,6 +53,7 @@ class PositionalAudioPool {
       item.audio.setBuffer(buffer);
       item.audio.setRefDistance(15);
       item.audio.setVolume(volume);
+      item.audio.setPlaybackRate(playbackRate);
       
       if (item.audio.isPlaying) item.audio.stop();
       item.audio.play();
@@ -216,6 +217,7 @@ export class NetworkSyncSystem {
 
   private handleHandshake(json: any) {
     this.match.localPlayerId = json.id;
+    (window as any).lastLocalPlayerId = json.id; // Persist for reconnection survival
     if (json.position) {
       this.match.playerPos.set(json.position.x, json.position.y, json.position.z);
       if (this.match.physicsWorker) {
@@ -316,16 +318,29 @@ export class NetworkSyncSystem {
     if (msg.type === "drone_shoot") {
       _droneMuzzlePos.set(msg.posX, msg.posY, msg.posZ);
       const type = msg.droneType;
-      if (type === 1) { _droneMuzzlePos.y -= 0.5; }
-      else if (type === 3) { _droneMuzzlePos.y += 0.8; _droneMuzzlePos.z += 0.5; }
-      else if (type === 4) { _droneMuzzlePos.y += 0.6; _droneMuzzlePos.z += 0.6; }
-      else if (type === 5) { _droneMuzzlePos.y -= 0.2; _droneMuzzlePos.x += 1.0; }
-      else if (type === 6) { _droneMuzzlePos.y += 1.5; _droneMuzzlePos.z += 0.8; }
-      else { _droneMuzzlePos.y += 0.5; }
+
+      let playbackRate = 1.0;
+      let scaleFactor = 1.0;
+      if (type === DroneType.ROTARY_SHOOTER) {
+        playbackRate = 1.3;
+        scaleFactor = 0.8;
+      } else if (type === DroneType.FIXED_WING) {
+        playbackRate = 1.0;
+        scaleFactor = 1.1;
+      } else if (type === DroneType.WHEELED) {
+        playbackRate = 0.95;
+        scaleFactor = 1.0;
+      } else if (type === DroneType.ROBOT_DOG) {
+        playbackRate = 1.15;
+        scaleFactor = 0.9;
+      } else if (type === DroneType.HUMANOID) {
+        playbackRate = 0.6; // Deep heavy sound
+        scaleFactor = 2.0; // Massive flash
+      }
 
       _droneFireDir.set(msg.dirX, msg.dirY, msg.dirZ).normalize();
       if (typeof (window as any).spawnTracer === "function") (window as any).spawnTracer(_droneMuzzlePos, _droneFireDir);
-      if (typeof (window as any).triggerFlash === "function") (window as any).triggerFlash(_droneMuzzlePos);
+      if (typeof (window as any).triggerFlash === "function") (window as any).triggerFlash(_droneMuzzlePos, scaleFactor);
 
       // Reusable Positional Audio to avoid dynamic allocation GC overhead during intense combat
       const camera = (window as any).camera;
@@ -334,7 +349,7 @@ export class NetworkSyncSystem {
       if (camera && camera.position.distanceToSquared(_droneMuzzlePos) < 22500 && shotBuffer && audioListener) {
          const s = (window as any).vexeaSettings;
          const volume = s ? s.sfxVolume : 1.0;
-         droneAudioPool.play(scene, audioListener, shotBuffer, _droneMuzzlePos, volume);
+         droneAudioPool.play(scene, audioListener, shotBuffer, _droneMuzzlePos, volume, playbackRate);
       }
     }
 
@@ -446,6 +461,7 @@ export class NetworkSyncSystem {
     if (clientMatchMe) {
       match.playerHP = clientMatchMe.hp;
       match.playerScore = clientMatchMe.score;
+      (window as any).serverPlayerCollisions = clientMatchMe.activeCollisions || [];
       if (match.hud) match.hud.updateHUD();
     }
 

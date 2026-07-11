@@ -4,8 +4,22 @@ import {
   color, 
   fog, 
   exponentialHeightFogFactor, 
-  rangeFogFactor 
+  rangeFogFactor,
+  uniform,
+  pass,
+  mrt,
+  output,
+  normalView,
+  select,
+  screenUV,
+  vec2,
+  vec3,
+  vec4,
+  Fn
 } from "three/tsl";
+import { ao } from "three/addons/tsl/display/GTAONode.js";
+import { bloom } from "three/addons/tsl/display/BloomNode.js";
+import { chromaticAberration } from "three/addons/tsl/display/ChromaticAberrationNode.js";
 import { MatchController } from "../../MatchController";
 import { 
   initMatchVisuals, 
@@ -29,10 +43,19 @@ import { getSettings, applySettings } from "../../settings";
 
 export class VisualsSystem {
   private match: MatchController;
+  private decorativeProps: THREE.Mesh[] = [];
 
   constructor(match: MatchController) {
     this.match = match;
+    window.addEventListener("VEXEA_GRAPHICS_CHANGED", this.onGraphicsChanged as any);
   }
+
+  private onGraphicsChanged = (e: Event) => {
+    const s = (e as CustomEvent).detail;
+    this.decorativeProps.forEach(p => {
+      p.visible = s.instancedProps;
+    });
+  };
 
   public async init() {
     const scene = this.match.scene;
@@ -79,6 +102,8 @@ export class VisualsSystem {
 
     this.setupDevMapDecorations(scene);
     this.setupLaserSegments(scene);
+    this.spawnDecorativeProps(scene);
+    this.initPostProcessing(scene, camera, renderer);
 
     // Ensure all materials are pre-compiled and warmed via mock render pass
     if (renderer) {
@@ -103,7 +128,11 @@ export class VisualsSystem {
       if (decalBatch && decalSlots > 0) decalBatch.setVisibleAt(0, true);
 
       // Render a mock frame using the actual scene and camera to compile all WebGPU pipelines synchronously/asynchronously
-      renderer.render(scene, camera);
+      if (isWebGPU && (window as any).renderPipeline) {
+        (window as any).renderPipeline.render();
+      } else {
+        renderer.render(scene, camera);
+      }
 
       // Restore visibility
       if (pistolGroup) pistolGroup.visible = wasPistolVisible;
@@ -175,5 +204,173 @@ export class VisualsSystem {
 
   public dispose() {
     clearAllVisuals();
+    window.removeEventListener("VEXEA_GRAPHICS_CHANGED", this.onGraphicsChanged as any);
+  }
+
+  private initPostProcessing(scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: any) {
+    const s = getSettings();
+    const isWebGPU = (window as any).isWebGPU;
+    if (!isWebGPU || !renderer) return;
+
+    console.log("[VisualsSystem] Setting up WebGPU advanced RenderPipeline...");
+    try {
+      // Create our global uniforms object if not already initialized
+      const uniforms = {
+        bloomEnabled: uniform(s.bloom ? 1.0 : 0.0),
+        bloomStrength: uniform(s.bloomStrength),
+        bloomRadius: uniform(s.bloomRadius),
+        bloomThreshold: uniform(s.bloomThreshold),
+        vignetteEnabled: uniform(s.vignette ? 1.0 : 0.0),
+        vignetteIntensity: uniform(s.vignetteIntensity),
+        chromaticAberrationEnabled: uniform(s.chromaticAberration ? 1.0 : 0.0),
+        chromaticAberrationIntensity: uniform(s.chromaticAberrationIntensity),
+        ssaoEnabled: uniform(s.ssao ? 1.0 : 0.0),
+        pomScale: uniform(s.parallaxOcclusion ? 0.025 : 0.0),
+        pbrNormalScale: uniform(s.pbrMaterials ? 1.0 : 0.0),
+        pbrDetailsEnabled: uniform(s.pbrMaterials ? 1.0 : 0.0),
+        instancedPropsEnabled: uniform(s.instancedProps ? 1.0 : 0.0)
+      };
+      
+      // Merge into window-level graphics uniforms so applySettings can access them
+      (window as any).vexGraphicsUniforms = Object.assign((window as any).vexGraphicsUniforms || {}, uniforms);
+
+      const renderPipeline = new (THREE as any).RenderPipeline(renderer);
+
+      // 1. Scene pass (color and depth)
+      const scenePass = pass(scene, camera);
+      const sceneColor = scenePass.getTextureNode('output');
+
+      let colorNode = sceneColor;
+
+      // 2. Inline Chromatic Aberration pass (extremely performant and robust inline TSL)
+      const uvNode = screenUV;
+      const center = vec2(0.5, 0.5);
+      const offset = uvNode.sub(center);
+      const distance = offset.length();
+      const aberrationStrength = uniforms.chromaticAberrationIntensity.mul(distance).mul(0.01);
+      
+      const rOffset = offset.mul(aberrationStrength);
+      const bOffset = offset.mul(aberrationStrength).negate();
+      
+      const r = sceneColor.sample(uvNode.add(rOffset)).r;
+      const g = sceneColor.g;
+      const b = sceneColor.sample(uvNode.add(bOffset)).b;
+      const a = sceneColor.a;
+      
+      const caPass = vec4(r, g, b, a);
+      colorNode = select(uniforms.chromaticAberrationEnabled.equal(1.0), caPass as any, colorNode) as any;
+
+      // 3. Bloom pass
+      const bloomPass = bloom(colorNode, uniforms.bloomStrength.mul(0.10) as any, uniforms.bloomRadius as any, uniforms.bloomThreshold as any);
+      colorNode = select(uniforms.bloomEnabled.equal(1.0), colorNode.add(bloomPass) as any, colorNode) as any;
+
+      // 4. Vignette custom effect using inline TSL (no Fn wrapper to avoid WGSL scope issues)
+      const dist = uvNode.sub(vec2(0.5)).length();
+      const vignetteVal = float(1.0).sub(dist.mul(uniforms.vignetteIntensity).pow(2.0)).saturate();
+      colorNode = select(uniforms.vignetteEnabled.equal(1.0), colorNode.mul(vignetteVal) as any, colorNode) as any;
+
+      // Output back to screen
+      renderPipeline.outputNode = colorNode;
+
+      // Save to window so main loop can render it
+      (window as any).renderPipeline = renderPipeline;
+      console.log("[VisualsSystem] WebGPU advanced RenderPipeline initialization complete and active.");
+    } catch (e) {
+      console.error("[VisualsSystem] WebGPU RenderPipeline creation failed:", e);
+    }
+  }
+
+  private spawnDecorativeProps(scene: THREE.Scene) {
+    const s = getSettings();
+    const spec = (window as any).__vexMapLoader?.spec;
+    if (!spec || !spec.buildings) {
+      console.log("[VisualsSystem] No map spec or buildings found for decorative prop spawning. Creating procedural props instead.");
+      const centers = [
+        new THREE.Vector3(-15, 0, -15),
+        new THREE.Vector3(15, 0, 15),
+        new THREE.Vector3(-25, 0, 20),
+        new THREE.Vector3(25, 0, -20)
+      ];
+      centers.forEach((center, idx) => {
+        this.createPropCluster(scene, center, idx, s);
+      });
+      return;
+    }
+
+    console.log(`[VisualsSystem] Spawning decorative props clustered around ${spec.buildings.length} buildings.`);
+    spec.buildings.forEach((b: any, bIdx: number) => {
+      if (b.meshType === 'TYPE_CENTERPIECE') return; // Skip centerpiece to avoid occlusion
+      
+      const pos = new THREE.Vector3(b.position.x, b.position.y, b.position.z);
+      const sizeX = b.size?.x || 10;
+      const sizeZ = b.size?.z || 10;
+      
+      // Spawn 2-3 small props next to the building walls (clustered)
+      const propCount = 2 + (bIdx % 2); 
+      for (let i = 0; i < propCount; i++) {
+        const angle = (i / propCount) * Math.PI * 2 + (bIdx * 1.5);
+        const offsetX = Math.cos(angle) * (sizeX / 2 + 1.5);
+        const offsetZ = Math.sin(angle) * (sizeZ / 2 + 1.5);
+        
+        const propPos = new THREE.Vector3()
+          .copy(pos)
+          .add(new THREE.Vector3(offsetX, 0, offsetZ));
+        
+        propPos.y = 0;
+
+        this.createPropCluster(scene, propPos, bIdx * 10 + i, s);
+      }
+    });
+  }
+
+  private createPropCluster(scene: THREE.Scene, pos: THREE.Vector3, seed: number, s: any) {
+    const propType = seed % 3; // 0 = crate, 1 = barrel, 2 = generator
+
+    let mesh: THREE.Mesh;
+    if (propType === 0) {
+      const geom = new THREE.BoxGeometry(1.6, 1.6, 1.6);
+      const mat = new THREE.MeshStandardMaterial({
+        color: seed % 2 === 0 ? 0xcc5500 : 0x444e5c, // Industrial Orange or Dark Slate Steel
+        roughness: 0.6,
+        metalness: 0.8,
+        name: 'crate_material'
+      });
+      mesh = new THREE.Mesh(geom, mat);
+    } else if (propType === 1) {
+      const geom = new THREE.CylinderGeometry(0.6, 0.6, 1.8, 12);
+      const mat = new THREE.MeshStandardMaterial({
+        color: seed % 2 === 0 ? 0x992222 : 0x226644, // Hazard Red or Acid Green
+        roughness: 0.5,
+        metalness: 0.7,
+        name: 'barrel_material'
+      });
+      mesh = new THREE.Mesh(geom, mat);
+    } else {
+      const geom = new THREE.BoxGeometry(1.4, 2.0, 1.4);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x20252c,
+        roughness: 0.4,
+        metalness: 0.9,
+        emissive: 0x00ffaa,
+        emissiveIntensity: seed % 2 === 0 ? 0.6 : 0.2,
+        name: 'gen_material'
+      });
+      mesh = new THREE.Mesh(geom, mat);
+    }
+
+    mesh.position.copy(pos);
+    mesh.position.y += (mesh.geometry as any).parameters.height / 2; // offset upward so base is on ground
+
+    mesh.rotation.y = (seed * 17) % (Math.PI * 2);
+    mesh.rotation.x = ((seed * 3) % 10) * 0.01;
+    mesh.rotation.z = ((seed * 7) % 10) * 0.01;
+
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    mesh.visible = s.instancedProps; // respect setting initially
+
+    scene.add(mesh);
+    this.decorativeProps.push(mesh);
   }
 }

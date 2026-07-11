@@ -137,7 +137,9 @@ export async function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera
 
       // Find muzzle node or create one
       let muzzleNode = gltf.scene.getObjectByName('Muzzle') || gltf.scene.getObjectByName('muzzle');
+      let isProcedural = false;
       if (!muzzleNode) {
+          isProcedural = true;
           let anySkinnedMesh: any = null;
           gltf.scene.traverse((c: any) => { if (c.isSkinnedMesh) anySkinnedMesh = c; });
           
@@ -162,6 +164,7 @@ export async function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera
           muzzleNode = dummy;
       }
       (rifleGroup as any).muzzleNode = muzzleNode;
+      (rifleGroup as any).isProceduralMuzzle = isProcedural;
       console.log("[WEAPONS] SMG Loaded, Animations:", Object.keys(weaponActions.rifle));
     } catch (e) {
       console.error("[WEAPONS] Failed to load SMG:", e);
@@ -209,7 +212,9 @@ export async function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera
       });
 
       let muzzleNode = gltf.scene.getObjectByName('Muzzle') || gltf.scene.getObjectByName('muzzle');
+      let isProcedural = false;
       if (!muzzleNode) {
+          isProcedural = true;
           let anySkinnedMesh: any = null;
           gltf.scene.traverse((c: any) => { if (c.isSkinnedMesh) anySkinnedMesh = c; });
           
@@ -234,6 +239,7 @@ export async function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera
           muzzleNode = dummy;
       }
       (pistolGroup as any).muzzleNode = muzzleNode;
+      (pistolGroup as any).isProceduralMuzzle = isProcedural;
       console.log("[WEAPONS] Pistol Loaded, Animations:", Object.keys(weaponActions.pistol));
     } catch (e) {
       console.error("[WEAPONS] Failed to load Pistol:", e);
@@ -338,8 +344,6 @@ export function isSwitchingWeapon(): boolean {
 export function getMuzzleWorldPosition(outVec: THREE.Vector3, camera: THREE.Camera): void {
   const activeMesh = weaponVisualState.activeSlot === 1 ? rifleGroup : pistolGroup;
   if (activeMesh && (activeMesh as any).muzzleNode) {
-    const muzzleOffset = weaponVisualState.activeSlot === 1 ? DEV_WEAPON_OFFSETS.rifle.muzzle : DEV_WEAPON_OFFSETS.pistol.muzzle;
-    
     // First, make sure the local offset of the dummy node is 0
     (activeMesh as any).muzzleNode.position.set(0, 0, 0);
     (activeMesh as any).muzzleNode.updateMatrixWorld(true);
@@ -347,15 +351,21 @@ export function getMuzzleWorldPosition(outVec: THREE.Vector3, camera: THREE.Came
     // Get the base animated world position from the model's muzzle or bone
     (activeMesh as any).muzzleNode.getWorldPosition(outVec);
     
-    // Convert the camera's rotation to world axes so the DEV_WEAPON_OFFSETS 
-    // predictably apply in view space (X=Right, Y=Up, Z=Backward)
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
-    
-    outVec.addScaledVector(right, muzzleOffset.x);
-    outVec.addScaledVector(up, muzzleOffset.y);
-    outVec.addScaledVector(forward, muzzleOffset.z);
+    // ONLY apply the camera-space offset if this is a procedurally created dynamic muzzle fallback.
+    // Authored gltf muzzle nodes are already placed perfectly at the tip.
+    if ((activeMesh as any).isProceduralMuzzle) {
+      const muzzleOffset = weaponVisualState.activeSlot === 1 ? DEV_WEAPON_OFFSETS.rifle.muzzle : DEV_WEAPON_OFFSETS.pistol.muzzle;
+      
+      // Convert the camera's rotation to world axes so the DEV_WEAPON_OFFSETS 
+      // predictably apply in view space (X=Right, Y=Up, Z=Backward)
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+      const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+      
+      outVec.addScaledVector(right, muzzleOffset.x);
+      outVec.addScaledVector(up, muzzleOffset.y);
+      outVec.addScaledVector(forward, muzzleOffset.z);
+    }
   } else {
     outVec.copy(camera.position);
     const cameraDir = _pos.set(0, 0, -1).applyQuaternion(camera.quaternion);

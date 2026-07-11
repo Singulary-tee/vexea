@@ -13,8 +13,14 @@ export class SimulationSystem {
     );
     
     if (typeof SharedArrayBuffer !== "undefined") {
-      this.match.physicsSAB = new SharedArrayBuffer(12 * 4); // 12 floats
-      this.match.physicsData = new Float32Array(this.match.physicsSAB);
+      try {
+        this.match.physicsSAB = new SharedArrayBuffer(12 * 4); // 12 floats
+        this.match.physicsData = new Float32Array(this.match.physicsSAB);
+      } catch (err) {
+        console.warn("Failed to create SharedArrayBuffer", err);
+        this.match.physicsSAB = null;
+        this.match.physicsData = null;
+      }
     } else {
       this.match.physicsSAB = null;
       this.match.physicsData = null;
@@ -26,11 +32,22 @@ export class SimulationSystem {
         buildingsToPass = spec.buildings;
     }
 
-    this.match.physicsWorker.postMessage({ 
-      type: "INIT", 
-      sab: this.match.physicsSAB, 
-      buildings: buildingsToPass 
-    });
+    try {
+      this.match.physicsWorker.postMessage({ 
+        type: "INIT", 
+        sab: this.match.physicsSAB, 
+        buildings: buildingsToPass 
+      });
+    } catch (err) {
+      console.warn("Failed to postMessage SharedArrayBuffer, falling back", err);
+      this.match.physicsSAB = null;
+      this.match.physicsData = null;
+      this.match.physicsWorker.postMessage({ 
+        type: "INIT", 
+        sab: null, 
+        buildings: buildingsToPass 
+      });
+    }
 
     this.match.physicsWorker.onmessage = (e: MessageEvent) => {
       this.handleWorkerMessage(e);
@@ -52,6 +69,8 @@ export class SimulationSystem {
       if (typeof (window as any).removeClientCubeMesh === "function") {
         (window as any).removeClientCubeMesh();
       }
+    } else if (e.data.type === "PLAYER_COLLISIONS") {
+      (window as any).clientPlayerCollisions = e.data.collisions;
     } else if (e.data.type === "PLAYER_UPDATE") {
       if (!GlobalState.isFlying) {
         this.match.playerPos.set(e.data.pos.x, e.data.pos.y, e.data.pos.z);
@@ -64,7 +83,24 @@ export class SimulationSystem {
 
   public step(dt: number) {
     if (this.match.physicsWorker) {
-      this.match.physicsWorker.postMessage({ type: "STEP", delta: dt * 1000 });
+      let dronesData: any[] = [];
+      if (this.match.droneJitterMap) {
+        this.match.droneJitterMap.forEach((buffer, id) => {
+          if (buffer.count > 0) {
+            const latest = buffer.getLatest();
+            if (latest.state !== 2) { // DroneState.DEAD is 2
+              dronesData.push({
+                id,
+                x: latest.posX,
+                y: latest.posY,
+                z: latest.posZ,
+                type: latest.type
+              });
+            }
+          }
+        });
+      }
+      this.match.physicsWorker.postMessage({ type: "STEP", delta: dt * 1000, drones: dronesData });
     }
   }
 

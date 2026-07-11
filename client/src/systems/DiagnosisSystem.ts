@@ -1,7 +1,7 @@
 import * as THREE from "three/webgpu";
 import { MatchController } from "../../MatchController";
 import { GlobalState } from "../../state";
-import { ZONE_BOUNDS, WAYPOINTS } from "../../../shared/constants";
+import { ZONE_BOUNDS, WAYPOINTS, DRONE_CONFIGS, DroneType } from "../../../shared/constants";
 
 export class DiagnosisSystem {
     private match: MatchController;
@@ -220,31 +220,28 @@ export class DiagnosisSystem {
 
                         // Update mesh geometry and scale to match Rapier shapes
                         const type = head.type;
-                        if (type === 6) { // HUMANOID (Capsule)
-                            if (mesh.geometry !== this.droneCapsuleGeom) mesh.geometry = this.droneCapsuleGeom;
-                            // capsule(1.5, 1.0) -> radius 1.0, half-height 1.5. Total height 5.0.
-                            // THREE.CapsuleGeometry(radius, length) -> total height = length + 2*radius.
-                            // So length = 5.0 - 2.0 = 3.0.
-                            // Wait, let's just scale it.
-                            mesh.scale.set(1.0, 1.0, 1.0); // We'll assume the geometry matches exactly if we recreate it, or just scale the 1,2 capsule.
-                            // Better: use a fixed capsule geom and scale it.
-                            // CapsuleGeom(1, 1) -> total height 3. We want total height 5.
-                            mesh.scale.set(1.0, 5.0/3.0, 1.0);
-                        } else if (type === 0 || type === 1 || type === 2 || type === 3 || type === 4 || type === 5) {
-                            if (mesh.geometry !== this.droneBoxGeom) mesh.geometry = this.droneBoxGeom;
-                            if (type === 0) mesh.scale.set(0.77, 0.20, 0.59);
-                            else if (type === 1) mesh.scale.set(0.70, 0.70, 0.70);
-                            else if (type === 2) mesh.scale.set(0.41, 0.12, 0.90);
-                            else if (type === 3) mesh.scale.set(0.62, 0.18, 1.35);
-                            else if (type === 4) mesh.scale.set(0.98, 0.97, 0.55);
-                            else if (type === 5) mesh.scale.set(0.82, 0.20, 1.23);
+                        const config = DRONE_CONFIGS[type];
+                        if (config && config.collider) {
+                            if (config.collider.type === 'capsule') {
+                                if (mesh.geometry !== this.droneCapsuleGeom) mesh.geometry = this.droneCapsuleGeom;
+                                const radius = config.collider.radius || 0.8;
+                                const halfHeight = config.collider.halfHeight || 1.0;
+                                const totalHeight = 2.0 * halfHeight + 2.0 * radius;
+                                mesh.scale.set(radius, totalHeight / 4.0, radius);
+                            } else if (config.collider.type === 'cuboid' && config.collider.halfExtents) {
+                                if (mesh.geometry !== this.droneBoxGeom) mesh.geometry = this.droneBoxGeom;
+                                mesh.scale.set(config.collider.halfExtents[0], config.collider.halfExtents[1], config.collider.halfExtents[2]);
+                            } else {
+                                if (mesh.geometry !== this.droneSphereGeom) mesh.geometry = this.droneSphereGeom;
+                                const radius = config.collider.radius || 1.5;
+                                mesh.scale.set(radius, radius, radius);
+                            }
                         } else {
                             if (mesh.geometry !== this.droneSphereGeom) mesh.geometry = this.droneSphereGeom;
                             mesh.scale.set(1.5, 1.5, 1.5);
                         }
 
                         let offsetOffsetY = 0;
-                        if (head.type === 4) offsetOffsetY = -1.0; // WHEELED
 
                         mesh.position.set(head.posX, head.posY + offsetOffsetY, head.posZ);
                         const yawAngle = 2 * Math.atan2(head.rotY, head.rotW);

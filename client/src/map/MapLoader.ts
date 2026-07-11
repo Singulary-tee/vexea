@@ -1,10 +1,12 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MapRegistryEntry } from '../../../shared/maps/map-registry';
 import { getCachedOrFetchUrl, blobUrlMap } from '../../asset-cache';
+import { texture, uv, normalMap, uniform, parallaxUV } from 'three/tsl';
+import { getSettings } from '../../settings';
 
 export interface MapSpec {
   id: string;
@@ -276,6 +278,17 @@ export class MapLoader {
     const normal = textureLoader.load(normUrl);
     const arm = textureLoader.load(armUrl);
 
+    albedo.colorSpace = THREE.SRGBColorSpace;
+    [albedo, normal, arm].forEach(tex => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(80, 80);
+    });
+
+    const isWebGPU = (window as any).isWebGPU;
+    const s = (window as any).vexeaSettings || getSettings();
+
+    // 1. Concrete Wall Material
     if (wallDiffUrl) {
       const wallAlbedo = textureLoader.load(wallDiffUrl);
       const wallNormal = textureLoader.load(wallNormUrl);
@@ -287,16 +300,37 @@ export class MapLoader {
         tex.wrapT = THREE.RepeatWrapping;
         tex.repeat.set(4, 4);
       });
-      
-      this.concreteWallMat = new THREE.MeshStandardMaterial({
-        map: wallAlbedo,
-        normalMap: wallNormal,
-        roughnessMap: wallArm,
-        aoMap: wallArm,
-        metalnessMap: wallArm,
-        metalness: 0.1,
-        roughness: 0.7
-      });
+
+      if (isWebGPU) {
+        const wallNodeMat = new THREE.MeshStandardNodeMaterial();
+        const pbrNormalScale = uniform(s.pbrMaterials ? 1.0 : 0.0);
+        const pomScale = uniform(s.parallaxOcclusion ? 0.025 : 0.0);
+
+        (window as any).vexGraphicsUniforms = (window as any).vexGraphicsUniforms || {};
+        (window as any).vexGraphicsUniforms.wallPbrNormalScale = pbrNormalScale;
+        (window as any).vexGraphicsUniforms.wallPomScale = pomScale;
+
+        const wallUV = uv().mul(4.0);
+        const pUV = parallaxUV(wallUV, pomScale.mul(texture(wallArm, wallUV).g));
+
+        wallNodeMat.colorNode = texture(wallAlbedo, pUV);
+        wallNodeMat.normalNode = normalMap(texture(wallNormal, pUV), pbrNormalScale);
+        wallNodeMat.roughnessNode = texture(wallArm, pUV).g;
+        wallNodeMat.metalnessNode = texture(wallArm, pUV).b.mul(0.1);
+        wallNodeMat.aoNode = texture(wallArm, pUV).r;
+
+        this.concreteWallMat = wallNodeMat as any;
+      } else {
+        this.concreteWallMat = new THREE.MeshStandardMaterial({
+          map: wallAlbedo,
+          normalMap: wallNormal,
+          roughnessMap: wallArm,
+          aoMap: wallArm,
+          metalnessMap: wallArm,
+          metalness: 0.1,
+          roughness: 0.7
+        });
+      }
     } else {
       this.concreteWallMat = new THREE.MeshStandardMaterial({
         color: 0x768192,
@@ -305,22 +339,38 @@ export class MapLoader {
       });
     }
 
-    albedo.colorSpace = THREE.SRGBColorSpace;
-    [albedo, normal, arm].forEach(tex => {
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.repeat.set(80, 80);
-    });
+    // 2. Ground Material
+    let groundMat;
+    if (isWebGPU) {
+      const groundNodeMat = new THREE.MeshStandardNodeMaterial();
+      const pbrNormalScale = uniform(s.pbrMaterials ? 1.0 : 0.0);
+      const pomScale = uniform(s.parallaxOcclusion ? 0.025 : 0.0);
 
-    const groundMat = new THREE.MeshStandardMaterial({
-      map: albedo,
-      normalMap: normal,
-      roughnessMap: arm,
-      aoMap: arm,
-      metalnessMap: arm,
-      metalness: 1.0,
-      roughness: 1.0
-    });
+      (window as any).vexGraphicsUniforms = (window as any).vexGraphicsUniforms || {};
+      (window as any).vexGraphicsUniforms.pomScale = pomScale;
+      (window as any).vexGraphicsUniforms.pbrNormalScale = pbrNormalScale;
+
+      const groundUV = uv().mul(80.0);
+      const pUV = parallaxUV(groundUV, pomScale.mul(texture(arm, groundUV).g));
+
+      groundNodeMat.colorNode = texture(albedo, pUV);
+      groundNodeMat.normalNode = normalMap(texture(normal, pUV), pbrNormalScale);
+      groundNodeMat.roughnessNode = texture(arm, pUV).g;
+      groundNodeMat.metalnessNode = texture(arm, pUV).b;
+      groundNodeMat.aoNode = texture(arm, pUV).r;
+
+      groundMat = groundNodeMat as any;
+    } else {
+      groundMat = new THREE.MeshStandardMaterial({
+        map: albedo,
+        normalMap: normal,
+        roughnessMap: arm,
+        aoMap: arm,
+        metalnessMap: arm,
+        metalness: 1.0,
+        roughness: 1.0
+      });
+    }
 
     const { x: wX, z: wZ } = this.spec.worldSize;
     const groundGeom = new THREE.PlaneGeometry(wX, wZ);

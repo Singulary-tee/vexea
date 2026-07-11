@@ -35,6 +35,8 @@ let localIsJump = false;
 let localIsCrouch = false;
 let localVelY = 0;
 
+let dronesMap: Map<number, { body: RAPIER.RigidBody, collider: RAPIER.Collider }> = new Map();
+
 self.onerror = function(message, source, lineno, colno, error) {
     self.postMessage({
         type: "WORKER_CRASH",
@@ -147,6 +149,42 @@ self.onmessage = async (e) => {
         if (localStepOnceRequested) {
             accumulator += FIXED_TIMESTEP;
             localStepOnceRequested = false;
+        }
+        
+        if (e.data.drones && Array.isArray(e.data.drones)) {
+            const currentDroneIds = new Set<number>();
+            for (const d of e.data.drones) {
+                currentDroneIds.add(d.id);
+                let droneObj = dronesMap.get(d.id);
+                
+                if (!droneObj) {
+                    let dSizeX = 1.5, dSizeY = 1.5, dSizeZ = 1.5;
+                    const type = d.type;
+                    if (type === 0) { dSizeX = 0.777; dSizeY = 0.204; dSizeZ = 0.596; } // ROTARY_SHOOTER
+                    else if (type === 1) { dSizeX = 0.777; dSizeY = 0.204; dSizeZ = 0.596; } // BOMBER
+                    else if (type === 2) { dSizeX = 0.777; dSizeY = 0.204; dSizeZ = 0.596; } // RECON
+                    else if (type === 3) { dSizeX = 6.435; dSizeY = 1.545; dSizeZ = 13.890; } // FIXED_WING
+                    else if (type === 4) { dSizeX = 1.187; dSizeY = 0.695; dSizeZ = 1.082; } // WHEELED
+                    else if (type === 5) { dSizeX = 0.82; dSizeY = 0.20; dSizeZ = 1.23; } // ROBOT_DOG
+                    else if (type === 6) { dSizeX = 1.0; dSizeY = 2.5; dSizeZ = 1.0; } // HUMANOID
+                    
+                    const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(d.x, d.y + dSizeY, d.z);
+                    const body = world.createRigidBody(bodyDesc);
+                    const colliderDesc = RAPIER.ColliderDesc.cuboid(dSizeX, dSizeY, dSizeZ);
+                    const collider = world.createCollider(colliderDesc, body);
+                    droneObj = { body, collider };
+                    dronesMap.set(d.id, droneObj);
+                }
+                
+                droneObj.body.setNextKinematicTranslation({ x: d.x, y: d.y + droneObj.collider.halfExtents().y, z: d.z });
+            }
+            
+            for (const [id, droneObj] of Array.from(dronesMap.entries())) {
+                if (!currentDroneIds.has(id)) {
+                    world.removeRigidBody(droneObj.body);
+                    dronesMap.delete(id);
+                }
+            }
         }
         
         while (accumulator >= FIXED_TIMESTEP) {
@@ -287,6 +325,34 @@ self.onmessage = async (e) => {
             nextPos.z = currBodyPos.z + computed.z;
             
             playerBody.setNextKinematicTranslation(nextPos);
+
+            const localCollisions: string[] = [];
+            for (let i = 0; i < kcc.numComputedCollisions(); i++) {
+                const collision = kcc.computedCollision(i);
+                if (collision && collision.collider) {
+                    if (playerCollider && collision.collider.handle === playerCollider.handle) {
+                        continue;
+                    }
+                    if (cubeCollider && collision.collider.handle === cubeCollider.handle) {
+                        localCollisions.push("PredictionCube");
+                        continue;
+                    }
+                    const colTranslation = collision.collider.translation();
+                    if (collision.collider.shapeType() === RAPIER.ShapeType.Cuboid) {
+                        if (Math.abs(colTranslation.y - (-0.5)) < 0.1) {
+                            localCollisions.push("Floor");
+                        } else {
+                            localCollisions.push("Building");
+                        }
+                    } else {
+                        localCollisions.push("Wall");
+                    }
+                }
+            }
+            self.postMessage({
+                type: "PLAYER_COLLISIONS",
+                collisions: localCollisions
+            });
 
             if (sharedData) {
                 sharedData[5] = nextPos.x;

@@ -18,7 +18,7 @@ export class HUDSystem {
     const scoreVal = document.getElementById("score-val");
     
     if (hBar) hBar.style.width = `${match.playerHP}%`;
-    if (hpVal) hpVal.innerText = `${Math.floor(match.playerHP)}/100`;
+    if (hpVal) hpVal.innerText = `${Math.floor(match.playerHP)}`;
     if (scoreVal) scoreVal.innerText = `${match.playerScore}`;
   }
 
@@ -27,15 +27,15 @@ export class HUDSystem {
     const a2 = document.getElementById("weapon-2-ammo");
     
     if (a1 && primary) {
-      a1.innerText = primary.isReloading
+      a1.innerHTML = primary.isReloading
         ? "RELOADING"
-        : `${primary.currentMag.toString().padStart(2, "0")}/${primary.reserve}`;
+        : `<span class="ammo-mag">${primary.currentMag.toString().padStart(2, "0")}</span><span class="ammo-res">/${primary.reserve}</span>`;
     }
     
     if (a2 && secondary) {
-      a2.innerText = secondary.isReloading
+      a2.innerHTML = secondary.isReloading
         ? "RELOADING"
-        : `${secondary.currentMag.toString().padStart(2, "0")}/${secondary.reserve}`;
+        : `<span class="ammo-mag">${secondary.currentMag.toString().padStart(2, "0")}</span><span class="ammo-res">/${secondary.reserve}</span>`;
     }
   }
 

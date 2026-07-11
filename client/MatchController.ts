@@ -10,6 +10,7 @@ import { DroneSystem } from "./src/systems/DroneSystem";
 import { DiagnosisSystem } from "./src/systems/DiagnosisSystem";
 import { HUDSystem } from "./src/systems/HUDSystem";
 import { VisualsSystem } from "./src/systems/VisualsSystem";
+import { ReconnectionSystem } from "./src/systems/ReconnectionSystem";
 
 export interface NetworkDroneState {
   t: number; // local receive timestamp
@@ -119,6 +120,7 @@ export class MatchController {
   public diagnosis: DiagnosisSystem | null = null;
   public hud: HUDSystem | null = null;
   public visuals: VisualsSystem | null = null;
+  public reconnection: ReconnectionSystem | null = null;
 
   // Match State
   public localPlayerId = "";
@@ -219,6 +221,8 @@ export class MatchController {
     this.hud.init();
     this.visuals = new VisualsSystem(this);
     this.visuals.init();
+    this.reconnection = new ReconnectionSystem(this);
+    this.reconnection.init();
   }
 
   public stop() {
@@ -317,6 +321,10 @@ export class MatchController {
 
     if (this.combat) {
         this.combat = null;
+    }
+
+    if (this.reconnection) {
+        this.reconnection = null;
     }
 
     // 5. Reset primitives

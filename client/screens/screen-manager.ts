@@ -1,7 +1,7 @@
 import { DS } from "../design-system";
 import { audioManager } from "../audio";
 
-const screens = ['splash-screen', 'main-menu-screen', 'lobby-screen', 'dev-map-editor-screen'];
+const screens = ['splash-screen', 'main-menu-screen', 'lobby-screen', 'dev-map-editor-screen', 'dev-entities-screen'];
 let transitionTimers: number[] = [];
 
 export function hideAll() {
@@ -62,6 +62,17 @@ export function showDevMapEditor() {
 }
 if (typeof window !== 'undefined') {
   (window as any).showDevMapEditor = showDevMapEditor;
+}
+
+export function showDevEntities() {
+  import("./dev-entities").then(({ initDevEntities, activateScreen }) => {
+    initDevEntities().then(() => {
+      activateScreen();
+    });
+  });
+}
+if (typeof window !== 'undefined') {
+  (window as any).showDevEntities = showDevEntities;
 }
 
 export function showGame() {

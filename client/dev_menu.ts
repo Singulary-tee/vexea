@@ -645,6 +645,28 @@ export function initDevMenu(channel: any, jitterMap: any) {
         channel.on("dev_test_entity_telemetry", (data: any) => {
             (window as any).testEntityTelemetryData = data.data;
         });
+        channel.on("dev_collision_signal", (data: string) => {
+            if (!(window as any).collisionLogs) (window as any).collisionLogs = [];
+            (window as any).collisionLogs.push(data);
+            if ((window as any).collisionLogs.length > 200) (window as any).collisionLogs.shift();
+            
+            const logEl = document.getElementById("dev-collisions");
+            if (logEl) {
+                updateCollisionsHUD();
+            }
+        });
+        channel.on("dev_collision_telemetry", (data: any) => {
+            (window as any).lastCollisionTelemetry = data;
+            const telEl = document.getElementById("dev-collision-telemetry");
+            if (telEl) {
+                telEl.innerHTML = `
+                    <div style="color:#60a5fa; margin-bottom:5px;">[LIVE TELEMETRY (Tick: ${data.tick})]</div>
+                    <div>PLAYER: [${data.player.x.toFixed(3)}, ${data.player.y.toFixed(3)}, ${data.player.z.toFixed(3)}]</div>
+                    <div>DRONE (${data.drone.id}): [${data.drone.x.toFixed(3)}, ${data.drone.y.toFixed(3)}, ${data.drone.z.toFixed(3)}]</div>
+                    <div>DISTANCE: ${data.dist.toFixed(3)}m</div>
+                `;
+            }
+        });
     }
 
     // Construct DOM
@@ -658,7 +680,7 @@ export function initDevMenu(channel: any, jitterMap: any) {
     overlay.id = "dev-overlay";
     overlay.style.cssText = "display:none;position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:999998;pointer-events:auto;color:#0f0;font-family:monospace;padding:10px;flex-direction:column;";
     
-    const tabs = ["VIS DIAG", "GAME CONTROL", "PHYSICS", "CHEATS", "WEPS", "CONSOLE", "LLM FEED", "AI NAV", "PERF", "NETWORK", "ZONES", "ENTITIES"];
+    const tabs = ["VIS DIAG", "GAME CONTROL", "PHYSICS", "CHEATS", "WEPS", "CONSOLE", "LLM FEED", "AI NAV", "PERF", "NETWORK", "ZONES", "ENTITIES", "COLLISIONS"];
     const header = document.createElement("div");
     header.style.cssText = "display:flex;gap:10px;margin-bottom:10px;overflow-x:auto;";
     tabs.forEach(t => {
@@ -942,11 +964,21 @@ function renderPanel() {
 
             <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
                 <div style="font-weight:bold; color:#0ff; margin-bottom:5px;">[DEBUG OPERATIONS]</div>
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
                     <button id="dev-spawn-client-cube" style="padding:8px 12px; background:#1e3a8a; border:1px solid #3b82f6; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SPAWN CLIENT CUBE (Prediction)</button>
                     <button id="dev-spawn-server-cube" style="padding:8px 12px; background:#5c1d1d; border:1px solid #ef4444; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SPAWN SERVER CUBE (Authoritative)</button>
                     <button id="dev-spawn-both-cubes" style="padding:8px 12px; background:#b45309; border:1px solid #f59e0b; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SPAWN BOTH (Side-by-Side)</button>
                     <button id="dev-clear-physics-cubes" style="padding:8px 12px; background:#374151; border:1px solid #4b5563; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">CLEAR ALL CUBES</button>
+                </div>
+                <div style="font-weight:bold; color:#a855f7; margin-bottom:5px;">[COLLISION DIAGNOSTICS & TEST ENTITIES]</div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+                    <button id="dev-spawn-frozen-drone" style="padding:8px 12px; background:#6b21a8; border:1px solid #a855f7; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SPAWN FROZEN DRONE (At Player)</button>
+                    <button id="dev-clear-frozen-drones" style="padding:8px 12px; background:#374151; border:1px solid #4b5563; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">CLEAR FROZEN DRONES</button>
+                </div>
+                <div style="font-weight:bold; color:#ef4444; margin-bottom:5px;">[DISCONNECT / RECONNECT TEST (DISLOCATOR)]</div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button id="dev-simulate-disconnect" style="padding:8px 12px; background:#b91c1c; border:1px solid #ef4444; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SIMULATE DISCONNECT (3s)</button>
+                    <span id="dev-disconnect-status" style="color:#10b981; font-weight:bold;">Status: Connected</span>
                 </div>
             </div>
 
@@ -1119,6 +1151,52 @@ function renderPanel() {
                 }
                 if (activeChannel) {
                     activeChannel.emit("dev_clear_cube", {});
+                }
+            };
+        }
+
+        const spawnFrozenDroneBtn = document.getElementById("dev-spawn-frozen-drone");
+        if (spawnFrozenDroneBtn) {
+            spawnFrozenDroneBtn.onclick = () => {
+                const dir = new THREE.Vector3(0, 0, -1);
+                if (camera) dir.applyQuaternion(camera.quaternion);
+                const pos = new THREE.Vector3();
+                const pPos = (window as any).playerPos;
+                if (pPos) {
+                    pos.copy(pPos).add(dir.multiplyScalar(3));
+                } else if (camera) {
+                    pos.copy(camera.position).add(dir.multiplyScalar(3));
+                }
+                const spawnY = pos.y + 0.5;
+                
+                if (activeChannel) {
+                    activeChannel.emit("dev_spawn_frozen_drone", {
+                        type: 6, // HUMANOID
+                        x: pos.x,
+                        y: spawnY,
+                        z: pos.z
+                    });
+                }
+            };
+        }
+
+        const clearFrozenBtn = document.getElementById("dev-clear-frozen-drones");
+        if (clearFrozenBtn) {
+            clearFrozenBtn.onclick = () => {
+                if (activeChannel) {
+                    activeChannel.emit("dev_clear_frozen", {});
+                }
+            };
+        }
+
+        const simulateDisconnectBtn = document.getElementById("dev-simulate-disconnect");
+        if (simulateDisconnectBtn) {
+            simulateDisconnectBtn.onclick = () => {
+                const matchInstance = getMatch();
+                if (matchInstance && matchInstance.reconnection) {
+                    matchInstance.reconnection.simulateDisconnect(3000);
+                } else {
+                    console.error("[RECONNECTION] MatchController or ReconnectionSystem not found.");
                 }
             };
         }
@@ -1469,6 +1547,31 @@ function renderPanel() {
     else if (activePanel === "ZONES") {
         c.innerHTML = "<div id='dev-zones' style='white-space:pre-wrap;overflow-y:auto;height:100%; padding:10px;'></div>";
     }
+    else if (activePanel === "COLLISIONS") {
+        c.innerHTML = `
+            <div style="display:flex; flex-direction:column; height:100%;">
+                <div style="padding:10px; background:#111; border-bottom:1px solid #333;">
+                    <div id="dev-collision-telemetry" style="font-family:monospace; font-size:12px; line-height:1.4; color:#34d399; background:#000; padding:8px; border:1px solid #222; border-radius:4px;">
+                        Awaiting telemetry from server...
+                    </div>
+                </div>
+                <div style="padding:10px; background:#222; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:bold; color:#f87171;">[OVERLAP LOG]</span>
+                    <button id="dev-clear-collisions" style="padding:4px 8px; background:#b91c1c; border:1px solid #ef4444; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">CLEAR LOG</button>
+                </div>
+                <div id="dev-collisions" style="white-space:pre-wrap; overflow-y:auto; flex:1; padding:10px; font-family:monospace; font-size:11px; line-height:1.5; background:#000; color:#34d399;">No overlap detected yet. Active server-side geometric scans are running...</div>
+            </div>
+        `;
+        const clearBtn = document.getElementById("dev-clear-collisions");
+        if (clearBtn) {
+            clearBtn.onclick = () => {
+                (window as any).collisionLogs = [];
+                const logEl = document.getElementById("dev-collisions");
+                if (logEl) logEl.innerText = "Cleared. Awaiting new overlap signals from server ticks...";
+            };
+        }
+        updateCollisionsHUD();
+    }
 
     const copyBtn = document.createElement("button");
     copyBtn.id = "dev-copy-btn";
@@ -1499,6 +1602,9 @@ function renderPanel() {
         }
         else if (activePanel === "ZONES") {
             content = document.getElementById("dev-zones")?.innerText || "";
+        }
+        else if (activePanel === "COLLISIONS") {
+            content = document.getElementById("dev-collisions")?.innerText || "";
         } else if (activePanel === "AI NAV") {
             let lines: string[] = ["AI NAV TAB - EXTRACTED DRAWN TEXT LABELS"];
             for (const [zoneName, bound] of Object.entries(ZONE_BOUNDS)) {
@@ -2015,7 +2121,72 @@ function updatePhysicsPanelHUD() {
         `;
     }
 
+    // New Collision Resolution State Diagnostic calculation
+    const clientCols = (window as any).clientPlayerCollisions || [];
+    let clientCollisionsListHtml = "<div style='color:#64748b; font-style:italic;'>No active collision contacts</div>";
+    if (clientCols.length > 0) {
+        clientCollisionsListHtml = clientCols.map((c: string) => `<div style="color:#22d3ee; font-weight:bold;">💥 COLLIDING WITH: ${c}</div>`).join("");
+    }
+
+    const serverCols = (window as any).serverPlayerCollisions || [];
+    let serverCollisionsListHtml = "<div style='color:#94a3b8; font-style:italic;'>No active collision contacts</div>";
+    if (serverCols.length > 0) {
+        serverCollisionsListHtml = serverCols.map((c: string) => `<div style="color:#ef4444; font-weight:bold;">💥 COLLIDING WITH: ${c}</div>`).join("");
+    }
+
+    const collisionDiagnosticHtml = `
+        <div style="background:#0f172a; padding:12px; border:1px solid #334155; border-radius:6px; font-family:monospace; margin-bottom:15px; font-size:11px; line-height:1.4;">
+            <div style="font-weight:bold; color:#38bdf8; font-size:12px; margin-bottom:8px; border-bottom:1px solid #334155; padding-bottom:5px; display:flex; justify-content:space-between; align-items:center;">
+                <span>🛡️ PLAYER COLLISION RESOLUTION STATE DIAGNOSTIC</span>
+                <span style="font-size:10px; color:#94a3b8; font-weight:normal;">Genuinely Independent Dual Code-Paths</span>
+            </div>
+            
+            <div style="display:flex; flex-wrap:wrap; gap:15px;">
+                <!-- Client-Side Collision Column -->
+                <div style="flex:1 1 280px; background:#020617; padding:10px; border:1px solid #1e293b; border-radius:4px;">
+                    <div style="font-weight:bold; color:#06b6d4; margin-bottom:6px; display:flex; justify-content:space-between;">
+                        <span>[CLIENT RESOLUTION (PREDICTION)]</span>
+                        <span style="color:#10b981;">ACTIVE</span>
+                    </div>
+                    <div style="margin-bottom:8px; color:#94a3b8;">Source: <span style="color:#f472b6;">client/physics.worker.ts</span> (KCC query collisions log)</div>
+                    
+                    <div style="background:#090d16; border:1px solid #1e293b; padding:8px; border-radius:3px;">
+                        <div style="font-weight:bold; color:#94a3b8; margin-bottom:4px; font-size:10px;">CLIENT-SIDE CONTACTS:</div>
+                        ${clientCollisionsListHtml}
+                    </div>
+                    
+                    <div style="margin-top:10px; color:#94a3b8; font-size:10px; border-top:1px dashed #1e293b; padding-top:6px; display:grid; gap:3px;">
+                        <div>• Player vs Drone: <span style="color:#ef4444; font-weight:bold;">ABSENT</span> (Drones are NOT simulated in client local world)</div>
+                        <div>• Player vs Player: <span style="color:#ef4444; font-weight:bold;">ABSENT</span> (Other players NOT in client world)</div>
+                        <div>• Player vs Pred Cube: <span style="color:#10b981; font-weight:bold;">SUPPORTED</span> (Simulated in local Rapier)</div>
+                    </div>
+                </div>
+                
+                <!-- Server-Side Collision Column -->
+                <div style="flex:1 1 280px; background:#090505; padding:10px; border:1px solid #3b0712; border-radius:4px;">
+                    <div style="font-weight:bold; color:#ef4444; margin-bottom:6px; display:flex; justify-content:space-between;">
+                        <span>[SERVER RESOLUTION (AUTHORITATIVE)]</span>
+                        <span style="color:#10b981;">ACTIVE</span>
+                    </div>
+                    <div style="margin-bottom:8px; color:#fca5a5;">Source: <span style="color:#f472b6;">server/MatchRoom.ts</span> (KCC player activeCollisions via state_sync)</div>
+                    
+                    <div style="background:#1a080c; border:1px solid #3b0712; padding:8px; border-radius:3px;">
+                        <div style="font-weight:bold; color:#f87171; margin-bottom:4px; font-size:10px;">SERVER-SIDE CONTACTS:</div>
+                        ${serverCollisionsListHtml}
+                    </div>
+                    
+                    <div style="margin-top:10px; color:#f87171; font-size:10px; border-top:1px dashed #3b0712; padding-top:6px; display:grid; gap:3px;">
+                        <div>• Player vs Drone: <span style="color:#10b981; font-weight:bold;">FULLY SUPPORTED</span> (Authoritative)</div>
+                        <div>• Player vs Player: <span style="color:#10b981; font-weight:bold;">FULLY SUPPORTED</span> (Authoritative)</div>
+                        <div>• Player vs Auth Cube: <span style="color:#10b981; font-weight:bold;">FULLY SUPPORTED</span> (Authoritative)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
     el.innerHTML = `
+        ${collisionDiagnosticHtml}
         ${comparisonHtml}
         <div style="display:flex; flex-wrap:wrap; gap:15px;">
             <!-- Client Cube column -->
@@ -2051,4 +2222,16 @@ function updatePhysicsPanelHUD() {
             </div>
         </div>
     `;
+}
+
+function updateCollisionsHUD() {
+    const logEl = document.getElementById("dev-collisions");
+    if (logEl) {
+        const logsArray = (window as any).collisionLogs || [];
+        if (logsArray.length === 0) {
+            logEl.innerText = "No overlap detected yet. Active server-side geometric scans are running...";
+        } else {
+            logEl.innerText = logsArray.slice().reverse().join("\n");
+        }
+    }
 }

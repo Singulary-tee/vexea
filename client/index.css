@@ -5,3 +5,22 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
+
+#dev-entities-screen {
+    z-index: 200000 !important;
+    background-color: #1a1f2e !important;
+    pointer-events: auto !important;
+    display: none; /* Controlled by JS but z-index is high */
+}
+
+#dev-entities-screen.active-dev {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Fallback hiding of root if screen-manager fails or for CSS-only robustness */
+#dev-entities-screen:not([style*="display: none"]) ~ #root,
+#root:has(~ #dev-entities-screen:not([style*="display: none"])) {
+    display: none !important;
+}

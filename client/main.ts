@@ -22,6 +22,7 @@ import map1Spec from "../shared/maps/map_1_facility.spec.json";
 import { initMainMenu } from "./screens/main-menu";
 import { initLobby } from "./screens/lobby";
 import { initDevMapEditor } from "./screens/dev-map-editor";
+import { initDevEntities } from "./screens/dev-entities";
 import { initMapViewerGlobally } from "./screens/map_viewer";
 import * as screenManager from "./screens/screen-manager";
 import { audioManager } from "./audio";
@@ -292,12 +293,12 @@ const initClient = async () => {
       const w2 = document.getElementById("weapon-slot-2");
       const autoLabel = document.getElementById("auto-label");
       if (w1) {
-        w1.style.setProperty("opacity", match.activeWeapon === 1 ? "1" : "0.4", "important");
+        w1.style.setProperty("opacity", "1", "important");
         if (match.activeWeapon === 1) w1.classList.add("active");
         else w1.classList.remove("active");
       }
       if (w2) {
-        w2.style.setProperty("opacity", match.activeWeapon === 2 ? "1" : "0.4", "important");
+        w2.style.setProperty("opacity", "1", "important");
         if (match.activeWeapon === 2) w2.classList.add("active");
         else w2.classList.remove("active");
       }
@@ -316,6 +317,10 @@ const initClient = async () => {
     if (cc) cc.style.display = "block";
     const hud = document.getElementById("hud-container");
     if (hud) hud.style.setProperty("display", "block", "important");
+
+    setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+    }, 10);
 
     (window as any)._serverMatchReady = false;
 
@@ -354,6 +359,7 @@ const initClient = async () => {
         Math.exp(-12 * (s / bufferSize));
     }
     localLaserSound.setBuffer(shotBuffer);
+    (window as any).shotBuffer = shotBuffer;
     localLaserSound.setVolume(0.2);
 
     // Connect socket & boot views
@@ -471,6 +477,7 @@ const initClient = async () => {
   initMainMenu();
   initLobby();
   initDevMapEditor();
+  // initDevEntities(); deferred until activation
 
   // 2. Setup Three.js Stage Pipeline
   await setup3DStage();
@@ -683,6 +690,7 @@ const setup3DStage = async () => {
   (window as any).weaponsContainer = weaponsContainer;
   (window as any).camera = camera;
   (window as any).triggerFlash = triggerFlash;
+  (window as any).spawnTracer = spawnTracer;
 };
 
 // Merges area corridors elements dynamically
@@ -766,8 +774,8 @@ const animateFrame = async () => {
 
     if (match.diagnosis) match.diagnosis.update();
 
-    if (match.physicsWorker) {
-      match.physicsWorker.postMessage({ type: "STEP", delta: dt * 1000 });
+    if (match.simulation) {
+      match.simulation.step(dt);
     }
 
     if ((window as any).__vexMapLoader) {
@@ -930,6 +938,16 @@ const animateFrame = async () => {
         crosshair.style.opacity = Math.max(0, 1.0 - match.currentAdsLerp).toString();
         crosshair.style.display = match.currentAdsLerp > 0.9 ? "none" : "block";
       }
+
+      // Toggle sprint button / running SVG display
+      const btnSprint = document.getElementById("btn-sprint");
+      if (btnSprint) {
+        if ((window as any).isEditMode) {
+          btnSprint.style.setProperty("display", "flex", "important");
+        } else {
+          btnSprint.style.setProperty("display", inputManager.isSprinting ? "flex" : "none", "important");
+        }
+      }
     }
 
     // 4.5 Minimap Arrow Rotation
@@ -966,7 +984,9 @@ const animateFrame = async () => {
 
     // 5. Render Step
     const tLogicEnd = performance.now();
-    if ((window as any).fxaaPass && (window as any).fxaaPass.enabled) {
+    if ((window as any).isWebGPU && (window as any).renderPipeline) {
+      (window as any).renderPipeline.render();
+    } else if ((window as any).fxaaPass && (window as any).fxaaPass.enabled) {
       (window as any).composer.render();
     } else {
       renderer.render(match.scene, camera);

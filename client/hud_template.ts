@@ -1,9 +1,9 @@
 export const HUD_HTML = `
     <!-- MAIN INTERACTIVE PORT -->
-    <div id="vexea-view" class="relative w-screen h-screen overflow-hidden bg-transparent font-mono select-none text-white touch-none">
+    <div id="vexea-view" class="relative w-screen h-screen overflow-hidden bg-transparent  select-none text-white touch-none" style="font-family: 'Rajdhani', sans-serif !important; font-weight: 500 !important;">
       
       <!-- Death Overlay -->
-      <div id="death-overlay" style="display: none; position: absolute; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.88); flex-direction: column; align-items: center; justify-content: center; pointer-events: none; color: white; font-family: 'Barlow Condensed', sans-serif; user-select: none;">
+      <div id="death-overlay" style="display: none; position: absolute; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.88); flex-direction: column; align-items: center; justify-content: center; pointer-events: none; color: white; font-family: 'Rajdhani', sans-serif; user-select: none;">
         <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(12px); padding: 2rem 3rem; border-radius: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;">
           <div style="font-size: 1.2rem; letter-spacing: 0.3em; color: rgba(255,255,255,0.4); text-transform: uppercase;">CONTRACTOR DOWN</div>
           <div id="death-countdown" style="font-size: 5rem; color: #C8882A; line-height: 1.2;">5</div>
@@ -26,6 +26,7 @@ export const HUD_HTML = `
   pointer-events: none !important;
   user-select: none !important;
   font-family: 'Rajdhani', sans-serif !important;
+  font-weight: 500 !important;
   letter-spacing: 0.1em !important;
   z-index: 10 !important;
   margin: 0 !important;
@@ -79,13 +80,15 @@ export const HUD_HTML = `
   align-items: center !important;
   text-align: center !important;
   background: transparent !important;
+  z-index: 12 !important;
 }
 #hud-timer {
-  font-weight: bold !important;
+  font-weight: 500 !important;
   white-space: nowrap !important;
-  font-size: clamp(14px, 1.8vw, 22px) !important;
+  font-size: clamp(12px, 1.5vw, 18px) !important;
   background: transparent !important;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  font-family: 'Rajdhani', sans-serif !important;
 }
 #hud-location {
   color: white !important;
@@ -100,19 +103,23 @@ export const HUD_HTML = `
   position: absolute !important;
   top: 2.1vh !important;
   right: 1.5vw !important;
-  width: 14vw !important;
+  width: 104px !important;
   height: 95px !important;
-  min-width: 100px !important;
+  min-width: 104px !important;
   min-height: 95px !important;
   pointer-events: auto !important;
-  background: transparent !important;
-  border: 1px solid white !important;
-  border-radius: 8px !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  border-radius: 15px !important;
   overflow: hidden !important;
 }
+#minimap-player-arrow {
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.85)) !important;
+}
 #minimap-container.fullscreen-minimap {
+ position: absolute !important;
   top: 5vh !important;
-  left: 5vw !important;
+  left: auto !important;
   right: auto !important;
   width: 90vw !important;
   height: 90vh !important;
@@ -128,16 +135,17 @@ export const HUD_HTML = `
 #minimap-label {
   position: absolute !important;
   /* Float below minimap with gap */
-  top: calc(2.1vh + 14vw + 12px) !important;
+  top: calc(2.1vh + 95px + 6px) !important;
   right: 1.5vw !important;
-  width: 14vw !important;
+  width: 95px !important;
   text-align: center !important;
   color: white !important;
   background: transparent !important;
-  font-weight: bold !important;
+  font-weight: 500 !important;
   font-size: clamp(10px, 1.1vw, 14px) !important;
   border: none !important;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  font-family: 'Rajdhani', sans-serif !important;
 }
 #minimap-label svg {
   height: 12px !important;
@@ -146,8 +154,8 @@ export const HUD_HTML = `
 }
 @media (max-width: 714px) {
   #minimap-label {
-    top: calc(2.1vh + 100px + 12px) !important;
-    width: 100px !important;
+    top: calc(2.1vh + 95px + 6px) !important;
+    width: 95px !important;
   }
 }
 
@@ -221,8 +229,8 @@ export const HUD_HTML = `
 
 #btn-sprint {
   position: absolute !important;
-  left: 17vw !important;
-  bottom: 35vh !important;
+  left: 7.14vw !important;
+  top: 16.56vh !important;
   width: 5.4vw !important;
   height: 5.4vw !important;
   min-width: 50px !important;
@@ -230,7 +238,7 @@ export const HUD_HTML = `
   pointer-events: auto !important;
   border-radius: 50% !important;
   background: transparent !important;
-  border: 1px solid white !important;
+  border: none !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -261,17 +269,16 @@ export const HUD_HTML = `
   bottom: 2.5vh !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
-  width: 35vw !important;
+  width: 32vw !important;
   height: 2vh !important;
   min-height: 12px !important;
   background: transparent !important;
-  border: 1px solid #d4d4d4 !important;
   overflow: hidden !important;
 }
 #health-bar-fill {
   width: 100% !important;
   height: 100% !important;
-  background: #d4d4d4 !important;
+  background: #fafafa !important;
 }
 
 #health-plus-sq-wrap {
@@ -298,7 +305,7 @@ export const HUD_HTML = `
   pointer-events: none !important;
 }
 #health-text {
-  font-weight: bold !important;
+  font-weight: 500 !important;
   color: black !important;
   font-size: clamp(8px, 0.9vw, 11px) !important;
   display: block !important;
@@ -321,6 +328,7 @@ export const HUD_HTML = `
   align-items: center !important;
   justify-content: space-between !important;
   pointer-events: auto !important;
+  background: rgba(0, 0, 0, 0.7) !important;
 }
 #auto-label {
   position: absolute !important;
@@ -329,7 +337,7 @@ export const HUD_HTML = `
   transform: translateX(-50%) !important;
   color: white !important;
   background: transparent !important;
-  font-weight: bold !important;
+  font-weight: 500 !important;
   font-size: clamp(10px, 1.1vw, 14px) !important;
   border: none !important;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
@@ -349,25 +357,44 @@ export const HUD_HTML = `
 }
 #weapon-slots-wrap {
   display: flex !important;
-  gap: 0.5vw !important;
-  background: transparent !important;
+  gap: 0 !important;
   border: none !important;
-}
-.weapon-slot {
-  width: 12vw !important;
-  height: 9vh !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  background: transparent !important;
-  border: none !important;
-  color: white !important;
   border-radius: 0 !important;
+  padding: 0 !important;
+  background: rgba(0, 0, 0, 0.1) !important;
+  overflow: hidden !important;
+  width: 28vw !important;
+  height: 9vh !important;
+}
+#weapon-1-ammo, #weapon-2-ammo {
+  position: absolute !important;
+  bottom: 4px !important;
+  left: 4px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-family: 'Rajdhani', sans-serif !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.1em !important;
+  color: #CCCCCC !important;
+  line-height: 1 !important;
+  font-size: 10px !important;
+}
+.ammo-mag { font-size: 10px !important; }
+.ammo-res { font-size: 8px !important; margin-left: 2px !important; }
+.weapon-slot {
+  width: 50% !important;
+  height: 100% !important;
   position: relative !important;
+  background: transparent !important;
+  color: #FFFFFF !important;
+  border: 1px solid transparent !important;
+  border-radius: 0 !important;
+  box-sizing: border-box !important;
 }
 .weapon-slot.active {
-  border: 1px solid white !important;
+  background: transparent !important;
+  color: #FFFFFF !important;
+  border: 1px solid #FFFFFF !important;
 }
 .weapon-slot.active::before {
   content: "" !important;
@@ -376,11 +403,11 @@ export const HUD_HTML = `
   left: 0 !important;
   width: 0 !important;
   height: 0 !important;
-  border-top: 15px solid white !important;
-  border-right: 15px solid transparent !important;
+  border-top: 10.1px solid #FFFFFF !important;
+  border-right: 10.1px solid transparent !important;
 }
 #weapon-slot-1 { opacity: 1 !important; }
-#weapon-slot-2 { opacity: 0.4 !important; }
+#weapon-slot-2 { opacity: 1 !important; }
 
 /* ACTION BUTTONS (THUMB PAD) - BOTTOM RIGHT */
 .btn-action {
@@ -454,12 +481,25 @@ export const HUD_HTML = `
 #hud-container svg path, #hud-container svg g { fill: currentColor !important; }
 #hud-container .btn-sidekick svg { width: 55% !important; height: 55% !important; }
 #hud-container #btn-mic svg { width: 75% !important; height: 75% !important; }
-#hud-container .weapon-slot svg { width: 95% !important; height: 85% !important; max-height: 85% !important; }
-#hud-container .squad-circle svg { width: 70% !important; height: 70% !important; color: #22c55e !important; }
+#hud-container .weapon-slot svg {
+  height: 85% !important;
+  width: 55% !important;
+  position: absolute !important;
+  top: 50% !important;
+  right: 14px !important;
+  transform: translateY(-50%) scaleX(-1) !important;
+  pointer-events: none !important;
+  color: inherit !important;
+}
+#hud-container .squad-circle svg { width: 70% !important; height: 70% !important; color: white !important; }
 #hud-container .btn-util svg { width: 60% !important; height: 60% !important; }
 #hud-container .btn-action svg { width: 55% !important; height: 55% !important; }
-#hud-container #btn-reload svg { width: 100% !important; height: 100% !important; transform: translate(-2px, -2px) !important; }
-#weapon-slot-1 svg, #weapon-slot-2 svg, #btn-fire-left svg, #btn-fire-right svg { transform: scaleX(-1) !important; }
+#hud-container #btn-crouch svg { width: 75% !important; height: 75% !important; }
+#hud-container #btn-ads svg { width: 75% !important; height: 75% !important; }
+#weapon-slot-1 svg, #weapon-slot-2 svg {
+  transform: translateY(-50%) scaleX(-1) !important;
+}
+#btn-fire-right svg { transform: scaleX(-1) !important; }
 #squad-container .squad-circle { border-color: #22c55e !important; }
 
 /* CROSSHAIR */
@@ -598,8 +638,9 @@ fill="#ffffff" stroke="none">
 
   <div id="hud-timer-container">
     <div id="hud-timer">TURN TIMER: 00:00</div>
-    <div id="hud-location">LOCATION: CORE</div>
   </div>
+
+  <div id="compass-placeholder" style="position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); width: 20vw; height: 4vh; border: none !important; background: rgba(0, 0, 0, 0.3) !important; z-index: 11 !important;"></div>
 
   <div id="minimap-container">
     <canvas id="minimap-canvas"></canvas>
@@ -705,6 +746,29 @@ fill="#ffffff" stroke="none">
 </svg>
   </button>
 
+  <button id="btn-sprint" class="btn-action" style="position: absolute; left: 7.14vw; top: 16.56vh; width: 5.4vw; height: 5.4vw; min-width: 50px; min-height: 50px; display: none;">
+    <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 147.000000 147.000000"
+     preserveAspectRatio="xMidYMid meet">
+    <g transform="translate(0.000000,147.000000) scale(0.100000,-0.100000)"
+     fill="#ffffff" stroke="none">
+    <path d="M845 1268 c-35 -19 -55 -52 -55 -91 0 -54 52 -107 105 -107 52 0 105
+     53 105 105 0 74 -91 129 -155 93z"/>
+    <path d="M627 1013 c-38 -25 -84 -60 -103 -78 l-34 -32 0 -120 c0 -123 6 -143
+     42 -143 13 0 18 -8 18 -27 0 -14 7 -34 16 -44 19 -21 11 -39 -17 -39 -10 0
+     -29 -10 -41 -22 -12 -13 -80 -50 -150 -84 -151 -71 -198 -109 -198 -159 0 -56
+     24 -54 183 14 206 89 214 95 254 174 19 37 39 67 44 67 6 0 21 12 35 27 l25
+     27 79 -39 c44 -22 80 -41 80 -45 0 -3 -9 -64 -22 -136 -21 -126 -21 -133 -4
+     -158 20 -31 53 -46 101 -46 44 0 57 31 26 64 l-21 22 36 154 c19 84 33 164 30
+     176 -4 16 -38 43 -107 85 -55 34 -99 65 -97 68 13 31 74 141 78 141 3 -1 14
+     -15 25 -32 11 -17 25 -33 30 -35 13 -4 216 142 228 163 11 20 -10 44 -38 44
+     -12 0 -40 -13 -61 -28 -21 -16 -51 -36 -66 -46 l-26 -17 -26 44 c-35 60 -51
+     71 -122 90 -94 26 -120 22 -197 -30z m23 -137 c0 -8 -61 -136 -65 -136 -2 0
+     -2 24 2 53 3 34 12 58 25 70 18 15 38 23 38 13z"/>
+    </g>
+    </svg>
+  </button>
+
   <div id="auto-label">AUTO &rarr;</div>
   <button id="btn-walkie" class="btn-util" style="position: absolute; left: 26vw; bottom: 8vh;">
     <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
@@ -728,13 +792,26 @@ fill="#ffffff" stroke="none">
 </svg>
   </button>
   
-  <div id="weapon-slots-wrap" style="position: absolute; left: 50%; transform: translateX(-50%); bottom: 8vh; display: flex; gap: 8px;">
+  <button id="btn-helmet" class="btn-util" style="position: absolute; left: 34.5vw; bottom: 8vh; width: 7vw; height: 7vw; min-width: 64px; min-height: 64px; display: flex; align-items: center; justify-content: center; background: transparent; border: none;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="width: 70%; height: 70%;" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 50 15 C 26 15 18 30 18 52 C 18 55 20 58 23 58 C 26 58 28 55 29 52 C 32 35 41 25 50 25 C 59 25 68 35 71 52 C 72 55 74 58 77 58 C 80 58 82 55 82 52 C 82 30 74 15 50 15 Z" fill="rgba(255, 255, 255, 0.08)" />
+      <path d="M 21 54 C 21 48 79 48 79 54 C 79 58 75 62 70 62 L 30 62 C 25 62 21 58 21 54 Z" fill="rgba(255, 255, 255, 0.2)" />
+      <path d="M 46 15 L 46 25" stroke-width="3" />
+      <path d="M 54 15 L 54 25" stroke-width="3" />
+      <path d="M 38 18 C 42 21 44 26 43 31" />
+      <path d="M 62 18 C 58 21 56 26 57 31" />
+      <path d="M 30 62 L 33 78 C 34 82 40 85 50 85 C 60 85 66 82 67 78 L 70 62" />
+      <path d="M 43 85 L 57 85" stroke-width="4" />
+    </svg>
+  </button>
+  
+  <div id="weapon-slots-wrap" style="position: absolute; left: 50%; transform: translateX(-50%); bottom: 8vh;">
     <div id="weapon-slot-1" class="weapon-slot active">
       <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
  viewBox="0 0 183.000000 107.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,107.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="currentColor" stroke="none">
 <path d="M748 918 l-3 -43 -60 -8 c-33 -5 -114 -11 -180 -13 -66 -2 -130 -6
 -142 -9 -13 -3 -34 -23 -48 -45 l-25 -40 -73 0 c-108 0 -111 -3 -98 -129 6
 -57 11 -129 11 -161 0 -64 16 -81 54 -57 12 8 33 17 48 20 17 5 30 17 38 39 6
@@ -755,14 +832,14 @@ c-193 0 -352 4 -357 9 -6 5 -19 11 -30 13 -13 2 -22 13 -25 32 -8 47 -28 43
 15 15 18 38 13 16 -3 47 -6 68 -6z"/>
 </g>
 </svg>
-      <div id="weapon-1-ammo" style="position: absolute; bottom: 2px; left: 4px; margin: 0; font-size: clamp(8px, 1vw, 13px); font-weight: bold; border: none; background: transparent;">40/289</div>
+      <div id="weapon-1-ammo"><span class="ammo-mag">40</span><span class="ammo-res">/289</span></div>
     </div>
     <div id="weapon-slot-2" class="weapon-slot">
       <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
  viewBox="0 0 145.000000 105.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,105.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="currentColor" stroke="none">
 <path d="M293 920 c-3 -11 -11 -20 -19 -20 -8 0 -22 -28 -34 -67 -24 -79 -52
 -113 -91 -113 -58 0 -46 -25 31 -63 85 -42 87 -84 14 -278 -56 -148 -67 -224
 -35 -253 18 -16 38 -19 140 -20 73 -1 124 3 131 10 5 5 24 66 40 134 17 68 39
@@ -775,11 +852,17 @@ fill="#ffffff" stroke="none">
 59 -29z"/>
 </g>
 </svg>
-      <div id="weapon-2-ammo" style="position: absolute; bottom: 2px; left: 4px; margin: 0; font-size: clamp(8px, 1vw, 13px); font-weight: bold; border: none; background: transparent;">35/241</div>
+      <div id="weapon-2-ammo"><span class="ammo-mag">35</span><span class="ammo-res">/241</span></div>
     </div>
   </div>
 
+  <div id="medkit-arrow" style="position: absolute; right: 26vw; bottom: calc(8vh + 7vw + 10px); width: 24px; height: 24px; color: white; opacity: 0.85; pointer-events: auto; display: flex; align-items: center; justify-content: center;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%;">
+      <polyline points="18 15 12 9 6 15"></polyline>
+    </svg>
+  </div>
   <button id="btn-medkit" class="btn-util" style="position: absolute; right: 26vw; bottom: 8vh;">
+    
     <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
  viewBox="0 0 128.000000 117.000000"
  preserveAspectRatio="xMidYMid meet">
@@ -839,7 +922,7 @@ fill="#ffffff" stroke="none">
 -66 -154 -148z"/>
 </g>
 </svg>
-      <div id="health-text" style="margin: 0 4px;">100/100</div>
+      <div id="health-text" style="margin: 0 4px;">100</div>
       <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
  viewBox="0 0 127.000000 128.000000"
  preserveAspectRatio="xMidYMid meet">
@@ -913,26 +996,7 @@ l-25 16 0 204 c0 163 -3 204 -13 204 -8 0 -17 -3 -21 -7z"/>
 </svg>
   </button>
   <button id="btn-reload" class="btn-action">
-    <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
- viewBox="0 0 138.000000 138.000000"
- preserveAspectRatio="xMidYMid meet">
-<g transform="translate(0.000000,138.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
-<path d="M650 808 c0 -11 86 -160 140 -245 16 -24 35 -30 45 -13 7 11 -15 49
--109 193 -47 71 -76 96 -76 65z"/>
-<path d="M747 805 c-7 -18 9 -29 43 -29 18 -1 26 -7 28 -24 4 -28 29 -40 45
--22 9 9 2 20 -32 51 -46 41 -75 49 -84 24z m30 -12 c-4 -3 -10 -3 -14 0 -3 4
-0 7 7 7 7 0 10 -3 7 -7z m73 -53 c0 -5 -5 -10 -11 -10 -5 0 -7 5 -4 10 3 6 8
-10 11 10 2 0 4 -4 4 -10z"/>
-<path d="M580 771 c0 -23 150 -273 168 -279 20 -6 14 44 -10 82 -89 140 -142
-216 -150 216 -4 0 -8 -8 -8 -19z"/>
-<path d="M510 738 c0 -22 153 -289 164 -285 21 7 18 49 -7 85 -13 20 -48 76
--78 124 -49 79 -79 108 -79 76z"/>
-<path d="M491 537 c-17 -17 -14 -22 44 -67 44 -34 58 -40 69 -30 23 18 8 43
--21 35 -30 -7 -53 10 -53 40 0 26 -22 39 -39 22z m24 -17 c3 -5 1 -10 -4 -10
--6 0 -11 5 -11 10 0 6 2 10 4 10 3 0 8 -4 11 -10z"/>
-</g>
-</svg>
+    <svg version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 138.000000 138.000000" preserveAspectRatio="xMidYMid meet"><g transform="translate(0.000000,138.000000) scale(0.100000,-0.100000)" fill="#ffffff" stroke="none"><path d="M650 808 c0 -11 86 -160 140 -245 16 -24 35 -30 45 -13 7 11 -15 49-109 193 -47 71 -76 96 -76 65z"/><path d="M747 805 c-7 -18 9 -29 43 -29 18 -1 26 -7 28 -24 4 -28 29 -40 45-22 9 9 2 20 -32 51 -46 41 -75 49 -84 24z m30 -12 c-4 -3 -10 -3 -14 0 -3 40 7 7 7 7 0 10 -3 7 -7z m73 -53 c0 -5 -5 -10 -11 -10 -5 0 -7 5 -4 10 3 6 810 11 10 2 0 4 -4 4 -10z"/><path d="M580 771 c0 -23 150 -273 168 -279 20 -6 14 44 -10 82 -89 140 -142216 -150 216 -4 0 -8 -8 -8 -19z"/><path d="M510 738 c0 -22 153 -289 164 -285 21 7 18 49 -7 85 -13 20 -48 76-78 124 -49 79 -79 108 -79 76z"/><path d="M491 537 c-17 -17 -14 -22 44 -67 44 -34 58 -40 69 -30 23 18 8 43-21 35 -30 -7 -53 10 -53 40 0 26 -22 39 -39 22z m24 -17 c3 -5 1 -10 -4 -10-6 0 -11 5 -11 10 0 6 2 10 4 10 3 0 8 -4 11 -10z"/></g></svg>
   </button>
   <button id="btn-jump" class="btn-action">
     <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
@@ -981,7 +1045,7 @@ m-65 -309 c46 -5 86 -12 89 -14 4 -5 -23 -81 -37 -103 -7 -9 -31 -4 -105 25
       
       <!-- TITLE & STATUS -->
       <div style="text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 16px;">
-        <div id="summary-victory-status" style="font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #C8882A;">OPERATION COMPLETE</div>
+        <div id="summary-victory-status" style="font-size: 28px; font-weight: 500; letter-spacing: 6px; color: #C8882A;">OPERATION COMPLETE</div>
         <div style="font-size: 11px; letter-spacing: 3px; color: #888888; margin-top: 4px;">CONTRACT DIVISION SYSTEM ENGAGEMENT SUMMARY</div>
       </div>
 
@@ -989,11 +1053,11 @@ m-65 -309 c46 -5 86 -12 89 -14 4 -5 -23 -81 -37 -103 -7 -9 -31 -4 -105 25
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 20px;">
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <div style="font-size: 10px; letter-spacing: 2px; color: #888888;">CONTRACTOR SCORE</div>
-          <div id="summary-score" style="font-size: 36px; font-weight: bold; color: white;">0</div>
+          <div id="summary-score" style="font-size: 36px; font-weight: 500; color: white;">0</div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px; justify-content: center; align-items: flex-end; text-align: right;">
           <div style="font-size: 10px; letter-spacing: 2px; color: #888888;">BATTLEPASS TIER</div>
-          <div style="font-size: 18px; font-weight: bold; color: #C8882A; display: flex; align-items: center; gap: 6px;">
+          <div style="font-size: 18px; font-weight: 500; color: #C8882A; display: flex; align-items: center; gap: 6px;">
             TIER <span id="summary-bp-tier">1</span> <span style="font-size: 12px; color: #4ade80;">(+20% XP)</span>
           </div>
         </div>
@@ -1001,7 +1065,7 @@ m-65 -309 c46 -5 86 -12 89 -14 4 -5 -23 -81 -37 -103 -7 -9 -31 -4 -105 25
 
       <!-- PERFORMANCE METRICS STATS -->
       <div style="display: flex; flex-direction: column; gap: 12px;">
-        <div style="font-size: 11px; letter-spacing: 3px; color: #C8882A; font-weight: bold;">PERFORMANCE ASSESSMENT</div>
+        <div style="font-size: 11px; letter-spacing: 3px; color: #C8882A; font-weight: 500;">PERFORMANCE ASSESSMENT</div>
         
         <div id="summary-stats-container" style="display: flex; flex-direction: column; gap: 8px;">
           <!-- Dynamically filled stats rows -->
@@ -1010,20 +1074,20 @@ m-65 -309 c46 -5 86 -12 89 -14 4 -5 -23 -81 -37 -103 -7 -9 -31 -4 -105 25
 
       <!-- REWARDS GAINED (CREDITS, XP, PASS) -->
       <div style="background: rgba(200, 136, 42, 0.05); border: 1px solid rgba(200, 136, 42, 0.15); padding: 16px; display: flex; flex-direction: column; gap: 8px;">
-        <div style="font-size: 10px; letter-spacing: 2px; color: #C8882A; font-weight: bold;">EARNED CREDITS & STAMINA TARIFF</div>
+        <div style="font-size: 10px; letter-spacing: 2px; color: #C8882A; font-weight: 500;">EARNED CREDITS & STAMINA TARIFF</div>
         <div style="display: flex; justify-content: space-between; font-size: 13px;">
           <span style="color: #888888;">MATCH COMPLETION ALLOTMENT</span>
-          <span style="color: #4ade80; font-weight: bold;">+25 CR</span>
+          <span style="color: #4ade80; font-weight: 500;">+25 CR</span>
         </div>
         <div style="display: flex; justify-content: space-between; font-size: 13px;">
           <span style="color: #888888;">OPERATION ENVELOPE TAX (ENERGY)</span>
-          <span style="color: #f87171; font-weight: bold;">-10 EN</span>
+          <span style="color: #f87171; font-weight: 500;">-10 EN</span>
         </div>
       </div>
 
       <!-- DISPATCH BUTTON -->
       <div>
-        <button id="main-menu-btn" style="width: 100%; padding: 14px; background: #C8882A; border: none; color: #0A0A0A; font-family: inherit; font-size: 16px; font-weight: bold; letter-spacing: 3px; cursor: pointer; transition: all 200ms ease;">
+        <button id="main-menu-btn" style="width: 100%; padding: 14px; background: #C8882A; border: none; color: #0A0A0A; font-family: inherit; font-size: 16px; font-weight: 500; letter-spacing: 3px; cursor: pointer; transition: all 200ms ease;">
           RETURN TO COMMAND PORTAL
         </button>
       </div>

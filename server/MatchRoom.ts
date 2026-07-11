@@ -1,5 +1,4 @@
-import { processDroneIntelligence, DroneIntelConfig, INTEL_CONFIGS, getPlayerEntity } from "./ai/DroneIntelligence";
-import * as YUKA from "yuka";
+import { processDroneIntelligence, DroneIntelConfig, INTEL_CONFIGS } from "./ai/DroneIntelligence";
 import { GoogleGenAI, Type } from "@google/genai";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { ACTIVE_GAMEMODE } from "../shared/gamemode-configs.js";
@@ -23,6 +22,7 @@ import {
   TOTAL_STATE_BUFFER_SIZE as CONST_BUFFER_SIZE,
   PLAYER_CENTER_OFFSET,
   PLAYER_TOTAL_HEIGHT,
+  getDroneMuzzleWorldPosition,
 } from "../shared/constants";
 import { ChannelAdapter } from "./transport/adapter";
 import { getMapById } from "../shared/maps/map-registry";
@@ -133,10 +133,13 @@ export interface ServerDrone {
   type: DroneType;
   state: DroneState; // This now acts as the Task
   mode: "NORMAL" | "COMBAT";
-  yukaVehicle?: YUKA.Vehicle;
-  yukaMemory?: YUKA.MemorySystem;
-  yukaVision?: YUKA.Vision;
-  yukaTarget?: YUKA.MemoryRecord | null;
+  currentVelocityX: number;
+  currentVelocityY: number;
+  currentVelocityZ: number;
+  currentHeadingX: number;
+  currentHeadingZ: number;
+  memoryRecords: any[];
+  combatTarget?: any | null;
   bomberState?: "SEEKING" | "LOCKED" | "COMMITTED";
   bomberLockTime?: number;
   behavior: BehaviorProfile;
@@ -167,6 +170,8 @@ export interface ServerDrone {
   currentVelocity?: { x: number; y: number; z: number };
   currentHeading?: { x: number; y: number; z: number };
   currentSpeed?: number;
+  avoidanceState?: { active: boolean; direction: number; ticksRemaining: number } | null;
+  stuckTicks?: number;
 }
 
 export interface ServerCamera {
@@ -196,6 +201,9 @@ export interface ServerZoneState {
 }
 
 const HISTORICAL_SAMPLES_MAX = 120;
+const BASE_DETECTION_DISTANCE = 3.0;
+const DETECTION_TIME_HORIZON = 0.5;
+const MIN_AVOIDANCE_TICKS = 30;
 const HISTORIC_BLOCK_SIZE = 2 + MAX_DRONES * 4;
 const DEBUG_PHYSICS_TICKS = false;
 
@@ -398,7 +406,14 @@ export class MatchRoom {
         type: DroneType.WHEELED,
         state: DroneState.DEAD,
         mode: "NORMAL",
-        // memory: memorySlots, removed for Yuka
+        currentVelocityX: 0,
+        currentVelocityY: 0,
+        currentVelocityZ: 0,
+        currentHeadingX: 1,
+        currentHeadingZ: 0,
+        memoryRecords: [],
+        combatTarget: null,
+        // memory: memorySlots, removed for custom memory
         behavior: "patrol",
         zone: ZONES.CORE,
         posX: 0,
@@ -424,13 +439,6 @@ export class MatchRoom {
         body: null,
         collider: null,
       });
-      const drone = this.drones[this.drones.length - 1];
-      drone.yukaVehicle = new YUKA.Vehicle();
-      drone.yukaVehicle.maxForce = 20;
-      drone.yukaVehicle.maxSpeed = 10;
-      drone.yukaMemory = new YUKA.MemorySystem(drone.yukaVehicle);
-      drone.yukaMemory.memorySpan = 10;
-      drone.yukaVision = new YUKA.Vision(drone.yukaVehicle);
     }
 
     // Initialize cameras
@@ -561,24 +569,17 @@ export class MatchRoom {
         .setTranslation(d.posX, d.posY, d.posZ);
       d.body = this.rapierWorld.createRigidBody(bodyDesc);
       let colliderDesc: RAPIER.ColliderDesc;
-      const type = d.type;
-      if (type === DroneType.ROTARY_SHOOTER) {
-        colliderDesc = RAPIER.ColliderDesc.cuboid(0.77, 0.20, 0.59);
-      } else if (type === DroneType.BOMBER) {
-        colliderDesc = RAPIER.ColliderDesc.cuboid(0.70, 0.70, 0.70);
-      } else if (type === DroneType.RECON) {
-        colliderDesc = RAPIER.ColliderDesc.cuboid(0.41, 0.12, 0.90);
-      } else if (type === DroneType.FIXED_WING) {
-        colliderDesc = RAPIER.ColliderDesc.cuboid(0.62, 0.18, 1.35);
-      } else if (type === DroneType.WHEELED) {
-        colliderDesc = RAPIER.ColliderDesc.cuboid(0.98, 0.97, 0.55);
-        colliderDesc.setTranslation(0, -1.0, 0); // Preserve sink-fix
-      } else if (type === DroneType.ROBOT_DOG) {
-        colliderDesc = RAPIER.ColliderDesc.cuboid(0.82, 0.20, 1.23);
-      } else if (type === DroneType.HUMANOID) {
-        colliderDesc = RAPIER.ColliderDesc.capsule(1.5, 1.0); // Total height 5.0, matching targetRadius 2.5
+      const config = DRONE_CONFIGS[d.type] || DRONE_CONFIGS[DroneType.TEST_ENTITY];
+      if (config.collider.type === 'cuboid' && config.collider.halfExtents) {
+        colliderDesc = RAPIER.ColliderDesc.cuboid(config.collider.halfExtents[0], config.collider.halfExtents[1], config.collider.halfExtents[2]);
+        // Set rad to the maximum half-extent to cover the box for the sphere-check fallback
+        d.rad = Math.max(config.collider.halfExtents[0], config.collider.halfExtents[1], config.collider.halfExtents[2]);
+      } else if (config.collider.type === 'capsule' && config.collider.halfHeight !== undefined && config.collider.radius !== undefined) {
+        colliderDesc = RAPIER.ColliderDesc.capsule(config.collider.halfHeight, config.collider.radius);
+        d.rad = config.collider.halfHeight + config.collider.radius;
       } else {
-        colliderDesc = RAPIER.ColliderDesc.ball(1.5);
+        d.rad = config.collider.radius || 1.5;
+        colliderDesc = RAPIER.ColliderDesc.ball(d.rad);
       }
       
       d.collider = this.rapierWorld.createCollider(colliderDesc, d.body);
@@ -647,6 +648,27 @@ export class MatchRoom {
     stats: any,
   ): PlayerState {
     console.log(`[SERVER registerPlayer] playerId: "${playerId}", mapId: "${this.mapId}"`);
+
+    // Handle Reconnection: If player already exists, rebind channel and return state
+    if (this.players.has(playerId)) {
+      const existing = this.players.get(playerId)!;
+      existing.channel = channel;
+      console.log(`[MATCH] Player ${playerId} reconnected. Rebinding to existing session state at [${existing.posX.toFixed(2)}, ${existing.posY.toFixed(2)}, ${existing.posZ.toFixed(2)}]`);
+      
+      // Force an immediate handshake to the client with the current state
+      channel.emit("handshake", {
+        id: existing.id,
+        mapId: this.mapId,
+        posX: existing.posX,
+        posY: existing.posY,
+        posZ: existing.posZ,
+        hp: existing.hp,
+        weapon: existing.weapon,
+        stats: existing.stats
+      });
+      
+      return existing;
+    }
     
     // Deterministic Spawning Phase 1/2: Resolve coordinates from map data
     const spawnX = this.specJson?.playerSpawn?.position?.x ?? ((Math.random() - 0.5) * 40);
@@ -1022,6 +1044,40 @@ export class MatchRoom {
               player.posX = t.x;
               player.posY = t.y;
               player.posZ = t.z;
+
+              // Continuous coordinate telemetry for debugging
+              let nearestDrone: ServerDrone | null = null;
+              let minDistSq = Infinity;
+
+              for (let i = 0; i < this.drones.length; i++) {
+                const d = this.drones[i];
+                if (d.state === DroneState.DEAD) continue;
+                
+                const dx = d.posX - player.posX;
+                const dy = d.posY - player.posY;
+                const dz = d.posZ - player.posZ;
+                const distSq = dx*dx + dy*dy + dz*dz;
+                
+                if (distSq < minDistSq) {
+                  minDistSq = distSq;
+                  nearestDrone = d;
+                }
+              }
+
+              if (nearestDrone && player.channel) {
+                const telemetry = {
+                  tick: this.serverTick,
+                  player: { x: player.posX, y: player.posY, z: player.posZ },
+                  drone: { 
+                    id: nearestDrone.id, 
+                    x: nearestDrone.posX, 
+                    y: nearestDrone.posY, 
+                    z: nearestDrone.posZ 
+                  },
+                  dist: Math.sqrt(minDistSq)
+                };
+                player.channel.emit("dev_collision_telemetry", telemetry);
+              }
             }
 
             if (!player.isAlive) {
@@ -1192,12 +1248,36 @@ export class MatchRoom {
                 console.log('[COLLIDE_DIAG] KCC query result. playerId:', player.id, 'correctedTrans:', JSON.stringify(correctedTrans), 'computedGrounded:', player.kcc.computedGrounded(), 'numComputedCollisions:', player.kcc.numComputedCollisions());
               }
 
+              const playerCollisionsList: string[] = [];
               for (let i = 0; i < player.kcc.numComputedCollisions(); i++) {
                 const collision = player.kcc.computedCollision(i);
                 if (DEBUG_PHYSICS_TICKS && this.serverTick % 300 === 0) {
                   console.log('[COLLIDE_DIAG] KCC detected collision. playerId:', player.id, 'collisionIndex:', i, 'colliderHandle:', collision ? (collision.collider ? collision.collider.handle : 'unknown') : 'unknown', 'toi:', collision ? (collision.toi !== undefined ? collision.toi : 'unknown') : 'unknown');
                 }
+                if (collision && collision.collider) {
+                  const hit = this.findHitEntity(collision.collider.handle);
+                  if (hit) {
+                    if (hit.type === "player") {
+                      playerCollisionsList.push(`Player_${hit.obj.id}`);
+                    } else if (hit.type === "drone") {
+                      playerCollisionsList.push(`Drone_${hit.obj.id}_Type_${hit.obj.type}`);
+                    }
+                  } else {
+                    // For static geometry, we can check translation/shape to identify it
+                    const colTrans = collision.collider.translation();
+                    if (collision.collider.shapeType() === RAPIER.ShapeType.Cuboid) {
+                      if (Math.abs(colTrans.y - (-0.5)) < 0.1) {
+                        playerCollisionsList.push("Floor");
+                      } else {
+                        playerCollisionsList.push("Building");
+                      }
+                    } else {
+                      playerCollisionsList.push("StaticWallOrBoundary");
+                    }
+                  }
+                }
               }
+              (player as any).activeCollisions = playerCollisionsList;
               const prevX = player.posX;
               const prevY = player.posY;
               const prevZ = player.posZ;
@@ -1377,6 +1457,7 @@ export class MatchRoom {
         isFiring: p.firedThisTick || false, // boolean
         isReloading: p.weaponState.primary.isReloading || p.weaponState.secondary.isReloading, // approximated to any slot reloading
         isAlive: p.isAlive,
+        activeCollisions: (p as any).activeCollisions || [],
       }));
 
       const devDrones = this.drones.filter(d => d.state !== DroneState.DEAD).map(d => ({
@@ -1386,7 +1467,7 @@ export class MatchRoom {
         targetY: d.targetY,
         targetZ: d.targetZ,
         mode: d.mode,
-        memory: d.yukaMemory ? d.yukaMemory.records.filter(m => (m as any).confidence > 0).map(m => ({ id: m.entity.name, x: m.lastSensedPosition.x, y: m.lastSensedPosition.y, z: m.lastSensedPosition.z, conf: (m as any).confidence })) : []
+        memory: d.memoryRecords ? d.memoryRecords.filter(m => m.confidence > 0).map(m => ({ id: m.entityId, x: m.lastSensedPosition.x, y: m.lastSensedPosition.y, z: m.lastSensedPosition.z, conf: m.confidence })) : []
       }));
 
       let cubeSyncData = null;
@@ -1805,6 +1886,16 @@ export class MatchRoom {
 
       const oldState = d.state;
 
+      if ((d as any).isFrozen) {
+        if (d.body) {
+          const trans = d.body.translation();
+          d.posX = trans.x;
+          d.posY = trans.y;
+          d.posZ = trans.z;
+        }
+        continue;
+      }
+
       if (d.state === DroneState.IDLE) {
         d.cooldown--;
         if (d.cooldown <= 0) {
@@ -1819,42 +1910,28 @@ export class MatchRoom {
 
       
             let shouldFire = false;
-      let combatTargetRecord = d.yukaTarget;
+      let combatTargetRecord = d.combatTarget;
 
       if (d.mode === "COMBAT" && combatTargetRecord) {
         const conf = INTEL_CONFIGS[d.type];
         const targetPos = combatTargetRecord.lastSensedPosition;
         
-        const dx = targetPos.x - d.posX;
-        const dy = targetPos.y - d.posY;
-        const dz = targetPos.z - d.posZ;
+        const muzzle = getDroneMuzzleWorldPosition(d);
+        const dx = targetPos.x - muzzle.x;
+        const dy = targetPos.y - muzzle.y;
+        const dz = targetPos.z - muzzle.z;
         const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
         let hasLOS = true;
         if (this.rapierWorld && dist > 0.1) {
-          const ray = new RAPIER.Ray({ x: d.posX, y: d.posY + 0.5, z: d.posZ }, { x: dx/dist, y: dy/dist, z: dz/dist });
+          const ray = new RAPIER.Ray(muzzle, { x: dx/dist, y: dy/dist, z: dz/dist });
           const hit = this.rapierWorld.castRay(ray, dist, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC);
           if (hit && hit.collider && hit.timeOfImpact < dist - 0.7) hasLOS = false;
         }
 
-        d.yukaVehicle.steering.clear();
-        
         if (d.type === DroneType.RECON) {
            d.state = DroneState.PURSUING;
-           const evade = new YUKA.EvadeBehavior(combatTargetRecord.entity, 5.0);
-           d.yukaVehicle.steering.add(evade);
         } else if (d.type === DroneType.ROTARY_SHOOTER) {
            d.state = DroneState.PURSUING;
-           if (dist < conf.engagementMin) {
-              const flee = new YUKA.FleeBehavior(targetPos, conf.engagementMin);
-              d.yukaVehicle.steering.add(flee);
-           } else if (dist > conf.engagementMax) {
-              const seek = new YUKA.SeekBehavior(targetPos);
-              d.yukaVehicle.steering.add(seek);
-           } else {
-              const arrive = new YUKA.ArriveBehavior(targetPos, 2, 0.5);
-              d.yukaVehicle.steering.add(arrive);
-           }
-           
            if (dist >= conf.engagementMin && dist <= conf.engagementMax && hasLOS) {
              const angleToTarget = Math.atan2(dx, dz);
              let angleDiff = Math.abs(d.rotY - angleToTarget);
@@ -1867,13 +1944,9 @@ export class MatchRoom {
            if (d.bomberState === "SEEKING") {
               d.bomberState = "LOCKED";
               d.bomberLockTime = this.serverTick;
-              d.yukaVehicle.steering.add(new YUKA.SeekBehavior(targetPos));
            } else if (d.bomberState === "LOCKED") {
               if (this.serverTick - (d.bomberLockTime || 0) > 20) d.bomberState = "COMMITTED";
-              d.yukaVehicle.steering.add(new YUKA.ArriveBehavior(targetPos, 2, 0.5));
            } else if (d.bomberState === "COMMITTED") {
-              const pursuit = new YUKA.PursuitBehavior(combatTargetRecord.entity, 1.0);
-              d.yukaVehicle.steering.add(pursuit);
               if (dist < 4.0) {
                  this.applyExplosionDamage({ x: d.posX, y: d.posY, z: d.posZ }, 4.0, DRONE_CONFIGS[d.type].damage, d.id.toString(), "drone");
                  this.despawnDrone(d);
@@ -1882,57 +1955,24 @@ export class MatchRoom {
            }
         } else if (d.type === DroneType.FIXED_WING) {
            d.state = DroneState.PURSUING;
-           const pursuit = new YUKA.PursuitBehavior(combatTargetRecord.entity, 1.0);
-           d.yukaVehicle.steering.add(pursuit);
            if (dist < 40 && hasLOS) shouldFire = true;
         } else if (d.type === DroneType.WHEELED) {
            d.state = DroneState.PURSUING;
-           if (hasLOS) {
-              const seek = new YUKA.SeekBehavior(targetPos);
-              d.yukaVehicle.steering.add(seek);
-              if (dist < conf.engagementMax) shouldFire = true;
-           }
+           if (hasLOS && dist < conf.engagementMax) shouldFire = true;
         } else if (d.type === DroneType.ROBOT_DOG) {
            d.state = DroneState.PURSUING;
-           const seek = new YUKA.SeekBehavior(targetPos);
-           d.yukaVehicle.steering.add(seek);
            if (hasLOS && dist < conf.engagementMax) shouldFire = true;
         } else if (d.type === DroneType.HUMANOID) {
            d.state = DroneState.PURSUING;
-           if ((combatTargetRecord as any).confidence < 1.0) {
-              d.yukaVehicle.steering.add(new YUKA.SeekBehavior(targetPos));
-           } else {
-              let foundCover = false;
-              if (this.rapierWorld) {
-                 for (let i = 0; i < 8; i++) {
-                    const angle = (i / 8) * Math.PI * 2;
-                    const cx = d.posX + Math.cos(angle) * 5;
-                    const cz = d.posZ + Math.sin(angle) * 5;
-                    const ray = new RAPIER.Ray({ x: cx, y: d.posY + 0.5, z: cz }, { x: -dx/dist, y: -dy/dist, z: -dz/dist });
-                    const hit = this.rapierWorld.castRay(ray, dist, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC);
-                    if (hit && hit.collider && hit.timeOfImpact < dist - 0.7) {
-                       d.yukaVehicle.steering.add(new YUKA.ArriveBehavior(new YUKA.Vector3(cx, d.posY, cz), 1, 0.5));
-                       foundCover = true;
-                       break;
-                    }
-                 }
-              }
-              if (!foundCover) {
-                 d.yukaVehicle.steering.add(new YUKA.SeekBehavior(targetPos));
-              }
-              if (hasLOS && dist < conf.engagementMax) shouldFire = true;
-           }
+           if (hasLOS && dist < conf.engagementMax) shouldFire = true;
         }
         
-        const steeringForce = new YUKA.Vector3();
-        d.yukaVehicle.steering.calculate(0.0166, steeringForce);
-        
-        finalTargetX = d.posX + steeringForce.x;
-        finalTargetY = d.posY + steeringForce.y;
-        finalTargetZ = d.posZ + steeringForce.z;
+        finalTargetX = targetPos.x;
+        finalTargetY = targetPos.y;
+        finalTargetZ = targetPos.z;
 
         if (shouldFire && d.cooldown <= 0 && d.type !== DroneType.RECON && d.type !== DroneType.BOMBER) {
-          const targetPlayerInstance = this.players.get(combatTargetRecord.entity.name);
+          const targetPlayerInstance = this.players.get(combatTargetRecord.entityId);
           const velX = targetPlayerInstance ? targetPlayerInstance.velEmaX : 0;
           const velY = targetPlayerInstance ? targetPlayerInstance.velEmaY : 0;
           const velZ = targetPlayerInstance ? targetPlayerInstance.velEmaZ : 0;
@@ -1942,22 +1982,23 @@ export class MatchRoom {
           const aimY = targetPos.y + velY * (dist / shootSpeed);
           const aimZ = targetPos.z + velZ * (dist / shootSpeed);
 
-          const dirX = aimX - d.posX;
-          const dirY = aimY - (d.posY + 0.5);
-          const dirZ = aimZ - d.posZ;
+          const fireMuzzle = getDroneMuzzleWorldPosition(d);
+          const dirX = aimX - fireMuzzle.x;
+          const dirY = aimY - fireMuzzle.y;
+          const dirZ = aimZ - fireMuzzle.z;
           const dirLen = Math.sqrt(dirX*dirX + dirY*dirY + dirZ*dirZ);
 
           if (dirLen > 0.1) {
              let clear = true;
              if (this.rapierWorld) {
-               const ray = new RAPIER.Ray({ x: d.posX, y: d.posY + 0.5, z: d.posZ }, { x: dirX/dirLen, y: dirY/dirLen, z: dirZ/dirLen });
+               const ray = new RAPIER.Ray(fireMuzzle, { x: dirX/dirLen, y: dirY/dirLen, z: dirZ/dirLen });
                const hit = this.rapierWorld.castRay(ray, dirLen, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC);
                if (hit && hit.collider && hit.timeOfImpact < dirLen - 0.7) clear = false;
              }
              if (clear) {
                d.state = DroneState.ATTACKING;
-               this.spawnServerProjectile(d.posX, d.posY + 0.5, d.posZ, dirX, dirY, dirZ, true, DRONE_CONFIGS[d.type].damage, d.id.toString());
-               this.broadcastReliableEvent({ type: "drone_shoot", droneId: d.id, droneType: d.type, posX: d.posX, posY: d.posY, posZ: d.posZ, dirX, dirY, dirZ });
+               this.spawnServerProjectile(fireMuzzle.x, fireMuzzle.y, fireMuzzle.z, dirX, dirY, dirZ, true, DRONE_CONFIGS[d.type].damage, d.id.toString());
+               this.broadcastReliableEvent({ type: "drone_shoot", droneId: d.id, droneType: d.type, posX: fireMuzzle.x, posY: fireMuzzle.y, posZ: fireMuzzle.z, dirX, dirY, dirZ });
                d.cooldown = d.type === DroneType.HUMANOID ? 40 : 20;
              }
           }
@@ -1987,12 +2028,6 @@ export class MatchRoom {
         }
       }
 
-      this.computeVelocityObstacleSteering(
-        d,
-        finalTargetX,
-        finalTargetY,
-        finalTargetZ,
-      );
       d.targetX = finalTargetX;
       d.targetY = finalTargetY;
       d.targetZ = finalTargetZ;
@@ -2002,101 +2037,435 @@ export class MatchRoom {
       let desiredTy = 0;
       let desiredTz = 0;
 
-      if (d.type === DroneType.BOMBER || d.type === DroneType.ROTARY_SHOOTER) {
-        // Quadcopter: Acceleration-Limited Velocity Easing
-        const maxAccelPerTick = 0.3; 
-        
-        let desiredVx = d.velX;
-        let desiredVy = d.velY;
-        let desiredVz = d.velZ;
-        
+      const isAir = d.type === DroneType.RECON || d.type === DroneType.ROTARY_SHOOTER || d.type === DroneType.BOMBER;
+      const isFixedWing = d.type === DroneType.FIXED_WING;
 
-        
-        if (!d.currentVelocity) d.currentVelocity = { x: 0, y: 0, z: 0 };
-        
-        const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
-        d.currentVelocity.x += clamp(desiredVx - d.currentVelocity.x, -maxAccelPerTick, maxAccelPerTick);
-        d.currentVelocity.y += clamp(desiredVy - d.currentVelocity.y, -maxAccelPerTick, maxAccelPerTick);
-        d.currentVelocity.z += clamp(desiredVz - d.currentVelocity.z, -maxAccelPerTick, maxAccelPerTick);
-        
-        desiredTx = d.currentVelocity.x * 0.0166;
-        desiredTy = d.currentVelocity.y * 0.0166;
-        desiredTz = d.currentVelocity.z * 0.0166;
-      } else if (d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
-        // Fixed Wing: Turn-Rate-Constrained Flight Model
-        const maxYawRatePerTick = 0.05;
-        const minSpeed = d.type === DroneType.FIXED_WING ? 6.0 : 4.0;
-        
-        if (!d.currentHeading) d.currentHeading = { x: 1, y: 0, z: 0 };
-        if (d.currentSpeed === undefined) d.currentSpeed = minSpeed;
-        
-        let desiredDirX = d.velX;
-        let desiredDirY = d.velY;
-        let desiredDirZ = d.velZ;
-        let desiredSpeed = Math.sqrt(desiredDirX * desiredDirX + desiredDirY * desiredDirY + desiredDirZ * desiredDirZ);
-        
-        if (desiredSpeed > 0.01) {
-          desiredDirX /= desiredSpeed;
-          desiredDirY /= desiredSpeed;
-          desiredDirZ /= desiredSpeed;
-        } else {
-          desiredDirX = d.currentHeading.x;
-          desiredDirY = d.currentHeading.y;
-          desiredDirZ = d.currentHeading.z;
-        }
-        
-        const dot = d.currentHeading.x * desiredDirX + d.currentHeading.y * desiredDirY + d.currentHeading.z * desiredDirZ;
-        const clampDot = Math.max(-1, Math.min(1, dot));
-        const angle = Math.acos(clampDot);
-        
-        if (angle > 0.001) {
-          const fraction = Math.min(1.0, maxYawRatePerTick / angle);
-          d.currentHeading.x = d.currentHeading.x + (desiredDirX - d.currentHeading.x) * fraction;
-          d.currentHeading.y = d.currentHeading.y + (desiredDirY - d.currentHeading.y) * fraction;
-          d.currentHeading.z = d.currentHeading.z + (desiredDirZ - d.currentHeading.z) * fraction;
-          
-          const hLen = Math.sqrt(d.currentHeading.x ** 2 + d.currentHeading.y ** 2 + d.currentHeading.z ** 2);
-          d.currentHeading.x /= hLen;
-          d.currentHeading.y /= hLen;
-          d.currentHeading.z /= hLen;
-        }
-        
-        d.currentSpeed = Math.max(minSpeed, desiredSpeed);
-        
-        desiredTx = d.currentHeading.x * d.currentSpeed * 0.0166;
-        desiredTy = d.currentHeading.y * d.currentSpeed * 0.0166;
-        desiredTz = d.currentHeading.z * d.currentSpeed * 0.0166;
-      } else {
-        // Ground Units: Route RVO desired displacement through KCC
-        desiredTx = d.velX * 0.0166;
-        desiredTy = d.velY * 0.0166;
-        desiredTz = d.velZ * 0.0166;
-        
-        // Add gravity to Y velocity for ground drones
-        d.velY += (-18.0) * 0.0166;
-        desiredTy = d.velY * 0.0166;
+      const dxToTarget = finalTargetX - d.posX;
+      const dyToTarget = finalTargetY - d.posY;
+      const dzToTarget = finalTargetZ - d.posZ;
+      const distToTarget = Math.sqrt(dxToTarget*dxToTarget + dyToTarget*dyToTarget + dzToTarget*dzToTarget);
+
+      let steerX = distToTarget > 0.1 ? (dxToTarget / distToTarget) : 0;
+      let steerY = distToTarget > 0.1 ? (dyToTarget / distToTarget) : 0;
+      let steerZ = distToTarget > 0.1 ? (dzToTarget / distToTarget) : 0;
+
+      const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+
+      let decelRadius = 5.0;
+      let maxYawRatePerTick = 0.1;
+      let minSpeed = 0.0;
+      let maxSpeed = 10.0;
+      let maxAccelPerTick = 0.4;
+
+      if (d.type === DroneType.RECON) {
+         decelRadius = 5.0;
+         maxYawRatePerTick = 0.1;
+         maxSpeed = 15.0;
+         maxAccelPerTick = 0.5;
+      } else if (d.type === DroneType.BOMBER) {
+         decelRadius = 8.0;
+         maxYawRatePerTick = 0.05;
+         maxSpeed = 20.0;
+         maxAccelPerTick = 0.8;
+      } else if (d.type === DroneType.ROTARY_SHOOTER) {
+         decelRadius = 5.0;
+         maxYawRatePerTick = 0.08;
+         maxSpeed = 10.0;
+         maxAccelPerTick = 0.3;
+      } else if (d.type === DroneType.FIXED_WING) {
+         decelRadius = 12.0;
+         maxYawRatePerTick = 0.05;
+         maxSpeed = 25.0;
+         minSpeed = 15.0;
+         maxAccelPerTick = 0.4;
+      } else if (d.type === DroneType.WHEELED) {
+         decelRadius = 4.0;
+         maxYawRatePerTick = 0.04;
+         maxSpeed = 8.0;
+         maxAccelPerTick = 0.4;
+      } else if (d.type === DroneType.ROBOT_DOG) {
+         decelRadius = 3.0;
+         maxYawRatePerTick = 0.15;
+         maxSpeed = 10.0;
+         maxAccelPerTick = 0.4;
+      } else if (d.type === DroneType.HUMANOID) {
+         decelRadius = 2.0;
+         maxYawRatePerTick = 0.2;
+         maxSpeed = 6.0;
+         maxAccelPerTick = 0.4;
       }
+
+      // Compute desired target speed with arrival deceleration
+      const desiredSpeed = distToTarget < 0.1 ? 0.0 : (distToTarget < decelRadius ? maxSpeed * (distToTarget / decelRadius) : maxSpeed);
+      const targetSpeed = Math.max(minSpeed, desiredSpeed);
+
+      // Part 1 & Part 3: Obstacle Detection & Cross-Tick State Machine
+      if (d.avoidanceState === undefined) {
+         d.avoidanceState = null;
+      }
+
+      let obstacleDetected = false;
+      let forwardHitDistance = 0;
+      let detectionDistance = BASE_DETECTION_DISTANCE;
+
+      const headingLen = Math.sqrt(d.currentHeadingX * d.currentHeadingX + d.currentHeadingZ * d.currentHeadingZ);
+      const dirX = headingLen > 0.001 ? d.currentHeadingX / headingLen : 1;
+      const dirZ = headingLen > 0.001 ? d.currentHeadingZ / headingLen : 0;
+
+      if (this.rapierWorld) {
+         const speedForDetection = Math.sqrt(d.currentVelocityX * d.currentVelocityX + d.currentVelocityY * d.currentVelocityY + d.currentVelocityZ * d.currentVelocityZ);
+         const currentSpeed = Math.max(speedForDetection, targetSpeed);
+         detectionDistance = BASE_DETECTION_DISTANCE + (currentSpeed * DETECTION_TIME_HORIZON);
+
+         const rayOrigin = getDroneMuzzleWorldPosition(d);
+         const rayDir = { x: dirX, y: 0, z: dirZ };
+         const ray = new RAPIER.Ray(rayOrigin, rayDir);
+         const hit = this.rapierWorld.castRay(
+           ray,
+           detectionDistance,
+           true,
+           RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+           undefined,
+           d.collider || undefined
+         );
+
+         // if (d.id === 1) {
+         //    console.log(`[DEBUG IN-ENGINE RAYCAST] Tick: ${this.serverTick} | Origin: (${rayOrigin.x.toFixed(2)}, ${rayOrigin.y.toFixed(2)}, ${rayOrigin.z.toFixed(2)}) | Dir: (${rayDir.x.toFixed(3)}, ${rayDir.z.toFixed(3)}) | Dist: ${detectionDistance.toFixed(2)} | Hit: ${hit ? `YES (toi: ${hit.timeOfImpact.toFixed(2)})` : "NO"}`);
+         // }
+
+         if (hit && hit.timeOfImpact <= detectionDistance) {
+            obstacleDetected = true;
+            forwardHitDistance = hit.timeOfImpact;
+         }
+      }
+
+      const sin45 = 0.70710678;
+      const cos45 = 0.70710678;
+
+      if (obstacleDetected) {
+         if (!d.avoidanceState || !d.avoidanceState.active) {
+            // Fresh activation: compute left vs right probe directions to choose deflection side
+            const probeDistance = Math.max(3.0, detectionDistance * 0.75);
+            const rayOrigin = getDroneMuzzleWorldPosition(d);
+
+            const leftDirX = dirX * cos45 - dirZ * sin45;
+            const leftDirZ = dirX * sin45 + dirZ * cos45;
+            const leftRay = new RAPIER.Ray(rayOrigin, { x: leftDirX, y: 0, z: leftDirZ });
+            const leftHit = this.rapierWorld ? this.rapierWorld.castRay(
+              leftRay,
+              probeDistance,
+              true,
+              RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+              undefined,
+              d.collider || undefined
+            ) : null;
+
+            const rightDirX = dirX * cos45 + dirZ * sin45;
+            const rightDirZ = -dirX * sin45 + dirZ * cos45;
+            const rightRay = new RAPIER.Ray(rayOrigin, { x: rightDirX, y: 0, z: rightDirZ });
+            const rightHit = this.rapierWorld ? this.rapierWorld.castRay(
+              rightRay,
+              probeDistance,
+              true,
+              RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+              undefined,
+              d.collider || undefined
+            ) : null;
+
+            const leftClearDist = leftHit ? leftHit.timeOfImpact : probeDistance;
+            const rightClearDist = rightHit ? rightHit.timeOfImpact : probeDistance;
+
+            const chosenDirection = leftClearDist > rightClearDist ? -1 : 1; // -1: Left, +1: Right
+
+            d.avoidanceState = {
+               active: true,
+               direction: chosenDirection,
+               ticksRemaining: MIN_AVOIDANCE_TICKS
+            };
+
+            // LOGGING FOR VERIFICATION
+            const droneTypeName = DroneType[d.type] || "UNKNOWN";
+            console.log(
+               `[AVOIDANCE ACTIVATED] Tick: ${this.serverTick} | Drone ID: ${d.id} (${droneTypeName}) | ` +
+               `Obstacle forward hit at ${forwardHitDistance.toFixed(2)}m (detection range: ${detectionDistance.toFixed(2)}m) | ` +
+               `Probes (L: ${leftClearDist.toFixed(2)}m, R: ${rightClearDist.toFixed(2)}m) | ` +
+               `Chosen Dir: ${chosenDirection === -1 ? "LEFT (-1)" : "RIGHT (+1)"}`
+            );
+         } else {
+            // Already active: decrement ticks remaining, handle extension if ticks remaining reaches 0
+            d.avoidanceState.ticksRemaining--;
+            if (d.avoidanceState.ticksRemaining <= 0) {
+               d.avoidanceState.ticksRemaining = MIN_AVOIDANCE_TICKS;
+               const droneTypeName = DroneType[d.type] || "UNKNOWN";
+               console.log(
+                  `[AVOIDANCE EXTENDED] Tick: ${this.serverTick} | Drone ID: ${d.id} (${droneTypeName}) | ` +
+                  `Obstacle still detected, resetting ticks to ${MIN_AVOIDANCE_TICKS}`
+               );
+            }
+         }
+      } else {
+         if (d.avoidanceState && d.avoidanceState.active) {
+            d.avoidanceState.ticksRemaining--;
+            if (d.avoidanceState.ticksRemaining <= 0) {
+               d.avoidanceState.active = false;
+               const droneTypeName = DroneType[d.type] || "UNKNOWN";
+               console.log(
+                  `[AVOIDANCE DEACTIVATED] Tick: ${this.serverTick} | Drone ID: ${d.id} (${droneTypeName}) | ` +
+                  `Ticks reached 0 and obstacle cleared`
+               );
+            }
+         }
+      }
+
+      // Compute avoidX, avoidZ deflection direction based on current avoidance state
+      const avoidanceActive = d.avoidanceState && d.avoidanceState.active;
+      let avoidX = 0;
+      let avoidZ = 0;
+
+      if (avoidanceActive && d.avoidanceState) {
+         if (d.avoidanceState.direction === -1) {
+            // Left deflection (+45 degrees)
+            avoidX = dirX * cos45 - dirZ * sin45;
+            avoidZ = dirX * sin45 + dirZ * cos45;
+         } else {
+            // Right deflection (-45 degrees)
+            avoidX = dirX * cos45 + dirZ * sin45;
+            avoidZ = -dirX * sin45 + dirZ * cos45;
+         }
+         const avoidLen = Math.sqrt(avoidX * avoidX + avoidZ * avoidZ);
+         if (avoidLen > 0.001) {
+            avoidX /= avoidLen;
+            avoidZ /= avoidLen;
+         }
+         
+         // Tick-gated representative logging of active avoidance
+         if (this.serverTick % 30 === 0) {
+            const droneTypeName = DroneType[d.type] || "UNKNOWN";
+            console.log(
+               `[AVOIDANCE RUNNING] Tick: ${this.serverTick} | Drone ID: ${d.id} (${droneTypeName}) | ` +
+               `Steering ${d.avoidanceState.direction === -1 ? "LEFT" : "RIGHT"} | ` +
+               `Ticks remaining: ${d.avoidanceState.ticksRemaining} | ` +
+               `Deflection Vector: (${avoidX.toFixed(3)}, ${avoidZ.toFixed(3)})`
+            );
+         }
+      }
+
+      if (isAir) {
+         if (d.type === DroneType.ROTARY_SHOOTER && d.mode === "COMBAT" && distToTarget < INTEL_CONFIGS[d.type].engagementMin) {
+            steerX = -steerX; steerY = -steerY; steerZ = -steerZ;
+         }
+
+         let airSteerX = steerX;
+         let airSteerZ = steerZ;
+         if (avoidanceActive) {
+            airSteerX = avoidX;
+            airSteerZ = avoidZ;
+         }
+
+         const desiredVx = airSteerX * targetSpeed;
+         const desiredVy = steerY * targetSpeed;
+         const desiredVz = airSteerZ * targetSpeed;
+
+         d.currentVelocityX += clamp(desiredVx - d.currentVelocityX, -maxAccelPerTick, maxAccelPerTick);
+         d.currentVelocityY += clamp(desiredVy - d.currentVelocityY, -maxAccelPerTick, maxAccelPerTick);
+         d.currentVelocityZ += clamp(desiredVz - d.currentVelocityZ, -maxAccelPerTick, maxAccelPerTick);
+
+         desiredTx = d.currentVelocityX * 0.0166;
+         desiredTy = d.currentVelocityY * 0.0166;
+         desiredTz = d.currentVelocityZ * 0.0166;
+
+         let targetHX = d.currentVelocityX;
+         let targetHZ = d.currentVelocityZ;
+
+         if (d.mode === "COMBAT") {
+            targetHX = dxToTarget;
+            targetHZ = dzToTarget;
+         }
+
+         if (avoidanceActive) {
+            targetHX = avoidX;
+            targetHZ = avoidZ;
+         }
+
+         const hLen = Math.sqrt(d.currentHeadingX**2 + d.currentHeadingZ**2) || 1;
+         const cX = d.currentHeadingX / hLen;
+         const cZ = d.currentHeadingZ / hLen;
+
+         const targetHLen = Math.sqrt(targetHX * targetHX + targetHZ * targetHZ);
+         let tX = cX;
+         let tZ = cZ;
+         if (targetHLen > 0.01) {
+            tX = targetHX / targetHLen;
+            tZ = targetHZ / targetHLen;
+         }
+
+         const targetAngle = Math.atan2(tX, tZ);
+         const currentAngle = Math.atan2(cX, cZ);
+
+         let angleDiff = targetAngle - currentAngle;
+         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+         const clampedDiff = clamp(angleDiff, -maxYawRatePerTick, maxYawRatePerTick);
+         const nextAngle = currentAngle + clampedDiff;
+
+         d.currentHeadingX = Math.sin(nextAngle);
+         d.currentHeadingZ = Math.cos(nextAngle);
+
+         if ((d.id === 1 || d.type === DroneType.TEST_ENTITY) && this.serverTick % 30 === 0) {
+            console.log(`[DRONE LOG] ID: ${d.id} Type: ${d.type} Dist: ${distToTarget.toFixed(3)} targetSpeed: ${targetSpeed.toFixed(3)} AngleDiff: ${(angleDiff * 180 / Math.PI).toFixed(1)}° headingX: ${d.currentHeadingX.toFixed(3)} headingZ: ${d.currentHeadingZ.toFixed(3)}`);
+         }
+
+      } else {
+         const hLen = Math.sqrt(d.currentHeadingX**2 + d.currentHeadingZ**2) || 1;
+         const cX = d.currentHeadingX / hLen;
+         const cZ = d.currentHeadingZ / hLen;
+
+         let finalSteerX = steerX;
+         let finalSteerZ = steerZ;
+         if (avoidanceActive) {
+            finalSteerX = avoidX;
+            finalSteerZ = avoidZ;
+         }
+
+         const targetAngle = Math.atan2(finalSteerX, finalSteerZ);
+         const currentAngle = Math.atan2(cX, cZ);
+
+         let angleDiff = targetAngle - currentAngle;
+         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+         const clampedDiff = clamp(angleDiff, -maxYawRatePerTick, maxYawRatePerTick);
+         const nextAngle = currentAngle + clampedDiff;
+
+         d.currentHeadingX = Math.sin(nextAngle);
+         d.currentHeadingZ = Math.cos(nextAngle);
+
+         const speedVel = Math.sqrt(d.currentVelocityX**2 + d.currentVelocityZ**2);
+         const nextSpeed = speedVel + clamp(targetSpeed - speedVel, -maxAccelPerTick, maxAccelPerTick);
+         
+         if (avoidanceActive) {
+            d.currentVelocityX = avoidX * nextSpeed;
+            d.currentVelocityZ = avoidZ * nextSpeed;
+         } else {
+            d.currentVelocityX = d.currentHeadingX * nextSpeed;
+            d.currentVelocityZ = d.currentHeadingZ * nextSpeed;
+         }
+         if (isFixedWing) {
+            d.currentVelocityY = steerY * nextSpeed;
+         } else {
+            d.currentVelocityY += -18.0 * 0.0166;
+            if (d.currentVelocityY < -40.0) d.currentVelocityY = -40.0;
+         }
+
+         desiredTx = d.currentVelocityX * 0.0166;
+         desiredTy = d.currentVelocityY * 0.0166;
+         desiredTz = d.currentVelocityZ * 0.0166;
+
+         if ((d.id === 1 || d.type === DroneType.TEST_ENTITY) && this.serverTick % 30 === 0) {
+            console.log(`[DRONE LOG] ID: ${d.id} Type: ${d.type} Dist: ${distToTarget.toFixed(3)} targetSpeed: ${targetSpeed.toFixed(3)} AngleDiff: ${(angleDiff * 180 / Math.PI).toFixed(1)}° headingX: ${d.currentHeadingX.toFixed(3)} headingZ: ${d.currentHeadingZ.toFixed(3)}`);
+         }
+      }
+
+      d.rotY = Math.atan2(d.currentHeadingX, d.currentHeadingZ);
+      d.rotW = Math.cos(d.rotY / 2);
+      d.rotY = Math.sin(d.rotY / 2);
+      d.rotX = 0;
+      d.rotZ = 0;
 
       if (!d.kcc) {
         this.initDronePhysics(d);
       }
 
       if (d.kcc && d.collider) {
-        const desiredTranslation = { x: desiredTx, y: desiredTy, z: desiredTz };
-        
         d.kcc.computeColliderMovement(
           d.collider,
-          desiredTranslation,
+          { x: desiredTx, y: desiredTy, z: desiredTz },
           RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
           undefined,
           undefined
         );
         
         const correctedTrans = d.kcc.computedMovement();
+
+        // Stuck state detection and recovery
+        const desiredMoveLenSq = desiredTx * desiredTx + desiredTz * desiredTz;
+        if (desiredMoveLenSq > 0.000001) {
+           const correctedMoveLenSq = correctedTrans.x * correctedTrans.x + correctedTrans.z * correctedTrans.z;
+           if (correctedMoveLenSq < 0.0001) {
+              d.stuckTicks = (d.stuckTicks || 0) + 1;
+           } else {
+              d.stuckTicks = 0;
+           }
+        } else {
+           d.stuckTicks = 0;
+        }
+
+        const STUCK_TICK_THRESHOLD = 15;
+        if ((d.stuckTicks || 0) >= STUCK_TICK_THRESHOLD) {
+           const droneTypeName = DroneType[d.type] || "UNKNOWN";
+           console.log(
+              `[STUCK RECOVERY] Tick: ${this.serverTick} | Drone ID: ${d.id} (${droneTypeName}) has been stuck for ${STUCK_TICK_THRESHOLD} ticks! Initiating recovery.`
+           );
+
+           // Zero out velocities
+           d.currentVelocityX = 0;
+           if (d.currentVelocityY !== undefined) d.currentVelocityY = 0;
+           d.currentVelocityZ = 0;
+
+           // Choose deflection direction using probe rays
+           let recoveryDirection = 1;
+           if (this.rapierWorld) {
+              const headingLen = Math.sqrt(d.currentHeadingX * d.currentHeadingX + d.currentHeadingZ * d.currentHeadingZ);
+              const dirX = headingLen > 0.001 ? d.currentHeadingX / headingLen : 1;
+              const dirZ = headingLen > 0.001 ? d.currentHeadingZ / headingLen : 0;
+              const sin45 = 0.70710678;
+              const cos45 = 0.70710678;
+              const probeDistance = Math.max(3.0, (BASE_DETECTION_DISTANCE + 5.0) * 0.75);
+              const rayOrigin = getDroneMuzzleWorldPosition(d);
+
+              const leftDirX = dirX * cos45 - dirZ * sin45;
+              const leftDirZ = dirX * sin45 + dirZ * cos45;
+              const leftRay = new RAPIER.Ray(rayOrigin, { x: leftDirX, y: 0, z: leftDirZ });
+              const leftHit = this.rapierWorld.castRay(
+                 leftRay,
+                 probeDistance,
+                 true,
+                 RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+                 undefined,
+                 d.collider || undefined
+              );
+
+              const rightDirX = dirX * cos45 + dirZ * sin45;
+              const rightDirZ = -dirX * sin45 + dirZ * cos45;
+              const rightRay = new RAPIER.Ray(rayOrigin, { x: rightDirX, y: 0, z: rightDirZ });
+              const rightHit = this.rapierWorld.castRay(
+                 rightRay,
+                 probeDistance,
+                 true,
+                 RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+                 undefined,
+                 d.collider || undefined
+              );
+
+              const leftClearDist = leftHit ? leftHit.timeOfImpact : probeDistance;
+              const rightClearDist = rightHit ? rightHit.timeOfImpact : probeDistance;
+              recoveryDirection = leftClearDist > rightClearDist ? -1 : 1;
+           }
+
+           // Force extend avoidance state to steer completely away from the obstacle
+           d.avoidanceState = {
+              active: true,
+              direction: recoveryDirection,
+              ticksRemaining: MIN_AVOIDANCE_TICKS * 2
+           };
+
+           d.stuckTicks = 0;
+        }
         
         if (d.type === DroneType.HUMANOID || d.type === DroneType.ROBOT_DOG || d.type === DroneType.WHEELED) {
           if (d.kcc.computedGrounded()) {
-            d.velY = Math.max(0, d.velY);
+            d.currentVelocityY = 0;
           }
         }
         
@@ -2111,53 +2480,10 @@ export class MatchRoom {
             z: d.posZ,
           });
         }
-        
-        let updateRot = false;
-        let mHead = 0;
-        if (d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
-          if (d.currentHeading) {
-            mHead = Math.atan2(d.currentHeading.x, d.currentHeading.z);
-            updateRot = true;
-          }
-        } else if (Math.abs(correctedTrans.x) > 0.001 || Math.abs(correctedTrans.z) > 0.001) {
-          mHead = Math.atan2(correctedTrans.x, correctedTrans.z);
-          updateRot = true;
-        }
-        
-        if (updateRot) {
-          if (d.type === DroneType.WHEELED || d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
-            mHead -= Math.PI / 2;
-          }
-          d.rotY = Math.sin(mHead * 0.5);
-          d.rotW = Math.cos(mHead * 0.5);
-          d.rotX = 0;
-          d.rotZ = 0;
-        }
       } else {
         d.posX += desiredTx;
         d.posY += desiredTy;
         d.posZ += desiredTz;
-        let updateRot = false;
-        let mHead = 0;
-        if (d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
-          if (d.currentHeading) {
-            mHead = Math.atan2(d.currentHeading.x, d.currentHeading.z);
-            updateRot = true;
-          }
-        } else if (Math.abs(desiredTx) > 0.001 || Math.abs(desiredTz) > 0.001) {
-          mHead = Math.atan2(desiredTx, desiredTz);
-          updateRot = true;
-        }
-        
-        if (updateRot) {
-          if (d.type === DroneType.WHEELED || d.type === DroneType.FIXED_WING || d.type === DroneType.RECON) {
-            mHead -= Math.PI / 2;
-          }
-          d.rotY = Math.sin(mHead * 0.5);
-          d.rotW = Math.cos(mHead * 0.5);
-          d.rotX = 0;
-          d.rotZ = 0;
-        }
       }
     }
 
@@ -2189,85 +2515,6 @@ export class MatchRoom {
       (this.historicalAABBIndex + 1) % HISTORICAL_SAMPLES_MAX;
   }
 
-  private computeVelocityObstacleSteering(
-    d: ServerDrone,
-    tx: number,
-    ty: number,
-    tz: number,
-  ) {
-    const targetDx = tx - d.posX;
-    const targetDy = ty - d.posY;
-    const targetDz = tz - d.posZ;
-    const dist = Math.sqrt(
-      targetDx * targetDx + targetDy * targetDy + targetDz * targetDz,
-    );
-
-    const isAir = d.type === DroneType.ROTARY_SHOOTER || d.type === DroneType.BOMBER || d.type === DroneType.RECON || d.type === DroneType.FIXED_WING;
-
-    const speed = d.type === DroneType.RECON ? 8.0 : (d.type === DroneType.FIXED_WING ? 12.0 : (isAir ? 5.5 : 3.8));
-    const prefVx = dist > 0.1 ? (targetDx / dist) * speed : 0;
-    const prefVy = dist > 0.1 ? (targetDy / dist) * speed : 0;
-    const prefVz = dist > 0.1 ? (targetDz / dist) * speed : 0;
-
-    let optimalVx = prefVx;
-    let optimalVy = isAir ? prefVy : 0;
-    let optimalVz = prefVz;
-    let bestScore = -999999;
-
-    const numSamples = 12;
-    for (let s = 0; s < numSamples; s++) {
-      const angle = (s / numSamples) * Math.PI * 2;
-      const sampleSpeed = speed * (s % 2 === 0 ? 1.0 : 0.5);
-      const sVx = Math.cos(angle) * sampleSpeed;
-      const sVy = isAir ? prefVy + (Math.random() - 0.5) * 2 : 0;
-      const sVz = Math.sin(angle) * sampleSpeed;
-
-      let penalty = 0;
-
-      for (let u = 0; u < this.drones.length; u++) {
-        const other = this.drones[u];
-        if (other.id !== d.id && other.state !== DroneState.DEAD) {
-          const dx = other.posX - d.posX;
-          const dy = other.posY - d.posY;
-          const dz = other.posZ - d.posZ;
-          const distSq = dx * dx + dy * dy + dz * dz;
-          if (distSq < 16.0) {
-            const relVx = sVx - other.velX;
-            const relVy = sVy - other.velY;
-            const relVz = sVz - other.velZ;
-            const timeToCollision =
-              (dx * relVx + dy * relVy + dz * relVz) /
-              (relVx * relVx + relVy * relVy + relVz * relVz + 0.001);
-            if (timeToCollision > 0 && timeToCollision < 2.5) {
-              penalty += (2.5 - timeToCollision) * 40.0;
-            }
-          }
-        }
-      }
-
-      for (const p of this.players.values()) {
-        const dx = p.posX - d.posX;
-        const dz = p.posZ - d.posZ;
-        const distSq = dx * dx + dz * dz;
-        if (distSq < 25.0) {
-          penalty += 100.0;
-        }
-      }
-
-      const alignScore =
-        sVx * prefVx + sVy * prefVy + sVz * prefVz - penalty * 12.0;
-      if (alignScore > bestScore) {
-        bestScore = alignScore;
-        optimalVx = sVx;
-        optimalVy = sVy;
-        optimalVz = sVz;
-      }
-    }
-
-    d.velX = optimalVx;
-    d.velY = isAir ? optimalVy : 0;
-    d.velZ = optimalVz;
-  }
 
   public spawnServerProjectile(
     x: number,
@@ -2737,10 +2984,12 @@ export class MatchRoom {
         d.cooldown = 40;
         (d as any).history = [];
         this.initDronePhysics(d);
-        if (d.yukaVehicle) {
-          d.yukaVehicle.position.set(x, y, z);
-          d.yukaVehicle.velocity.set(0, 0, 0);
-          d.yukaVehicle.steering.clear();
+        if (d.currentVelocityX !== undefined) {
+          d.currentVelocityX = 0;
+          d.currentVelocityY = 0;
+          d.currentVelocityZ = 0;
+          d.currentHeadingX = 1;
+          d.currentHeadingZ = 0;
         }
         spawned = true;
         break;
@@ -2765,12 +3014,9 @@ export class MatchRoom {
   }
 
   public setTestEntityTarget(x: number, y: number, z: number) {
-    const targetPos = new YUKA.Vector3(x, y, z);
     for (let i = 0; i < this.drones.length; i++) {
       const d = this.drones[i];
-      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD && d.yukaVehicle) {
-        d.yukaVehicle.steering.clear();
-        d.yukaVehicle.steering.add(new YUKA.SeekBehavior(targetPos));
+      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD) {
         d.targetX = x;
         d.targetY = y;
         d.targetZ = z;
@@ -2781,17 +3027,17 @@ export class MatchRoom {
   public triggerTestEntitySight() {
     for (let i = 0; i < this.drones.length; i++) {
       const d = this.drones[i];
-      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD && d.yukaMemory) {
+      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD && d.memoryRecords) {
         for (const player of this.players.values()) {
            if (player.isAlive) {
-              const pe = getPlayerEntity(player.id);
-              if (!d.yukaMemory.hasRecord(pe)) {
-                 d.yukaMemory.createRecord(pe);
+              let rec = d.memoryRecords.find(r => r.entityId === player.id);
+              if (!rec) {
+                 rec = { entityId: player.id, lastSensedPosition: { x: 0, y: 0, z: 0 }, timeLastSensed: 0, confidence: 0 };
+                 d.memoryRecords.push(rec);
               }
-              const rec = d.yukaMemory.getRecord(pe);
-              rec.lastSensedPosition.set(player.posX, player.posY, player.posZ);
+              rec.lastSensedPosition = { x: player.posX, y: player.posY, z: player.posZ };
               rec.timeLastSensed = Date.now() / 1000;
-              (rec as any).confidence = 1.0;
+              rec.confidence = 1.0;
               break;
            }
         }
@@ -2802,17 +3048,17 @@ export class MatchRoom {
   public triggerTestEntitySound() {
     for (let i = 0; i < this.drones.length; i++) {
       const d = this.drones[i];
-      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD && d.yukaMemory) {
+      if (d.type === DroneType.TEST_ENTITY && d.state !== DroneState.DEAD && d.memoryRecords) {
         for (const player of this.players.values()) {
            if (player.isAlive) {
-              const pe = getPlayerEntity(player.id);
-              if (!d.yukaMemory.hasRecord(pe)) {
-                 d.yukaMemory.createRecord(pe);
+              let rec = d.memoryRecords.find(r => r.entityId === player.id);
+              if (!rec) {
+                 rec = { entityId: player.id, lastSensedPosition: { x: 0, y: 0, z: 0 }, timeLastSensed: 0, confidence: 0 };
+                 d.memoryRecords.push(rec);
               }
-              const rec = d.yukaMemory.getRecord(pe);
-              rec.lastSensedPosition.set(player.posX, player.posY, player.posZ);
+              rec.lastSensedPosition = { x: player.posX, y: player.posY, z: player.posZ };
               rec.timeLastSensed = Date.now() / 1000;
-              (rec as any).confidence = 1.0;
+              rec.confidence = 1.0;
               break;
            }
         }
@@ -2836,26 +3082,78 @@ export class MatchRoom {
     for (let i = 0; i < this.drones.length; i++) {
       const d = this.drones[i];
       if (d.state === DroneState.DEAD || d.type !== DroneType.TEST_ENTITY) continue;
+
+      if ((d as any).isFrozen) {
+        if (d.body) {
+          const trans = d.body.translation();
+          d.posX = trans.x;
+          d.posY = trans.y;
+          d.posZ = trans.z;
+        }
+        let currentCollisions: string[] = [];
+        if (d.kcc && d.collider) {
+           const numCollisions = d.kcc.numComputedCollisions();
+           for (let c=0; c<numCollisions; c++) {
+              const col = d.kcc.computedCollision(c);
+              if (col && col.collider) {
+                 for (const p of this.players.values()) {
+                    if (p.collider && p.collider.handle === col.collider.handle) {
+                       currentCollisions.push(p.id);
+                    }
+                 }
+              }
+           }
+        }
+        const historyRecord = {
+           time: Date.now(),
+           targetX: d.targetX,
+           targetY: d.targetY,
+           targetZ: d.targetZ,
+           steerX: 0,
+           steerZ: 0,
+           velX: 0,
+           velZ: 0,
+           posX: d.posX,
+           posZ: d.posZ,
+           headingX: 1,
+           headingZ: 0
+        };
+        if (!(d as any).history) (d as any).history = [];
+        (d as any).history.push(historyRecord);
+        if ((d as any).history.length > 20) (d as any).history.shift();
+
+        telemetry.push({ id: d.id, history: (d as any).history, mode: d.mode, coll: d.collider ? d.collider.collisionGroups() : 0, collisions: currentCollisions });
+        continue;
+      }
       
-      if (d.yukaVehicle) {
-        const prevX = d.posX;
-        const prevY = d.posY;
-        const prevZ = d.posZ;
+      if (d.currentVelocityX !== undefined) {
+        const dxToTarget = d.targetX - d.posX;
+        const dyToTarget = d.targetY - d.posY;
+        const dzToTarget = d.targetZ - d.posZ;
+        const distToTarget = Math.sqrt(dxToTarget*dxToTarget + dyToTarget*dyToTarget + dzToTarget*dzToTarget);
 
-        d.yukaVehicle.update(dt);
-        
-        const desiredTx = d.yukaVehicle.position.x - prevX;
-        const desiredTy = d.yukaVehicle.position.y - prevY;
-        const desiredTz = d.yukaVehicle.position.z - prevZ;
+        let steerX = distToTarget > 0.1 ? (dxToTarget / distToTarget) : 0;
+        let steerY = distToTarget > 0.1 ? (dyToTarget / distToTarget) : 0;
+        let steerZ = distToTarget > 0.1 ? (dzToTarget / distToTarget) : 0;
 
-        d.posX = prevX;
-        d.posY = prevY;
-        d.posZ = prevZ;
-        d.rotX = d.yukaVehicle.rotation.x;
-        d.rotY = d.yukaVehicle.rotation.y;
-        d.rotZ = d.yukaVehicle.rotation.z;
-        d.rotW = d.yukaVehicle.rotation.w;
+        const maxSpeed = 10.0;
+        const targetSpeed = distToTarget > 1.0 ? maxSpeed : (distToTarget * maxSpeed);
+
+        const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+        const maxAccelPerTick = 0.4;
         
+        const desiredVx = steerX * targetSpeed;
+        const desiredVy = steerY * targetSpeed;
+        const desiredVz = steerZ * targetSpeed;
+
+        d.currentVelocityX += clamp(desiredVx - d.currentVelocityX, -maxAccelPerTick, maxAccelPerTick);
+        d.currentVelocityY += clamp(desiredVy - d.currentVelocityY, -maxAccelPerTick, maxAccelPerTick);
+        d.currentVelocityZ += clamp(desiredVz - d.currentVelocityZ, -maxAccelPerTick, maxAccelPerTick);
+
+        const desiredTx = d.currentVelocityX * 0.0166;
+        const desiredTy = d.currentVelocityY * 0.0166;
+        const desiredTz = d.currentVelocityZ * 0.0166;
+
         let currentCollisions: string[] = [];
         if (d.kcc && d.body && d.collider) {
            d.kcc.computeColliderMovement(
@@ -2875,8 +3173,6 @@ export class MatchRoom {
              y: d.posY,
              z: d.posZ
            });
-           
-           d.yukaVehicle.position.set(d.posX, d.posY, d.posZ);
 
            const numCollisions = d.kcc.numComputedCollisions();
            for (let c=0; c<numCollisions; c++) {
@@ -2890,26 +3186,36 @@ export class MatchRoom {
               }
            }
         } else {
-           d.posX = d.yukaVehicle.position.x;
-           d.posY = d.yukaVehicle.position.y;
-           d.posZ = d.yukaVehicle.position.z;
+           d.posX += desiredTx;
+           d.posY += desiredTy;
+           d.posZ += desiredTz;
         }
 
-        const steerForce = (d.yukaVehicle as any)._steeringForce || { x: 0, y: 0, z: 0 };
+        const hLen = Math.sqrt(d.currentVelocityX**2 + d.currentVelocityZ**2);
+        if (hLen > 0.01) {
+           d.currentHeadingX = d.currentVelocityX / hLen;
+           d.currentHeadingZ = d.currentVelocityZ / hLen;
+        }
+        
+        d.rotY = Math.atan2(d.currentHeadingX, d.currentHeadingZ);
+        d.rotW = Math.cos(d.rotY / 2);
+        d.rotY = Math.sin(d.rotY / 2);
+        d.rotX = 0;
+        d.rotZ = 0;
 
         const historyRecord = {
            time: Date.now(),
            targetX: d.targetX,
            targetY: d.targetY,
            targetZ: d.targetZ,
-           steerX: steerForce.x,
-           steerZ: steerForce.z,
-           velX: d.yukaVehicle.velocity.x,
-           velZ: d.yukaVehicle.velocity.z,
+           steerX: steerX,
+           steerZ: steerZ,
+           velX: d.currentVelocityX,
+           velZ: d.currentVelocityZ,
            posX: d.posX,
            posZ: d.posZ,
-           headingX: d.yukaVehicle.forward.x,
-           headingZ: d.yukaVehicle.forward.z
+           headingX: d.currentHeadingX,
+           headingZ: d.currentHeadingZ
         };
 
         if (!(d as any).history) (d as any).history = [];

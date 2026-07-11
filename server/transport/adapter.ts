@@ -5,6 +5,7 @@ import { Server as HttpServer } from "http";
 
 export interface ChannelAdapter {
   id: string;
+  connected: boolean;
   onDisconnect(callback: () => void): void;
   on(event: string, callback: (data: unknown) => void): void;
   onRaw(callback: (buffer: ArrayBuffer) => void): void;
@@ -89,14 +90,17 @@ class GeckosAdapter implements ServerTransport {
 
 class GeckosChannelAdapter implements ChannelAdapter {
   private _id: string;
+  private _connected: boolean = true;
   constructor(private channel: ServerChannel, id: string, private onDisconnectCb: () => void) {
       this._id = id;
       this.channel.onDisconnect(() => {
+          this._connected = false;
           this.onDisconnectCb();
       });
   }
   
   get id() { return this._id; }
+  get connected() { return this._connected; }
   
   onDisconnect(callback: () => void): void {
       this.channel.onDisconnect(() => {
@@ -193,6 +197,7 @@ class SocketIOChannelAdapter implements ChannelAdapter {
     }
     
     get id() { return this.socket.id; }
+    get connected() { return this.socket.connected; }
     
     onDisconnect(callback: () => void): void {
         this.localDisconnectCb.push(callback);

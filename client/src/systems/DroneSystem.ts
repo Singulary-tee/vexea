@@ -1,18 +1,50 @@
 import * as THREE from "three/webgpu";
 import { MatchController } from "../../MatchController";
-import { DroneState, DroneType } from "../../../shared/constants";
+import { DroneState, DroneType, DRONE_CONFIGS } from "../../../shared/constants";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
+import { createProceduralState, updateProceduralState, applyNodeRotation } from "./DroneProcedural";
 
 export class DroneSystem {
+
+  private droneProceduralState = new Map<number, any>();
+
+  public getOrCreateProceduralState(id: number) {
+     let state = this.droneProceduralState.get(id);
+     if (!state) {
+         state = { ...createProceduralState(), lastPos: new THREE.Vector3(), velocity: new THREE.Vector3(), smoothedVelocity: new THREE.Vector3(), lastFireTime: 0 };
+         this.droneProceduralState.set(id, state);
+     }
+     return state;
+  }
+  
+  public onDroneShoot(droneId: number, droneType: number) {
+      const state = this.getOrCreateProceduralState(droneId);
+      state.recoilAmount = 1.0;
+      state.lastFireTime = performance.now();
+  }
   private match: MatchController;
   private diagTempPosition = new THREE.Vector3();
   private diagTempQuaternion = new THREE.Quaternion();
   private diagTempMatrix = new THREE.Matrix4();
   
+  // Pre-allocated temp matrices for Zero-GC rendering of drone parts
+  private tempLocalMat = new THREE.Matrix4();
+  private tempR = new THREE.Matrix4();
+  private tempT1 = new THREE.Matrix4();
+  private tempT2 = new THREE.Matrix4();
+  private tempRotAroundPivot = new THREE.Matrix4();
+  private tempRecoilMat = new THREE.Matrix4();
+  private tempParentDroneLocalMat = new THREE.Matrix4();
+  private tempWorldMat = new THREE.Matrix4();
+  
   private droneSlots = new Map<number, { typeId: number, slotIdx: number }>();
   private freeSlots = new Map<number, number[]>();
   private activeThisTick = new Set<number>();
   private standaloneDrones = new Map<number, THREE.Group>();
+  private extraRot = new THREE.Quaternion();
+  private tempRotQ = new THREE.Quaternion();
+  private tempUp = new THREE.Vector3(0, 1, 0);
+  private standaloneMixers = new Map<number, THREE.AnimationMixer>();
 
   public riflemanModel: THREE.Group | null = null;
 
@@ -116,6 +148,15 @@ export class DroneSystem {
                  fw = SkeletonUtils.clone((window as any).fixedWingModel) as THREE.Group;
                  this.match.scene.add(fw);
                  this.standaloneDrones.set(id, fw);
+                 
+                 const anims = (window as any).fixedWingAnimations;
+                 if (anims && anims.length > 0) {
+                    const mixer = new THREE.AnimationMixer(fw);
+                    const action = mixer.clipAction(anims[0]);
+                    action.play();
+                    mixer.setTime(14/30); mixer.update(0);
+                    // Do NOT add to standaloneMixers, so it holds at frame 14
+                 }
               }
            }
            if (fw) {
@@ -154,39 +195,101 @@ export class DroneSystem {
                  const nodesInfo = batch.nodesInfo;
                  const sf = batch.scaleFactor || 1;
                  match.tempScale.set(sf, sf, sf);
-                 this.diagTempMatrix.compose(this.diagTempPosition, this.diagTempQuaternion, match.tempScale);
+                 let q = this.diagTempQuaternion;
+                 const config = DRONE_CONFIGS[typeId];
+                 if (config && config.orientationOffset) {
+                    const offsetEuler = new THREE.Euler(config.orientationOffset[0], config.orientationOffset[1], config.orientationOffset[2], 'YXZ');
+                    const offsetQ = new THREE.Quaternion().setFromEuler(offsetEuler);
+                    this.tempRotQ.copy(this.diagTempQuaternion).multiply(offsetQ);
+                    q = this.tempRotQ;
+                 }
+                 this.diagTempMatrix.compose(this.diagTempPosition, q, match.tempScale);
                  
-                 const worldMats = new Map<string, THREE.Matrix4>();
                  
-                 let unresolved = true;
-                 let limit = 20;
-                 while(unresolved && limit > 0) {
-                     unresolved = false;
-                     limit--;
-                     for(let n=0; n<nodesInfo.length; n++) {
-                        const info = nodesInfo[n];
-                        if (worldMats.has(info.name)) continue;
-                        
-                        if (!info.parentName) {
-                            const worldMat = new THREE.Matrix4().multiplyMatrices(this.diagTempMatrix, info.localMatrix);
-                            worldMats.set(info.name, worldMat);
-                            if (info.meshIndex >= 0) {
-                                batch.mesh.setMatrixAt(subIds[info.meshIndex], worldMat);
-                            }
-                        } else {
-                            const parentMat = worldMats.get(info.parentName);
-                            if (parentMat) {
-                                const worldMat = new THREE.Matrix4().multiplyMatrices(parentMat, info.localMatrix);
-                                worldMats.set(info.name, worldMat);
-                                if (info.meshIndex >= 0) {
-                                    batch.mesh.setMatrixAt(subIds[info.meshIndex], worldMat);
-                                }
-                            } else {
-                                unresolved = true;
-                            }
-                        }
-                     }
-                 } 
+                 const state = this.getOrCreateProceduralState(id);
+                 let diffT = 0.016; // default 60hz
+                 if (p1.t > p0.t) diffT = (p1.t - p0.t) / 1000;
+                 if (diffT < 0.001) diffT = 0.016;
+                 
+                 const p1Pos = new THREE.Vector3(p1.posX, p1.posY, p1.posZ);
+                 const p0Pos = new THREE.Vector3(p0.posX, p0.posY, p0.posZ);
+                 state.velocity.copy(p1Pos).sub(p0Pos).divideScalar(diffT);
+                 state.smoothedVelocity.lerp(state.velocity, 0.1);
+                 
+                 const speed = state.smoothedVelocity.length();
+                 const bodyEuler = new THREE.Euler().setFromQuaternion(this.diagTempQuaternion, 'YXZ');
+                 const swayQ = new THREE.Quaternion();
+                 
+                 updateProceduralState(state, typeId, dt, speed, state.smoothedVelocity, bodyEuler, swayQ);
+                 
+                 q = this.diagTempQuaternion.clone().multiply(swayQ);
+                 if (config && config.orientationOffset) {
+                    const offsetEuler = new THREE.Euler(config.orientationOffset[0], config.orientationOffset[1], config.orientationOffset[2], 'YXZ');
+                    const offsetQ = new THREE.Quaternion().setFromEuler(offsetEuler);
+                    q.multiply(offsetQ);
+                 }
+                 this.diagTempMatrix.compose(this.diagTempPosition, q, match.tempScale);
+                 
+                 if (!state.droneLocalMats) {
+                      state.droneLocalMats = new Map<string, THREE.Matrix4>();
+                  }
+                  if (!state.processedNodes) {
+                      state.processedNodes = new Set<string>();
+                  }
+                  state.processedNodes.clear();
+
+                  let unresolved = true;
+                  let limit = 20;
+                  while(unresolved && limit > 0) {
+                      unresolved = false;
+                      limit--;
+                      for(let n=0; n<nodesInfo.length; n++) {
+                         const info = nodesInfo[n];
+                         if (state.processedNodes.has(info.name)) continue;
+                         
+                         let parentDroneLocalMat = this.tempParentDroneLocalMat.identity();
+                         if (info.parentName) {
+                             if (state.processedNodes.has(info.parentName)) {
+                                 parentDroneLocalMat = state.droneLocalMats.get(info.parentName);
+                             } else {
+                                 unresolved = true;
+                                 continue;
+                             }
+                         }
+
+                         let droneLocalMat = state.droneLocalMats.get(info.name);
+                         if (!droneLocalMat) {
+                             droneLocalMat = new THREE.Matrix4();
+                             state.droneLocalMats.set(info.name, droneLocalMat);
+                         }
+
+                         this.tempLocalMat.copy(info.baseLocalMatrix);
+                         
+                         let r = this.tempR.identity();
+                         const { didRotate, hasRecoil } = applyNodeRotation(typeId, info.name, info.parentName, state, r, this.tempRecoilMat);
+                         
+                         if (didRotate) {
+                             const lp = (info as any).localPivot || new THREE.Vector3();
+                             this.tempT1.makeTranslation(-lp.x, -lp.y, -lp.z);
+                             this.tempT2.makeTranslation(lp.x, lp.y, lp.z);
+                             this.tempRotAroundPivot.multiplyMatrices(this.tempT2, r).multiply(this.tempT1);
+                             this.tempLocalMat.multiply(this.tempRotAroundPivot);
+                         }
+
+                         if (hasRecoil) {
+                             this.tempRecoilMat.makeTranslation(0, 0, state.recoilAmount * 0.2);
+                             this.tempLocalMat.multiply(this.tempRecoilMat);
+                         }
+
+                         droneLocalMat.multiplyMatrices(parentDroneLocalMat, this.tempLocalMat);
+                         state.processedNodes.add(info.name);
+
+                         this.tempWorldMat.multiplyMatrices(this.diagTempMatrix, droneLocalMat);
+                         if (info.meshIndex >= 0) {
+                             batch.mesh.setMatrixAt(subIds[info.meshIndex], this.tempWorldMat);
+                         }
+                      }
+                  } 
               }
             }
         }
@@ -209,8 +312,13 @@ export class DroneSystem {
       if (!this.activeThisTick.has(id)) {
          this.match.scene.remove(fw);
          this.standaloneDrones.delete(id);
+         this.standaloneMixers.delete(id);
       }
     }
+
+    this.standaloneMixers.forEach((mixer) => {
+       mixer.update(dt);
+    });
 
     match.remotePlayersTargetData.forEach((data, id) => {
       let group = match.remotePlayersMeshes.get(id);

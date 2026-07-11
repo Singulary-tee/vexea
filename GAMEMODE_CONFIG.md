@@ -355,3 +355,8 @@ To add a new game mode:
 4. No other files require modification.
 
 No gameplay system, damage pipeline, scoring system, or LLM commander code changes when a new mode is added. All systems read from the active config object passed at match initialization.
+
+---
+
+## 9. Drone Physics tuning
+* Wheeled Drone speed constant: 8.0, proposed turn rate: 0.04.

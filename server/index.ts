@@ -343,7 +343,16 @@ app.use((req, res, next) => {
 const PORT = 3000;
 const io = createTransport();
 
-app.use(express.json());
+app.use(express.json({limit: '10mb'}));
+
+app.post("/api/log", (req, res) => {
+    console.log("[CLIENT LOG]", ...req.body);
+    res.sendStatus(200);
+});
+
+app.get("/api/logs", (req, res) => {
+    res.json((global as any).serverLogs || []);
+});
 
 app.get("/api/proxy-asset", async (req, res) => {
   const fileUrl = req.query.url as string;
@@ -517,6 +526,24 @@ io.onConnection((channel: ChannelAdapter) => {
 
   channel.on("dev_spawn_test_entity", (args: any) => {
     currentRoom.spawnTestEntity(args.x, args.y, args.z);
+  });
+
+  channel.on("dev_spawn_frozen_drone", (args: any) => {
+    const success = currentRoom.registerDeveloperSpawner(args.type, { x: args.x, y: args.y, z: args.z });
+    if (success) {
+      const spawnedDrone = currentRoom.drones.find(x => x.id === currentRoom.nextDroneId - 1);
+      if (spawnedDrone) {
+        (spawnedDrone as any).isFrozen = true;
+      }
+    }
+  });
+
+  channel.on("dev_clear_frozen", () => {
+    for (let i = 0; i < currentRoom.drones.length; i++) {
+      if ((currentRoom.drones[i] as any).isFrozen) {
+        currentRoom.despawnDrone(currentRoom.drones[i]);
+      }
+    }
   });
 
   channel.on("dev_clear_test_entities", () => {
@@ -805,45 +832,24 @@ io.onConnection((channel: ChannelAdapter) => {
                   continue;
                 }
 
-                let w = 1,
-                  h = 1,
-                  l = 1;
-                switch (hitDrone.type) {
-                  case DroneType.ROTARY_SHOOTER:
-                    w = 0.6;
-                    h = 0.6;
-                    l = 0.6;
-                    break;
-                  case DroneType.BOMBER:
-                    w = 0.5;
-                    h = 0.5;
-                    l = 0.5;
-                    break;
-                  case DroneType.RECON:
-                    w = 0.4;
-                    h = 0.4;
-                    l = 0.4;
-                    break;
-                  case DroneType.FIXED_WING:
-                    w = 1.2;
-                    h = 0.4;
-                    l = 0.4;
-                    break;
-                  case DroneType.WHEELED:
-                    w = 0.8;
-                    h = 0.5;
-                    l = 0.6;
-                    break;
-                  case DroneType.ROBOT_DOG:
-                    w = 0.7;
-                    h = 0.6;
-                    l = 0.7;
-                    break;
-                  case DroneType.HUMANOID:
-                    w = 0.5;
-                    h = 1.8;
-                    l = 0.5;
-                    break;
+                const config = DRONE_CONFIGS[hitDrone.type];
+                let w = 1.0;
+                let h = 1.0;
+                let l = 1.0;
+                if (config && config.collider) {
+                  if (config.collider.type === 'cuboid' && config.collider.halfExtents) {
+                    w = config.collider.halfExtents[0] * 2;
+                    h = config.collider.halfExtents[1] * 2;
+                    l = config.collider.halfExtents[2] * 2;
+                  } else if (config.collider.type === 'capsule' && config.collider.radius !== undefined && config.collider.halfHeight !== undefined) {
+                    w = config.collider.radius * 2;
+                    h = (config.collider.halfHeight * 2) + (config.collider.radius * 2);
+                    l = config.collider.radius * 2;
+                  } else if (config.collider.radius !== undefined) {
+                    w = config.collider.radius * 2;
+                    h = config.collider.radius * 2;
+                    l = config.collider.radius * 2;
+                  }
                 }
 
                 if (
@@ -1039,8 +1045,18 @@ io.onConnection((channel: ChannelAdapter) => {
 
   channel.onDisconnect(() => {
     if (pState) {
-      console.log(`Disconnection registered: ${pState.id}`);
-      currentRoom.removePlayer(pState.id);
+      const pid = pState.id;
+      const room = currentRoom;
+      console.log(`Disconnection registered: ${pid}. Waiting 20s for reconnection...`);
+      
+      setTimeout(() => {
+        // If the player still has the same room and isn't connected
+        const p = room.players.get(pid);
+        if (p && !p.channel.connected) {
+           console.log(`[MATCH] Reconnection timeout expired for player ${pid}. Removing.`);
+           room.removePlayer(pid);
+        }
+      }, 20000);
     }
     const idx = globalChannels.indexOf(channel);
     if (idx !== -1) globalChannels.splice(idx, 1);

@@ -61,13 +61,13 @@ async function run() {
   processDroneIntelligence(nowMs, room.drones, room.players, room.rapierWorld, RAPIER);
 
   console.log("Drone state/mode after 1 tick:", drone.state, "/", drone.mode);
-  console.log("Drone target identified:", drone.yukaTarget ? "YES" : "NO");
-  if (drone.yukaTarget) {
-    console.log("  Target confidence:", (drone.yukaTarget as any).confidence);
+  console.log("Drone target identified:", drone.combatTarget ? "YES" : "NO");
+  if (drone.combatTarget) {
+    console.log("  Target confidence:", (drone.combatTarget as any).confidence);
     console.log("  Target position:", {
-      x: drone.yukaTarget.lastSensedPosition.x,
-      y: drone.yukaTarget.lastSensedPosition.y,
-      z: drone.yukaTarget.lastSensedPosition.z
+      x: drone.combatTarget.lastSensedPosition.x,
+      y: drone.combatTarget.lastSensedPosition.y,
+      z: drone.combatTarget.lastSensedPosition.z
     });
   }
   

@@ -32,6 +32,17 @@ export let smokeBatch: THREE.BatchedMesh | null = null;
 export let flashMesh: THREE.Mesh | null = null;
 export let flashLight: THREE.PointLight | null = null;
 
+export interface MuzzleFlashInstance {
+  mesh: THREE.Mesh;
+  light: THREE.PointLight | null;
+  life: number;
+  maxLife: number;
+  scaleFactor: number;
+}
+
+export const FLASH_POOL_SIZE = 8;
+export const flashPool: MuzzleFlashInstance[] = [];
+
 // Pool slot counts
 export let tracerSlots = 0;
 export let sparksPerHitCount = 0;
@@ -289,19 +300,38 @@ export function initMatchVisuals(scene: THREE.Scene) {
     _scene.add(decalBatch);
   }
   
+  // Initialize the flash pool
+  flashPool.length = 0;
   const _flashGeom = new THREE.PlaneGeometry(0.6, 0.6);
-  flashMesh = new THREE.Mesh(_flashGeom, flashMat);
-  flashMesh.name = "VFX_Flash";
-  flashMesh.visible = false;
-  _scene.add(flashMesh);
+  for (let i = 0; i < FLASH_POOL_SIZE; i++) {
+    const mesh = new THREE.Mesh(_flashGeom, flashMat);
+    mesh.name = `VFX_Flash_${i}`;
+    mesh.visible = false;
+    _scene.add(mesh);
 
-  if (cfg.flashLight) {
-    flashLight = new THREE.PointLight(0xFFF5E0, 0, 4);
-    flashLight.visible = false;
-    _scene.add(flashLight);
+    let light: THREE.PointLight | null = null;
+    if (cfg.flashLight) {
+      light = new THREE.PointLight(0xFFF5E0, 0, 6);
+      light.visible = false;
+      _scene.add(light);
+    }
+
+    flashPool.push({
+      mesh,
+      light,
+      life: 0,
+      maxLife: 0,
+      scaleFactor: 1.0
+    });
   }
 
-  console.log('[VFX:INIT]', 'preset:', getSettings().graphicsPreset, 'tracerSlots:', tracerSlots, 'sparks:', sparksPerHitCount, 'decals:', decalSlots, 'dust:', dustPerHitCount);
+  // Keep references to first element for pre-warming and backwards-compatibility
+  if (flashPool.length > 0) {
+    flashMesh = flashPool[0].mesh;
+    flashLight = flashPool[0].light;
+  }
+
+  console.log('[VFX:INIT]', 'preset:', getSettings().graphicsPreset, 'tracerSlots:', tracerSlots, 'sparks:', sparksPerHitCount, 'decals:', decalSlots, 'dust:', dustPerHitCount, 'flashPoolSize:', flashPool.length);
   vfxInitialized = true;
 }
 
@@ -325,19 +355,49 @@ export function spawnTracer(muzzlePos: THREE.Vector3, direction: THREE.Vector3) 
   }
 }
 
-export function triggerFlash(muzzlePos?: THREE.Vector3) {
-  if (flashMesh) {
-    flashLife = 3;
-    flashMesh.visible = true;
-    if (muzzlePos) {
-      flashMesh.position.copy(muzzlePos);
+export function triggerFlash(muzzlePos?: THREE.Vector3, scaleFactor = 1.0) {
+  if (!vfxInitialized || !muzzlePos) return;
+
+  // Find the first available (inactive or oldest) flash in the pool
+  let inst: MuzzleFlashInstance | null = null;
+  for (let i = 0; i < FLASH_POOL_SIZE; i++) {
+    if (flashPool[i].life <= 0) {
+      inst = flashPool[i];
+      break;
     }
-    if (flashLight) {
-      flashLight.visible = true;
-      flashLight.intensity = 8;
-      if (muzzlePos) {
-        flashLight.position.copy(muzzlePos);
+  }
+
+  // Fallback to oldest if all are active
+  if (!inst && flashPool.length > 0) {
+    let oldestIdx = 0;
+    let minLife = flashPool[0].life;
+    for (let i = 1; i < FLASH_POOL_SIZE; i++) {
+      if (flashPool[i].life < minLife) {
+        minLife = flashPool[i].life;
+        oldestIdx = i;
       }
+    }
+    inst = flashPool[oldestIdx];
+  }
+
+  if (inst) {
+    inst.life = 0.06; // 60ms duration
+    inst.maxLife = 0.06;
+    inst.scaleFactor = scaleFactor;
+
+    inst.mesh.position.copy(muzzlePos);
+    inst.mesh.visible = true;
+    inst.mesh.scale.setScalar(scaleFactor);
+
+    const camera = (window as any).camera;
+    if (camera) {
+      inst.mesh.quaternion.copy(camera.quaternion);
+    }
+
+    if (inst.light) {
+      inst.light.position.copy(muzzlePos);
+      inst.light.visible = true;
+      inst.light.intensity = 15.0 * scaleFactor;
     }
   }
 }
@@ -364,10 +424,14 @@ export function clearAllVisuals() {
     for (let i = 0; i < decalInstIds.length; i++) decalBatch.setVisibleAt(decalInstIds[i], false);
     decalIndex = 0;
   }
-  if (flashMesh) flashMesh.visible = false;
-  if (flashLight) {
-    flashLight.visible = false;
-    flashLight.intensity = 0;
+  for (let i = 0; i < flashPool.length; i++) {
+    const inst = flashPool[i];
+    inst.life = 0;
+    inst.mesh.visible = false;
+    if (inst.light) {
+      inst.light.visible = false;
+      inst.light.intensity = 0;
+    }
   }
   flashLife = 0;
 }
@@ -484,34 +548,24 @@ export function updateVFX(deltaTime: number, camera: THREE.PerspectiveCamera): v
     }
   }
   
-  // --- FLASH UPDATE ---
-  if (flashMesh && flashLife > 0) {
-    flashLife--;
-    
-    camera.getWorldPosition(_vfxPos);
-    camera.getWorldDirection(_vfxDir);
-    _vfxRight.setFromMatrixColumn(camera.matrixWorld, 0);
-    _vfxCamUp.setFromMatrixColumn(camera.matrixWorld, 1);
-    _vfxPos.addScaledVector(_vfxDir, 0.5);
-    _vfxPos.addScaledVector(_vfxRight, 0.2);
-    _vfxPos.addScaledVector(_vfxCamUp, -0.15);
-    
-    flashMesh.position.copy(_vfxPos);
-    flashMesh.quaternion.copy(camera.quaternion);
-    
-    const fScale = flashLife / 3;
-    flashMesh.scale.setScalar(fScale);
-    
-    if (flashLight) {
-      flashLight.position.copy(_vfxPos);
-      flashLight.intensity = 8 * fScale;
-    }
-    
-    if (flashLife <= 0) {
-      flashMesh.visible = false;
-      if (flashLight) {
-        flashLight.visible = false;
-        flashLight.intensity = 0;
+  // --- FLASH POOL UPDATE ---
+  for (let i = 0; i < flashPool.length; i++) {
+    const inst = flashPool[i];
+    if (inst.life > 0) {
+      inst.life -= deltaTime;
+      if (inst.life <= 0) {
+        inst.mesh.visible = false;
+        if (inst.light) {
+          inst.light.visible = false;
+          inst.light.intensity = 0;
+        }
+      } else {
+        inst.mesh.quaternion.copy(camera.quaternion);
+        const fScale = inst.life / inst.maxLife;
+        inst.mesh.scale.setScalar(inst.scaleFactor * fScale);
+        if (inst.light) {
+          inst.light.intensity = 15.0 * inst.scaleFactor * fScale;
+        }
       }
     }
   }
