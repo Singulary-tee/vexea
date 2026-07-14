@@ -3,6 +3,7 @@ import { MatchController, NetworkDroneState, DroneRingBuffer } from "../../Match
 import { 
   DroneState, 
   DroneType, 
+  DRONE_CONFIGS,
   HEADER_SIZE, 
   DRONE_STRUCT_SIZE,
   DETAILED_WEAPONS 
@@ -316,27 +317,15 @@ export class NetworkSyncSystem {
     }
 
     if (msg.type === "drone_shoot") {
+      if (this.match.drones) {
+        this.match.drones.onDroneShoot(msg.droneId, msg.droneType);
+      }
       _droneMuzzlePos.set(msg.posX, msg.posY, msg.posZ);
       const type = msg.droneType;
 
-      let playbackRate = 1.0;
-      let scaleFactor = 1.0;
-      if (type === DroneType.ROTARY_SHOOTER) {
-        playbackRate = 1.3;
-        scaleFactor = 0.8;
-      } else if (type === DroneType.FIXED_WING) {
-        playbackRate = 1.0;
-        scaleFactor = 1.1;
-      } else if (type === DroneType.WHEELED) {
-        playbackRate = 0.95;
-        scaleFactor = 1.0;
-      } else if (type === DroneType.ROBOT_DOG) {
-        playbackRate = 1.15;
-        scaleFactor = 0.9;
-      } else if (type === DroneType.HUMANOID) {
-        playbackRate = 0.6; // Deep heavy sound
-        scaleFactor = 2.0; // Massive flash
-      }
+      const config = DRONE_CONFIGS[type as DroneType];
+      let playbackRate = config?.firingSoundPitch ?? 1.0;
+      let scaleFactor = config?.muzzleFlashScale ?? 1.0;
 
       _droneFireDir.set(msg.dirX, msg.dirY, msg.dirZ).normalize();
       if (typeof (window as any).spawnTracer === "function") (window as any).spawnTracer(_droneMuzzlePos, _droneFireDir);

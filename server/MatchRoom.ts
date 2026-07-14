@@ -583,6 +583,9 @@ export class MatchRoom {
       }
       
       d.collider = this.rapierWorld.createCollider(colliderDesc, d.body);
+      if (config.collider.offset) {
+        d.collider.setTranslationWrtParent({ x: config.collider.offset[0], y: config.collider.offset[1], z: config.collider.offset[2] });
+      }
       
       const offset = 0.1;
       d.kcc = this.rapierWorld.createCharacterController(offset);
@@ -1916,7 +1919,7 @@ export class MatchRoom {
         const conf = INTEL_CONFIGS[d.type];
         const targetPos = combatTargetRecord.lastSensedPosition;
         
-        const muzzle = getDroneMuzzleWorldPosition(d);
+        const muzzle = getDroneMuzzleWorldPosition(d, targetPos);
         const dx = targetPos.x - muzzle.x;
         const dy = targetPos.y - muzzle.y;
         const dz = targetPos.z - muzzle.z;
@@ -1947,8 +1950,9 @@ export class MatchRoom {
            } else if (d.bomberState === "LOCKED") {
               if (this.serverTick - (d.bomberLockTime || 0) > 20) d.bomberState = "COMMITTED";
            } else if (d.bomberState === "COMMITTED") {
-              if (dist < 4.0) {
-                 this.applyExplosionDamage({ x: d.posX, y: d.posY, z: d.posZ }, 4.0, DRONE_CONFIGS[d.type].damage, d.id.toString(), "drone");
+              const detRadius = DRONE_CONFIGS[d.type].detonationTriggerRadius ?? 4.0;
+              if (dist < detRadius) {
+                 this.applyExplosionDamage({ x: d.posX, y: d.posY, z: d.posZ }, detRadius, DRONE_CONFIGS[d.type].damage, d.id.toString(), "drone");
                  this.despawnDrone(d);
                  continue;
               }
@@ -1982,7 +1986,7 @@ export class MatchRoom {
           const aimY = targetPos.y + velY * (dist / shootSpeed);
           const aimZ = targetPos.z + velZ * (dist / shootSpeed);
 
-          const fireMuzzle = getDroneMuzzleWorldPosition(d);
+          const fireMuzzle = getDroneMuzzleWorldPosition(d, { x: aimX, y: aimY, z: aimZ });
           const dirX = aimX - fireMuzzle.x;
           const dirY = aimY - fireMuzzle.y;
           const dirZ = aimZ - fireMuzzle.z;
@@ -1999,7 +2003,7 @@ export class MatchRoom {
                d.state = DroneState.ATTACKING;
                this.spawnServerProjectile(fireMuzzle.x, fireMuzzle.y, fireMuzzle.z, dirX, dirY, dirZ, true, DRONE_CONFIGS[d.type].damage, d.id.toString());
                this.broadcastReliableEvent({ type: "drone_shoot", droneId: d.id, droneType: d.type, posX: fireMuzzle.x, posY: fireMuzzle.y, posZ: fireMuzzle.z, dirX, dirY, dirZ });
-               d.cooldown = d.type === DroneType.HUMANOID ? 40 : 20;
+               d.cooldown = DRONE_CONFIGS[d.type].fireCooldown ?? (d.type === DroneType.HUMANOID ? 40 : 20);
              }
           }
         } else if (d.cooldown <= 0) {
@@ -2051,46 +2055,32 @@ export class MatchRoom {
 
       const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
 
-      let decelRadius = 5.0;
-      let maxYawRatePerTick = 0.1;
-      let minSpeed = 0.0;
-      let maxSpeed = 10.0;
+      const conf = DRONE_CONFIGS[d.type];
+      let decelRadius = conf.decelerationRadius ?? 5.0;
+      let maxYawRatePerTick = (conf.maxTurnRate ?? 3.0) * (1 / 60);
+      let minSpeed = conf.minSpeed ?? 0.0;
+      let maxSpeed = conf.speed;
       let maxAccelPerTick = 0.4;
 
       if (d.type === DroneType.RECON) {
-         decelRadius = 5.0;
-         maxYawRatePerTick = 0.1;
          maxSpeed = 15.0;
          maxAccelPerTick = 0.5;
       } else if (d.type === DroneType.BOMBER) {
-         decelRadius = 8.0;
-         maxYawRatePerTick = 0.05;
          maxSpeed = 20.0;
          maxAccelPerTick = 0.8;
       } else if (d.type === DroneType.ROTARY_SHOOTER) {
-         decelRadius = 5.0;
-         maxYawRatePerTick = 0.08;
          maxSpeed = 10.0;
          maxAccelPerTick = 0.3;
       } else if (d.type === DroneType.FIXED_WING) {
-         decelRadius = 12.0;
-         maxYawRatePerTick = 0.05;
          maxSpeed = 25.0;
-         minSpeed = 15.0;
          maxAccelPerTick = 0.4;
       } else if (d.type === DroneType.WHEELED) {
-         decelRadius = 4.0;
-         maxYawRatePerTick = 0.04;
          maxSpeed = 8.0;
          maxAccelPerTick = 0.4;
       } else if (d.type === DroneType.ROBOT_DOG) {
-         decelRadius = 3.0;
-         maxYawRatePerTick = 0.15;
          maxSpeed = 10.0;
          maxAccelPerTick = 0.4;
       } else if (d.type === DroneType.HUMANOID) {
-         decelRadius = 2.0;
-         maxYawRatePerTick = 0.2;
          maxSpeed = 6.0;
          maxAccelPerTick = 0.4;
       }
@@ -2106,7 +2096,7 @@ export class MatchRoom {
 
       let obstacleDetected = false;
       let forwardHitDistance = 0;
-      let detectionDistance = BASE_DETECTION_DISTANCE;
+      let detectionDistance = conf.detectionRadius ?? BASE_DETECTION_DISTANCE;
 
       const headingLen = Math.sqrt(d.currentHeadingX * d.currentHeadingX + d.currentHeadingZ * d.currentHeadingZ);
       const dirX = headingLen > 0.001 ? d.currentHeadingX / headingLen : 1;
@@ -2115,7 +2105,7 @@ export class MatchRoom {
       if (this.rapierWorld) {
          const speedForDetection = Math.sqrt(d.currentVelocityX * d.currentVelocityX + d.currentVelocityY * d.currentVelocityY + d.currentVelocityZ * d.currentVelocityZ);
          const currentSpeed = Math.max(speedForDetection, targetSpeed);
-         detectionDistance = BASE_DETECTION_DISTANCE + (currentSpeed * DETECTION_TIME_HORIZON);
+         detectionDistance = (conf.detectionRadius ?? BASE_DETECTION_DISTANCE) + (currentSpeed * DETECTION_TIME_HORIZON);
 
          const rayOrigin = getDroneMuzzleWorldPosition(d);
          const rayDir = { x: dirX, y: 0, z: dirZ };
@@ -2421,7 +2411,7 @@ export class MatchRoom {
               const dirZ = headingLen > 0.001 ? d.currentHeadingZ / headingLen : 0;
               const sin45 = 0.70710678;
               const cos45 = 0.70710678;
-              const probeDistance = Math.max(3.0, (BASE_DETECTION_DISTANCE + 5.0) * 0.75);
+              const probeDistance = Math.max(3.0, ((DRONE_CONFIGS[d.type].detectionRadius ?? BASE_DETECTION_DISTANCE) + 5.0) * 0.75);
               const rayOrigin = getDroneMuzzleWorldPosition(d);
 
               const leftDirX = dirX * cos45 - dirZ * sin45;

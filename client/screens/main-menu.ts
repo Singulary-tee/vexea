@@ -2,6 +2,7 @@ import * as screenManager from "./screen-manager";
 import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { DS } from "../design-system";
+import { IS_DEV } from "../../shared/gate";
 import { getDevMap, getDefaultMap, MAP_REGISTRY } from "../../shared/maps/map-registry";
 import { hasCachedBlob, getCachedOrFetchUrl, ensureAssetsDownloaded, getAssetUrl } from "../asset-cache";
 import { EXTENDED_SOUNDS, EXTENDED_TEXTURES } from "./splash";
@@ -384,7 +385,7 @@ export function initMainMenu() {
   leftColumn.appendChild(createNavCard('STATISTICS', 'STATISTICS').card);
   leftColumn.appendChild(createNavCard('FEEDBACK', 'FEEDBACK').card);
 
-  if ((import.meta as any).env?.DEV) {
+  if (IS_DEV) {
     const devBtn = createNavCard('DEV_QUICKSTART', 'DEV QUICK START').card;
     Object.assign(devBtn.style, {
       background: 'rgba(255,0,100,0.15)', border: '1px solid rgba(255,0,100,0.4)',
@@ -772,6 +773,7 @@ function renderRightPanel() {
          });
 
          // DEV DIAGNOSTICS & TESTING PANEL
+         if (IS_DEV) {
          const devBlock = document.createElement('div');
          Object.assign(devBlock.style, {
            marginTop: '24px',
@@ -836,6 +838,7 @@ function renderRightPanel() {
          };
          devBlock.appendChild(refillBtn);
          c.appendChild(devBlock);
+         }
        }));
        rightPanelContent.appendChild(createPanelBlock('LAST MATCH', c => {
          const lbl = document.createElement('div'); lbl.textContent = 'NO DATA AVAILABLE';

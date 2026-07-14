@@ -1,4 +1,4 @@
-import { DroneType, DroneState, getDroneMuzzleWorldPosition } from "../../shared/constants";
+import { DroneType, DroneState, getDroneMuzzleWorldPosition, DRONE_CONFIGS } from "../../shared/constants";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import type { PlayerState, ServerDrone } from "../MatchRoom";
 
@@ -70,6 +70,10 @@ export function processDroneIntelligence(
     if (d.type === DroneType.TEST_ENTITY) continue;
 
     const conf = INTEL_CONFIGS[d.type];
+    const droneConfig = DRONE_CONFIGS[d.type as DroneType];
+    const sightDistance = droneConfig?.detectionRadius ?? conf.sightDistance;
+    const visionConeAngle = droneConfig?.fovHalfAngle ? (droneConfig.fovHalfAngle * 2) : conf.visionConeAngle;
+    
     if (!d.memoryRecords) d.memoryRecords = [];
 
     // Reset touched flags for Zero-GC memory tracking
@@ -81,13 +85,13 @@ export function processDroneIntelligence(
 
     for (const player of livingPlayers) {
       // Stage 1: Distance check (Cheapest)
-      const sensorPos = getDroneMuzzleWorldPosition(d);
+      const sensorPos = getDroneMuzzleWorldPosition(d, { x: player.posX, y: player.posY, z: player.posZ });
       const dx = player.posX - sensorPos.x;
       const dy = player.posY - sensorPos.y;
       const dz = player.posZ - sensorPos.z;
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-      const inDistance = dist <= conf.sightDistance;
+      const inDistance = dist <= sightDistance;
 
       let inFOV = false;
       let angle = 0;
@@ -119,9 +123,9 @@ export function processDroneIntelligence(
         const dot = fx * dirX + fy * dirY + fz * dirZ;
         angle = Math.acos(Math.max(-1, Math.min(1, dot))); // Angle in radians
 
-        let fov = conf.visionConeAngle;
+        let fov = visionConeAngle;
         if (d.type === DroneType.HUMANOID) {
-          fov = Math.max(Math.PI / 6, (Math.PI / 2) * (1 - dist / conf.sightDistance));
+          fov = Math.max(Math.PI / 6, (Math.PI / 2) * (1 - dist / sightDistance));
         }
         halfAngle = fov / 2;
 

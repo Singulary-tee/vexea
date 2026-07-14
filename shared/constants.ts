@@ -94,7 +94,7 @@ export interface DroneConfig {
   isAirUnit: boolean;
   groupSizeMin: number;
   groupSizeMax: number;
-  collider: { type: 'cuboid' | 'capsule' | 'ball', halfExtents?: [number, number, number], halfHeight?: number, radius?: number };
+  collider: { type: 'cuboid' | 'capsule' | 'ball', halfExtents?: [number, number, number], halfHeight?: number, radius?: number, offset?: [number, number, number] };
   muzzleOffset?: [number, number, number]; // [x,y,z] relative to drone center
   visualRadius: number; // Target radius for visual scaling
   orientationOffset?: [number, number, number]; // [x,y,z] rotation offsets in radians to align forward axis
@@ -103,15 +103,24 @@ export interface DroneConfig {
   // Category 2 - Manual Points
   lightPoints?: [number, number, number][]; // Array of [x,y,z] light offset points
   detonationTriggerRadius?: number; // Kamikaze Bomber radius
+  turretYawPivot?: [number, number, number];
+  gunPitchPivot?: [number, number, number];
+  propPivotX?: number;
+  propPivotZ?: number;
 
   // Category 3 - Client-Only Animation Values
   propellerSpinRate?: number;
   hoverSwayAmount?: number;
   hoverSwaySpeed?: number;
+  verticalBobAmount?: number;
+  verticalBobSpeed?: number;
   wheelRollSpeed?: number;
   wheelSteerAngle?: number;
   barrelRecoilAmount?: number;
+  recoilDuration?: number;
+  recoilRecoverDuration?: number;
   chassisVibration?: number;
+  chassisVibrationSpeed?: number;
   muzzleFlashScale?: number;
   firingSoundPitch?: number;
 
@@ -128,6 +137,9 @@ export interface DroneConfig {
   turretRotateAngle?: number;
   turretGunAngle?: number;
   fireCooldown?: number;
+  detectionRadius?: number;
+  fovHalfAngle?: number;
+  decelerationRadius?: number;
 }
 
 export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
@@ -141,75 +153,157 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     isAirUnit: true,
     groupSizeMin: 3,
     groupSizeMax: 5,
-    visualRadius: 1.0,
+    visualRadius: 1,
     orientationOffset: [0, 0, 0],
     collider: { type: 'cuboid', halfExtents: [0.777, 0.204, 0.596] },
-    muzzleOffset: [0, -0.15, 0.8],
+    muzzleOffset: [0.04, 2.37, 8.59],
     animations: ['spin', 'sway'],
     // Category 2
-    lightPoints: [[-0.5, 0, 0.5], [0.5, 0, 0.5]],
+    lightPoints: [[-0.03, 0.01, 0.45], [0.03, 0.01, 0.45]],
+    propPivotX: 8.53,
+    propPivotZ: 7.28,
+    detonationTriggerRadius: 4,
+    turretYawPivot: [0, 0.45, -0.1],
+    gunPitchPivot: [0, 0.65, 0],
     // Category 3
-    propellerSpinRate: 35.0,
-    hoverSwayAmount: 0.05,
-    hoverSwaySpeed: 2.0,
-    muzzleFlashScale: 0.8,
+    propellerSpinRate: 60,
+    hoverSwayAmount: 0.02,
+    hoverSwaySpeed: 4.3,
+    verticalBobAmount: 0.03,
+    verticalBobSpeed: 1.5,
+    muzzleFlashScale: 0.6,
     firingSoundPitch: 1.3,
+    wheelRollSpeed: 2.5,
+    wheelSteerAngle: 0.5,
+    barrelRecoilAmount: 0.8,
+    recoilDuration: 0.05,
+    recoilRecoverDuration: 0.13,
+    chassisVibration: 0.05,
+    chassisVibrationSpeed: 30,
     // Category 4
-    maxRotationSpeed: 3.0,
-    maxVerticalSpeed: 5.0,
-    bankingAngle: 0.35,
-    fireCooldown: 20
+    maxRotationSpeed: 1.5,
+    maxVerticalSpeed: 2,
+    bankingAngle: 0.15,
+    minSpeed: 10,
+    maxTurnRate: 1.5,
+    pitchAngle: 0.35,
+    engagementRange: 40,
+    maxTurnAngle: 0.6,
+    maxTurnSpeed: 3,
+    turretRotateAngle: 3.14,
+    turretGunAngle: 0.5,
+    fireCooldown: 10,
+    detectionRadius: 30,
+    fovHalfAngle: 0.7853981633974483,
+    decelerationRadius: 5
   },
   [DroneType.BOMBER]: {
     type: DroneType.BOMBER,
-    hp: 30,
-    maxHp: 30,
-    damage: 80,
-    speed: 15,
+    hp: 40,
+    maxHp: 40,
+    damage: 8,
+    speed: 12,
     apCost: 2,
     isAirUnit: true,
-    groupSizeMin: 1,
-    groupSizeMax: 3,
-    visualRadius: 1.0,
+    groupSizeMin: 3,
+    groupSizeMax: 5,
+    visualRadius: 1.1,
     orientationOffset: [0, 0, 0],
-    collider: { type: 'cuboid', halfExtents: [0.777, 0.204, 0.596] },
+    collider: { type: 'cuboid', halfExtents: [1.05, 0.4, 0.85] },
+    muzzleOffset: [0.04, 2.37, 8.59],
     animations: ['spin', 'sway'],
     // Category 2
-    lightPoints: [[-0.5, 0, 0.5], [0.5, 0, 0.5]],
-    detonationTriggerRadius: 4.0,
+    lightPoints: [[-0.03, 0.01, 0.45], [0.03, 0.01, 0.45]],
+    propPivotX: 8.53,
+    propPivotZ: 7.28,
+    detonationTriggerRadius: 4,
+    turretYawPivot: [0, 0.45, -0.1],
+    gunPitchPivot: [0, 0.65, 0],
     // Category 3
-    propellerSpinRate: 35.0,
-    hoverSwayAmount: 0.05,
-    hoverSwaySpeed: 2.0,
+    propellerSpinRate: 60,
+    hoverSwayAmount: 0.02,
+    hoverSwaySpeed: 4.3,
+    verticalBobAmount: 0.03,
+    verticalBobSpeed: 1.5,
+    muzzleFlashScale: 0.6,
+    firingSoundPitch: 1.3,
+    wheelRollSpeed: 2.5,
+    wheelSteerAngle: 0.5,
+    barrelRecoilAmount: 0.8,
+    recoilDuration: 0.05,
+    recoilRecoverDuration: 0.13,
+    chassisVibration: 0.05,
+    chassisVibrationSpeed: 30,
     // Category 4
-    maxRotationSpeed: 3.0,
-    maxVerticalSpeed: 5.0,
-    bankingAngle: 0.35
+    maxRotationSpeed: 1.5,
+    maxVerticalSpeed: 2,
+    bankingAngle: 0.15,
+    minSpeed: 10,
+    maxTurnRate: 1.5,
+    pitchAngle: 0.35,
+    engagementRange: 40,
+    maxTurnAngle: 0.6,
+    maxTurnSpeed: 3,
+    turretRotateAngle: 3.14,
+    turretGunAngle: 0.5,
+    fireCooldown: 10,
+    detectionRadius: 30,
+    fovHalfAngle: 0.7853981633974483,
+    decelerationRadius: 5
   },
   [DroneType.RECON]: {
     type: DroneType.RECON,
-    hp: 20,
-    maxHp: 20,
-    damage: 0,
-    speed: 20,
-    apCost: 1,
+    hp: 40,
+    maxHp: 40,
+    damage: 8,
+    speed: 12,
+    apCost: 2,
     isAirUnit: true,
-    groupSizeMin: 1,
-    groupSizeMax: 2,
-    visualRadius: 1.0,
+    groupSizeMin: 3,
+    groupSizeMax: 5,
+    visualRadius: 0.8,
     orientationOffset: [0, 0, 0],
-    collider: { type: 'cuboid', halfExtents: [0.777, 0.204, 0.596] },
+    collider: { type: 'cuboid', halfExtents: [0.55, 0.19, 0.5] },
+    muzzleOffset: [0.04, 2.37, 8.59],
     animations: ['spin', 'sway'],
     // Category 2
-    lightPoints: [[-0.5, 0, 0.5], [0.5, 0, 0.5]],
+    lightPoints: [[-0.03, 0.01, 0.45], [0.03, 0.01, 0.45]],
+    propPivotX: 8.53,
+    propPivotZ: 7.28,
+    detonationTriggerRadius: 4,
+    turretYawPivot: [0, 0.45, -0.1],
+    gunPitchPivot: [0, 0.65, 0],
     // Category 3
-    propellerSpinRate: 20.0,
-    hoverSwayAmount: 0.05,
-    hoverSwaySpeed: 2.0,
+    propellerSpinRate: 60,
+    hoverSwayAmount: 0.02,
+    hoverSwaySpeed: 4.3,
+    verticalBobAmount: 0.03,
+    verticalBobSpeed: 1.5,
+    muzzleFlashScale: 0.6,
+    firingSoundPitch: 1.3,
+    wheelRollSpeed: 2.5,
+    wheelSteerAngle: 0.5,
+    barrelRecoilAmount: 0.8,
+    recoilDuration: 0.05,
+    recoilRecoverDuration: 0.13,
+    chassisVibration: 0.05,
+    chassisVibrationSpeed: 30,
     // Category 4
-    maxRotationSpeed: 3.0,
-    maxVerticalSpeed: 5.0,
-    bankingAngle: 0.35
+    maxRotationSpeed: 1.5,
+    maxVerticalSpeed: 2,
+    bankingAngle: 0.15,
+    minSpeed: 10,
+    maxTurnRate: 1.5,
+    pitchAngle: 0.35,
+    engagementRange: 40,
+    maxTurnAngle: 0.6,
+    maxTurnSpeed: 3,
+    turretRotateAngle: 3.14,
+    turretGunAngle: 0.5,
+    fireCooldown: 10,
+    detectionRadius: 30,
+    fovHalfAngle: 0.7853981633974483,
+    decelerationRadius: 5
   },
   [DroneType.FIXED_WING]: {
     type: DroneType.FIXED_WING,
@@ -228,6 +322,9 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     // Category 2
     lightPoints: [[-1.5, 0, 0.5], [1.5, 0, 0.5]],
     muzzleOffset: [0, 0, 1.2],
+    // Category 3
+    muzzleFlashScale: 2.0,
+    firingSoundPitch: 0.6,
     // Category 4
     minSpeed: 10.0,
     maxTurnRate: 1.5,
@@ -246,24 +343,40 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     groupSizeMax: 3,
     visualRadius: 1.5,
     orientationOffset: [0, -1.570796, 0],
-    collider: { type: 'cuboid', halfExtents: [1.187, 0.695, 1.082] },
-    muzzleOffset: [0, 0.6, 0.8],
+    collider: { type: 'cuboid', halfExtents: [1.65, 0.695, 1.8], offset: [0, -0.33, 0] },
+    muzzleOffset: [-4.62, 0.5, 0.1],
     animations: ['wheels', 'steer', 'turret'],
     // Category 2
-    lightPoints: [[-0.6, 0.3, 0.8], [0.6, 0.3, 0.8]],
+    lightPoints: [[-0.6, 0.3, 3], [0.6, -0.34, 3]],
+    detonationTriggerRadius: 4,
+    turretYawPivot: [-0.85, 0.45, -0.81],
+    gunPitchPivot: [-1.22, 0.99, 0],
     // Category 3
-    wheelRollSpeed: 2.5,
-    wheelSteerAngle: 0.5,
-    barrelRecoilAmount: 0.15,
-    chassisVibration: 0.05,
-    muzzleFlashScale: 1.0,
+    wheelRollSpeed: 1.8,
+    wheelSteerAngle: 0.1,
+    barrelRecoilAmount: 0.6,
+    recoilDuration: 0.08,
+    recoilRecoverDuration: 0.16,
+    chassisVibration: 0.01,
+    chassisVibrationSpeed: 32.79,
+    muzzleFlashScale: 1.7,
     firingSoundPitch: 0.95,
     // Category 4
-    maxTurnAngle: 0.6,
-    maxTurnSpeed: 3.0,
-    turretRotateAngle: 3.14,
-    turretGunAngle: 0.5,
-    fireCooldown: 15
+    maxRotationSpeed: 3,
+    maxVerticalSpeed: 5,
+    bankingAngle: 0.35,
+    minSpeed: 10,
+    maxTurnRate: 0.3,
+    pitchAngle: 0.35,
+    engagementRange: 40,
+    maxTurnAngle: 0.3,
+    maxTurnSpeed: 1.5,
+    turretRotateAngle: 6.25,
+    turretGunAngle: 0.3,
+    fireCooldown: 30,
+    detectionRadius: 30,
+    fovHalfAngle: 0.7853981633974483,
+    decelerationRadius: 5
   },
   [DroneType.ROBOT_DOG]: {
     type: DroneType.ROBOT_DOG,
@@ -367,10 +480,99 @@ export interface HitEvent {
   dirZ: number;
 }
 
-export function getDroneMuzzleWorldPosition(d: { posX: number; posY: number; posZ: number; rotX: number; rotY: number; rotZ: number; rotW: number; type: DroneType }) {
+export function getDroneMuzzleWorldPosition(
+  d: { posX: number; posY: number; posZ: number; rotX: number; rotY: number; rotZ: number; rotW: number; type: DroneType },
+  targetPos?: { x: number; y: number; z: number }
+) {
   const conf = DRONE_CONFIGS[d.type] || DRONE_CONFIGS[DroneType.TEST_ENTITY];
   const offset = conf.muzzleOffset || [0, 0.5, 0];
   
+  let rx = offset[0];
+  let ry = offset[1];
+  let rz = offset[2];
+
+  if (d.type === DroneType.WHEELED && targetPos) {
+    // Precise analytical forward kinematics for the wheeled drone's articulated turret
+    const pt_x = conf.turretYawPivot ? conf.turretYawPivot[0] : 0.0;
+    const pt_y = conf.turretYawPivot ? conf.turretYawPivot[1] : 0.45;
+    const pt_z = conf.turretYawPivot ? conf.turretYawPivot[2] : -0.1;
+
+    const pg_x = conf.gunPitchPivot ? conf.gunPitchPivot[0] : 0.0;
+    const pg_y = conf.gunPitchPivot ? conf.gunPitchPivot[1] : 0.65;
+    const pg_z = conf.gunPitchPivot ? conf.gunPitchPivot[2] : 0.0;
+
+    const pg_rel_x = pg_x - pt_x;
+    const pg_rel_y = pg_y - pt_y;
+    const pg_rel_z = pg_z - pt_z;
+
+    const pm_rel_x = offset[0] - pg_x;
+    const pm_rel_y = offset[1] - pg_y;
+    const pm_rel_z = offset[2] - pg_z;
+
+    // 1. Transform targetPos to local space of the drone body
+    const dx = targetPos.x - d.posX;
+    const dy = targetPos.y - d.posY;
+    const dz = targetPos.z - d.posZ;
+
+    const qx = -d.rotX;
+    const qy = -d.rotY;
+    const qz = -d.rotZ;
+    const qw = d.rotW;
+
+    const num1 = qx * 2;
+    const num2 = qy * 2;
+    const num3 = qz * 2;
+    const num4 = qx * num1;
+    const num5 = qy * num2;
+    const num6 = qz * num3;
+    const num7 = qx * num2;
+    const num8 = qx * num3;
+    const num9 = qy * num3;
+    const num10 = qw * num1;
+    const num11 = qw * num2;
+    const num12 = qw * num3;
+
+    const localTargetX = (1.0 - (num5 + num6)) * dx + (num7 - num12) * dy + (num8 + num11) * dz;
+    const localTargetY = (num7 + num12) * dx + (1.0 - (num4 + num6)) * dy + (num9 - num10) * dz;
+    const localTargetZ = (num8 - num11) * dx + (num9 + num10) * dy + (1.0 - (num4 + num5)) * dz;
+
+    // 2. Vector from Gun Pivot to local target
+    const vx = localTargetX - pg_x;
+    const vy = localTargetY - pg_y;
+    const vz = localTargetZ - pg_z;
+
+    // 3. Calculate yaw and pitch needed to face local target
+    const targetYaw = Math.atan2(vz, vx);
+    const dist2d = Math.sqrt(vx * vx + vz * vz);
+    const targetPitch = Math.atan2(vy, dist2d);
+
+    const maxYaw = conf.turretRotateAngle ?? Math.PI;
+    const maxPitch = conf.turretGunAngle ?? 0.5;
+    const clampedYaw = Math.max(-maxYaw, Math.min(maxYaw, targetYaw));
+    const clampedPitch = Math.max(-maxPitch, Math.min(maxPitch, targetPitch));
+
+    // 4. Kinematic chain evaluation
+    const cosP = Math.cos(clampedPitch);
+    const sinP = Math.sin(clampedPitch);
+    const rGunX = pm_rel_x * cosP - pm_rel_y * sinP;
+    const rGunY = pm_rel_x * sinP + pm_rel_y * cosP;
+    const rGunZ = pm_rel_z;
+
+    const rTurretRelX = rGunX + pg_rel_x;
+    const rTurretRelY = rGunY + pg_rel_y;
+    const rTurretRelZ = rGunZ + pg_rel_z;
+
+    const cosY = Math.cos(clampedYaw);
+    const sinY = Math.sin(clampedYaw);
+    const rTurretX = rTurretRelX * cosY - rTurretRelZ * sinY;
+    const rTurretY = rTurretRelY;
+    const rTurretZ = rTurretRelX * sinY + rTurretRelZ * cosY;
+
+    rx = rTurretX + pt_x;
+    ry = rTurretY + pt_y;
+    rz = rTurretZ + pt_z;
+  }
+
   const qx = d.rotX;
   const qy = d.rotY;
   const qz = d.rotZ;
@@ -389,13 +591,13 @@ export function getDroneMuzzleWorldPosition(d: { posX: number; posY: number; pos
   const num11 = qw * num2;
   const num12 = qw * num3;
 
-  const rx = (1.0 - (num5 + num6)) * offset[0] + (num7 - num12) * offset[1] + (num8 + num11) * offset[2];
-  const ry = (num7 + num12) * offset[0] + (1.0 - (num4 + num6)) * offset[1] + (num9 - num10) * offset[2];
-  const rz = (num8 - num11) * offset[0] + (num9 + num10) * offset[1] + (1.0 - (num4 + num5)) * offset[2];
+  const rx_final = (1.0 - (num5 + num6)) * rx + (num7 - num12) * ry + (num8 + num11) * rz;
+  const ry_final = (num7 + num12) * rx + (1.0 - (num4 + num6)) * ry + (num9 - num10) * rz;
+  const rz_final = (num8 - num11) * rx + (num9 + num10) * ry + (1.0 - (num4 + num5)) * rz;
 
   return {
-    x: d.posX + rx,
-    y: d.posY + ry,
-    z: d.posZ + rz
+    x: d.posX + rx_final,
+    y: d.posY + ry_final,
+    z: d.posZ + rz_final
   };
 }

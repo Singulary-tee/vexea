@@ -28,11 +28,12 @@ import {
   DETAILED_WEAPONS,
   calculateDamageWithFalloff,
 } from "../shared/weapons";
+import { IS_DEV } from "../shared/gate";
 
 export const HISTORICAL_SAMPLES_MAX = 120;
 export const HISTORIC_BLOCK_SIZE = 2 + MAX_DRONES * 4;
 
-export const IS_DEV = true; // Master toggle to easily disable all development cheats/commands on the server for production.
+export { IS_DEV }; // Master toggle to easily disable all development cheats/commands on the server for production.
 
 dotenv.config();
 
@@ -477,41 +478,49 @@ io.onConnection((channel: ChannelAdapter) => {
   });
 
   channel.on("dev_spawn_bots", (args: any) => {
+    if (!IS_DEV) return;
     const count = typeof args.count === "number" ? args.count : 3;
     currentRoom.spawnTestBots(count);
   });
 
   channel.on("dev_spawn_cube", (args: any) => {
+    if (!IS_DEV) return;
     currentRoom.devSpawnCube(pState.id, args);
   });
 
   channel.on("dev_clear_cube", () => {
+    if (!IS_DEV) return;
     currentRoom.devClearCube();
   });
 
   channel.on("dev_set_gravity_y", (args: any) => {
+    if (!IS_DEV) return;
     if (args && typeof args.gravityY === "number") {
       currentRoom.setDevPhysicsGravityY(args.gravityY);
     }
   });
 
   channel.on("dev_set_speed_multiplier", (args: any) => {
+    if (!IS_DEV) return;
     if (args && typeof args.speedMultiplier === "number") {
       currentRoom.setDevPhysicsSpeedMultiplier(args.speedMultiplier);
     }
   });
 
   channel.on("dev_set_paused", (args: any) => {
+    if (!IS_DEV) return;
     if (args && typeof args.paused === "boolean") {
       currentRoom.setDevPhysicsPaused(args.paused);
     }
   });
 
   channel.on("dev_step_once", () => {
+    if (!IS_DEV) return;
     currentRoom.setDevPhysicsStepOnce();
   });
 
   channel.on("dev_spawn_drone", (args: any) => {
+    if (!IS_DEV) return;
     const type = typeof args.type === "number" ? args.type : Number(args.type);
     const pos = (args.x !== undefined && args.y !== undefined && args.z !== undefined) ? 
       { x: Number(args.x), y: Number(args.y), z: Number(args.z) } : undefined;
@@ -519,16 +528,19 @@ io.onConnection((channel: ChannelAdapter) => {
   });
 
   channel.on("dev_clear_drones", () => {
+    if (!IS_DEV) return;
     for (let i = 0; i < currentRoom.drones.length; i++) {
       currentRoom.drones[i].state = DroneState.DEAD;
     }
   });
 
   channel.on("dev_spawn_test_entity", (args: any) => {
+    if (!IS_DEV) return;
     currentRoom.spawnTestEntity(args.x, args.y, args.z);
   });
 
   channel.on("dev_spawn_frozen_drone", (args: any) => {
+    if (!IS_DEV) return;
     const success = currentRoom.registerDeveloperSpawner(args.type, { x: args.x, y: args.y, z: args.z });
     if (success) {
       const spawnedDrone = currentRoom.drones.find(x => x.id === currentRoom.nextDroneId - 1);
@@ -539,6 +551,7 @@ io.onConnection((channel: ChannelAdapter) => {
   });
 
   channel.on("dev_clear_frozen", () => {
+    if (!IS_DEV) return;
     for (let i = 0; i < currentRoom.drones.length; i++) {
       if ((currentRoom.drones[i] as any).isFrozen) {
         currentRoom.despawnDrone(currentRoom.drones[i]);
@@ -547,36 +560,44 @@ io.onConnection((channel: ChannelAdapter) => {
   });
 
   channel.on("dev_clear_test_entities", () => {
+    if (!IS_DEV) return;
     currentRoom.clearTestEntities();
   });
 
   channel.on("dev_test_entity_mode", (args: any) => {
+    if (!IS_DEV) return;
     currentRoom.setTestEntityMode(args.mode);
   });
 
   channel.on("dev_test_entity_target", (args: any) => {
+    if (!IS_DEV) return;
     currentRoom.setTestEntityTarget(args.x, args.y, args.z);
   });
 
   channel.on("dev_test_entity_sight", () => {
+    if (!IS_DEV) return;
     currentRoom.triggerTestEntitySight();
   });
 
   channel.on("dev_test_entity_sound", () => {
+    if (!IS_DEV) return;
     currentRoom.triggerTestEntitySound();
   });
 
   channel.on("dev_test_entity_collision_filter", (args: any) => {
+    if (!IS_DEV) return;
     currentRoom.setTestEntityCollisionFilter(args.group, args.mask);
   });
 
 
   channel.on("dev_toggle_llm", (args: any) => {
+    if (!IS_DEV) return;
     currentRoom.llmCommanderDisabled = !!args?.disabled;
     console.log(`[VEXEA SERVER] LLM Commander disabled toggle processed: ${currentRoom.llmCommanderDisabled}`);
   });
 
   channel.on("refill_credits", async (args: any) => {
+    if (!IS_DEV) return;
     const reqUid = args?.uid || playerId;
     try {
       await updateDoc(doc(db, "users", reqUid), {
@@ -590,6 +611,7 @@ io.onConnection((channel: ChannelAdapter) => {
   });
 
   channel.on("dev_set_class", (args: any) => {
+    if (!IS_DEV) return;
     if (args.playerClass && pState) {
       pState.weapon = "rifle";
       pState.hp = 100;
@@ -674,6 +696,7 @@ io.onConnection((channel: ChannelAdapter) => {
   });
 
   channel.on("debug_get_state", () => {
+    if (!IS_DEV) return;
     if (currentRoom) {
       const state = {
         players: Array.from(currentRoom.players.values()).map(p => ({

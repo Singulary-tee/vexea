@@ -9,6 +9,7 @@ export interface DroneProceduralState {
   recoilAmount: number;
   steerAngle: number;
   lastBodyYaw?: number;
+  accumulatedTime?: number;
 }
 
 export function createProceduralState(): DroneProceduralState {
@@ -39,10 +40,25 @@ export function updateProceduralState(
   }
   
   if (config.animations.includes('sway')) {
+    if (state.accumulatedTime === undefined) state.accumulatedTime = 0;
+    state.accumulatedTime += dt;
+
     const swayAmount = config.hoverSwayAmount ?? 0.05;
-    const swayX = smoothedVelocity.z * swayAmount;
-    const swayZ = -smoothedVelocity.x * swayAmount;
-    outSwayQuaternion.setFromEuler(new THREE.Euler(swayX, 0, swayZ));
+    const swaySpeed = config.hoverSwaySpeed ?? 2.0;
+
+    // Time-based continuous sway (runs regardless of movement/velocity)
+    const timeSwayX = Math.sin(state.accumulatedTime * swaySpeed) * swayAmount;
+    const timeSwayZ = Math.cos(state.accumulatedTime * swaySpeed * 0.9) * swayAmount;
+
+    // Velocity-derived tilt
+    const velocityTiltX = smoothedVelocity.z * 0.05;
+    const velocityTiltZ = -smoothedVelocity.x * 0.05;
+
+    // Combine both
+    const totalSwayX = timeSwayX + velocityTiltX;
+    const totalSwayZ = timeSwayZ + velocityTiltZ;
+
+    outSwayQuaternion.setFromEuler(new THREE.Euler(totalSwayX, 0, totalSwayZ));
   } else {
     outSwayQuaternion.identity();
   }
@@ -51,8 +67,9 @@ export function updateProceduralState(
     state.wheelAngle += speed * dt * (config.wheelRollSpeed ?? 2.0);
   }
   
-  if (config.animations.includes('turret')) {
-    state.recoilAmount = Math.max(0, state.recoilAmount - dt * 5.0);
+  if (config.animations.includes('turret') || typeId === DroneType.ROTARY_SHOOTER) {
+    const recoverDur = config.recoilRecoverDuration ?? 0.20;
+    state.recoilAmount = Math.max(0, state.recoilAmount - dt * (1.0 / recoverDur));
   }
 
   if (config.animations.includes('steer')) {
@@ -85,7 +102,8 @@ export function applyNodeRotation(
   parentName: string | null | undefined,
   state: DroneProceduralState,
   rOut: THREE.Matrix4,
-  recoilOut: THREE.Matrix4
+  recoilOut: THREE.Matrix4,
+  isMesh?: boolean
 ): { didRotate: boolean; hasRecoil: boolean } {
   const config = DRONE_CONFIGS[typeId as DroneType];
   let didRotate = false;
@@ -94,9 +112,9 @@ export function applyNodeRotation(
   if (!config) return { didRotate, hasRecoil };
 
   if (config.animations.includes('spin')) {
-    if (nodeName.toLowerCase().includes('prop') && 
-      nodeName.toLowerCase() !== 'prop' && 
-      parentName?.toLowerCase() !== 'propbl') {
+    const parentNameLower = parentName?.toLowerCase() || '';
+    const isPropMesh = !!isMesh && (parentNameLower.includes('prop') && parentNameLower !== 'prop');
+    if (isPropMesh) {
       rOut.makeRotationY(state.spinAngle);
       didRotate = true;
     }
@@ -104,14 +122,25 @@ export function applyNodeRotation(
   
   if (config.animations.includes('steer')) {
     if (nodeName === 'FrontAxel') {
-      rOut.makeRotationY(state.steerAngle);
+      rOut.makeRotationX(state.steerAngle);
       didRotate = true;
     }
   }
 
   if (config.animations.includes('wheels')) {
-    if (nodeName.includes('Tires')) {
-      rOut.makeRotationY(-state.wheelAngle);
+    if (nodeName.includes('Tires') || (nodeName.toLowerCase().includes('wheel') && !nodeName.toLowerCase().includes('wheeled'))) {
+      rOut.makeRotationY(state.wheelAngle);
+      const nameLower = nodeName.toLowerCase();
+      const isSteeringWheel = nameLower.includes('front') || 
+                              nameLower.includes('steer') || 
+                              nameLower.includes('fl') || 
+                              nameLower.includes('fr') || 
+                              nameLower.includes('lefttires') || 
+                              nameLower.includes('righttires');
+      if (isSteeringWheel) {
+        const steerRot = new THREE.Matrix4().makeRotationX(state.steerAngle);
+        rOut.premultiply(steerRot);
+      }
       didRotate = true;
     }
   }
@@ -121,10 +150,20 @@ export function applyNodeRotation(
       rOut.makeRotationY(state.turretYaw);
       didRotate = true;
     } else if (nodeName === 'gun') {
-      rOut.makeRotationX(state.turretPitch);
+      rOut.makeRotationZ(state.turretPitch);
       didRotate = true;
-      hasRecoil = true;
-      recoilOut.makeTranslation(0, 0, state.recoilAmount * (config.barrelRecoilAmount ?? 0.15));
+    }
+  }
+
+  if (nodeName === 'barrel' || nodeName.toLowerCase().includes('barrel') || nodeName.toLowerCase() === 'rifle' || nodeName === 'gun') {
+    hasRecoil = true;
+    const recoilAmt = config.barrelRecoilAmount ?? 0.15;
+    if (typeId === DroneType.ROTARY_SHOOTER) {
+      recoilOut.makeTranslation(0, 0, -state.recoilAmount * recoilAmt);
+    } else if (typeId === DroneType.WHEELED) {
+      recoilOut.makeTranslation(state.recoilAmount * recoilAmt, 0, 0);
+    } else {
+      recoilOut.makeTranslation(-state.recoilAmount * recoilAmt, 0, 0);
     }
   }
 

@@ -374,9 +374,32 @@ export async function getCachedOrFetchUrl(
     const serverPrefix = s.serverUrl ? s.serverUrl.replace(/\/$/, "") : "";
     const proxyUrl = `${serverPrefix}/api/proxy-asset?url=${encodeURIComponent(downloadUrl)}`;
 
-    const response = await fetch(proxyUrl);
-    if (!response.ok) {
-      throw new Error(`[Cache] CDN fetch failed for ${baseName} via proxy: ${response.statusText}`);
+    const isAiStudio = typeof window !== "undefined" && (
+      window.location.hostname.endsWith(".run.app") ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1"
+    );
+
+    let response: Response;
+    if (!isAiStudio) {
+      // Production builds outside of AI Studio must fetch directly from CDN without server proxy
+      response = await fetch(downloadUrl);
+      if (!response.ok) {
+        throw new Error(`[Cache] CDN fetch failed for ${baseName}: status ${response.status}`);
+      }
+    } else {
+      try {
+        response = await fetch(downloadUrl);
+        if (!response.ok) {
+          throw new Error(`Direct CDN fetch failed: status ${response.status}`);
+        }
+      } catch (directErr) {
+        console.warn(`[Cache] Direct CDN fetch failed for ${baseName}, attempting proxy fallback:`, directErr);
+        response = await fetch(proxyUrl);
+        if (!response.ok) {
+          throw new Error(`[Cache] CDN fetch failed for ${baseName} via proxy fallback: ${response.statusText}`);
+        }
+      }
     }
 
     // Wrap reader to track progress

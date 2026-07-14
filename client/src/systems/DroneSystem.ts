@@ -46,6 +46,19 @@ export class DroneSystem {
   private tempUp = new THREE.Vector3(0, 1, 0);
   private standaloneMixers = new Map<number, THREE.AnimationMixer>();
 
+  // Pre-allocated objects for zero GC loops
+  private loopEuler = new THREE.Euler();
+  private loopOffsetQ = new THREE.Quaternion();
+  private loopP1Pos = new THREE.Vector3();
+  private loopP0Pos = new THREE.Vector3();
+  private loopSwayQ = new THREE.Quaternion();
+  private loopBodyEuler = new THREE.Euler();
+  private loopQ = new THREE.Quaternion();
+  private zeroVector = new THREE.Vector3(0, 0, 0);
+  private tempTurretPivot = new THREE.Vector3();
+  private tempGunPivot = new THREE.Vector3();
+  private tempPropellerPivot = new THREE.Vector3();
+
   public riflemanModel: THREE.Group | null = null;
 
   constructor(match: MatchController) {
@@ -198,9 +211,9 @@ export class DroneSystem {
                  let q = this.diagTempQuaternion;
                  const config = DRONE_CONFIGS[typeId];
                  if (config && config.orientationOffset) {
-                    const offsetEuler = new THREE.Euler(config.orientationOffset[0], config.orientationOffset[1], config.orientationOffset[2], 'YXZ');
-                    const offsetQ = new THREE.Quaternion().setFromEuler(offsetEuler);
-                    this.tempRotQ.copy(this.diagTempQuaternion).multiply(offsetQ);
+                    this.loopEuler.set(config.orientationOffset[0], config.orientationOffset[1], config.orientationOffset[2], 'YXZ');
+                    this.loopOffsetQ.setFromEuler(this.loopEuler);
+                    this.tempRotQ.copy(this.diagTempQuaternion).multiply(this.loopOffsetQ);
                     q = this.tempRotQ;
                  }
                  this.diagTempMatrix.compose(this.diagTempPosition, q, match.tempScale);
@@ -211,24 +224,40 @@ export class DroneSystem {
                  if (p1.t > p0.t) diffT = (p1.t - p0.t) / 1000;
                  if (diffT < 0.001) diffT = 0.016;
                  
-                 const p1Pos = new THREE.Vector3(p1.posX, p1.posY, p1.posZ);
-                 const p0Pos = new THREE.Vector3(p0.posX, p0.posY, p0.posZ);
-                 state.velocity.copy(p1Pos).sub(p0Pos).divideScalar(diffT);
+                 this.loopP1Pos.set(p1.posX, p1.posY, p1.posZ);
+                 this.loopP0Pos.set(p0.posX, p0.posY, p0.posZ);
+                 state.velocity.copy(this.loopP1Pos).sub(this.loopP0Pos).divideScalar(diffT);
                  state.smoothedVelocity.lerp(state.velocity, 0.1);
                  
                  const speed = state.smoothedVelocity.length();
-                 const bodyEuler = new THREE.Euler().setFromQuaternion(this.diagTempQuaternion, 'YXZ');
-                 const swayQ = new THREE.Quaternion();
+                 this.loopBodyEuler.setFromQuaternion(this.diagTempQuaternion, 'YXZ');
+                 this.loopSwayQ.set(0, 0, 0, 1);
                  
-                 updateProceduralState(state, typeId, dt, speed, state.smoothedVelocity, bodyEuler, swayQ);
+                 updateProceduralState(state, typeId, dt, speed, state.smoothedVelocity, this.loopBodyEuler, this.loopSwayQ);
                  
-                 q = this.diagTempQuaternion.clone().multiply(swayQ);
+                 this.loopQ.copy(this.diagTempQuaternion).multiply(this.loopSwayQ);
+                 q = this.loopQ;
                  if (config && config.orientationOffset) {
-                    const offsetEuler = new THREE.Euler(config.orientationOffset[0], config.orientationOffset[1], config.orientationOffset[2], 'YXZ');
-                    const offsetQ = new THREE.Quaternion().setFromEuler(offsetEuler);
-                    q.multiply(offsetQ);
+                    this.loopEuler.set(config.orientationOffset[0], config.orientationOffset[1], config.orientationOffset[2], 'YXZ');
+                    this.loopOffsetQ.setFromEuler(this.loopEuler);
+                    q.multiply(this.loopOffsetQ);
                  }
+                 
+                 let basePosY = this.diagTempPosition.y;
+                 if (typeId === DroneType.WHEELED) {
+                     // Handled by body-only translation below
+                 } else if (typeId === DroneType.ROTARY_SHOOTER || typeId === DroneType.BOMBER || typeId === DroneType.RECON) {
+                     const bobAmp = config?.verticalBobAmount ?? 0.08;
+                     const bobSpeed = config?.verticalBobSpeed ?? 1.5;
+                     if (bobAmp > 0) {
+                         this.diagTempPosition.y += Math.sin(performance.now() * 0.001 * bobSpeed) * bobAmp;
+                     }
+                 }
+                 
                  this.diagTempMatrix.compose(this.diagTempPosition, q, match.tempScale);
+                 
+                 // Restore for next node calculations if any
+                 this.diagTempPosition.y = basePosY;
                  
                  if (!state.droneLocalMats) {
                       state.droneLocalMats = new Map<string, THREE.Matrix4>();
@@ -266,34 +295,101 @@ export class DroneSystem {
                          this.tempLocalMat.copy(info.baseLocalMatrix);
                          
                          let r = this.tempR.identity();
-                         const { didRotate, hasRecoil } = applyNodeRotation(typeId, info.name, info.parentName, state, r, this.tempRecoilMat);
+                         const { didRotate, hasRecoil } = applyNodeRotation(typeId, info.name, info.parentName, state, r, this.tempRecoilMat, info.isMesh);
                          
                          if (didRotate) {
-                             const lp = (info as any).localPivot || new THREE.Vector3();
+                             let lp = (info as any).localPivot || this.zeroVector;
+                             
+                             // P_local: pivot relative to mesh origin in its own coordinate system
+                             if (typeId === DroneType.WHEELED && (info as any).baseInvWorldMatrix) {
+                                 if (info.name === 'rotate' && config.turretYawPivot) {
+                                     this.tempTurretPivot.set(config.turretYawPivot[0], config.turretYawPivot[1], config.turretYawPivot[2]);
+                                     this.tempTurretPivot.applyMatrix4((info as any).baseInvWorldMatrix);
+                                     lp = this.tempTurretPivot;
+                                 } else if (info.name === 'gun' && config.gunPitchPivot) {
+                                     this.tempGunPivot.set(config.gunPitchPivot[0], config.gunPitchPivot[1], config.gunPitchPivot[2]);
+                                     this.tempGunPivot.applyMatrix4((info as any).baseInvWorldMatrix);
+                                     lp = this.tempGunPivot;
+                                 }
+                             } else if ((typeId === DroneType.ROTARY_SHOOTER || typeId === DroneType.BOMBER || typeId === DroneType.RECON) && (info as any).baseInvWorldMatrix) {
+                                 const parentNameLower = info.parentName?.toLowerCase() || '';
+                                 const isPropellerMesh = info.isMesh && (parentNameLower.includes('prop') && parentNameLower !== 'prop');
+                                 if (isPropellerMesh) {
+                                     let px = 0;
+                                     let pz = 0;
+                                     const mirrorX = config.propPivotX ?? 0.5;
+                                     const mirrorZ = config.propPivotZ ?? 0.5;
+                                     const mpOrig = (info as any).modelPivot || this.zeroVector;
+                                     
+                                     if (mpOrig.x < 0 && mpOrig.z > 0) {
+                                         px = -mirrorX; pz = mirrorZ;
+                                     } else if (mpOrig.x > 0 && mpOrig.z > 0) {
+                                         px = mirrorX; pz = mirrorZ;
+                                     } else if (mpOrig.x < 0 && mpOrig.z < 0) {
+                                         px = -mirrorX; pz = -mirrorZ;
+                                      } else if (mpOrig.x > 0 && mpOrig.z < 0) {
+                                         px = mirrorX; pz = -mirrorZ;
+                                     } else {
+                                         px = mpOrig.x; pz = mpOrig.z;
+                                     }
+                                     
+                                     this.tempPropellerPivot.set(px, 0.05, pz);
+                                     this.tempPropellerPivot.applyMatrix4((info as any).baseInvWorldMatrix);
+                                     lp = this.tempPropellerPivot;
+                                 }
+                             }
+                             
+                             // Geometric Rule: M_local = T_position * T(P_local) * R * T(-P_local)
                              this.tempT1.makeTranslation(-lp.x, -lp.y, -lp.z);
                              this.tempT2.makeTranslation(lp.x, lp.y, lp.z);
                              this.tempRotAroundPivot.multiplyMatrices(this.tempT2, r).multiply(this.tempT1);
+                             
+                             // Apply to base local matrix (T_position)
                              this.tempLocalMat.multiply(this.tempRotAroundPivot);
                          }
 
                          if (hasRecoil) {
-                             this.tempRecoilMat.makeTranslation(0, 0, state.recoilAmount * 0.2);
+                             const recoilAmt = config.barrelRecoilAmount ?? 0.15;
+                             if (typeId === DroneType.ROTARY_SHOOTER) {
+                                  this.tempRecoilMat.makeTranslation(0, 0, -state.recoilAmount * recoilAmt);
+                              } else if (typeId === DroneType.WHEELED) {
+                                  this.tempRecoilMat.makeTranslation(state.recoilAmount * recoilAmt, 0, 0);
+                              } else {
+                                  this.tempRecoilMat.makeTranslation(-state.recoilAmount * recoilAmt, 0, 0);
+                              }
                              this.tempLocalMat.multiply(this.tempRecoilMat);
+                         }
+
+                         let totalVib = 0;
+                         if (typeId === DroneType.WHEELED && (info.name === 'm2hb_mount_0' || (info.isMesh && (info.name === 'Cube_BASE_0' || info.name === 'body' || info.name.toLowerCase().includes('body') || info.name.toLowerCase().includes('chassis'))))) {
+                             const vibAmp = config?.chassisVibration ?? 0.05;
+                             const vibSpeed = config?.chassisVibrationSpeed ?? 30.0;
+                             if (vibAmp > 0 && speed > 0.1) {
+                                 totalVib += Math.sin(performance.now() * 0.001 * vibSpeed) * vibAmp * Math.min(speed / 10.0, 1.0);
+                             }
+                             if (state.recoilAmount > 0) {
+                                 totalVib += Math.sin(performance.now() * 0.001 * (vibSpeed * 1.5)) * vibAmp * state.recoilAmount;
+                             }
                          }
 
                          droneLocalMat.multiplyMatrices(parentDroneLocalMat, this.tempLocalMat);
                          state.processedNodes.add(info.name);
 
                          this.tempWorldMat.multiplyMatrices(this.diagTempMatrix, droneLocalMat);
+                         if (totalVib !== 0) {
+                             this.tempRecoilMat.makeTranslation(0, totalVib, 0);
+                             this.tempWorldMat.multiply(this.tempRecoilMat);
+                         }
+
                          if (info.meshIndex >= 0) {
                              batch.mesh.setMatrixAt(subIds[info.meshIndex], this.tempWorldMat);
                          }
                       }
-                  } 
               }
             }
         }
       }
+       }
     });
 
     for (const [id, assignment] of this.droneSlots.entries()) {

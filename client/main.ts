@@ -16,13 +16,13 @@ declare global {
  */
 
 import "./index.css";
-import "./dev_menu";
+if ((import.meta as any).env?.DEV) {
+  import("./dev_menu");
+}
 import { initSplash } from "./screens/splash";
 import map1Spec from "../shared/maps/map_1_facility.spec.json";
 import { initMainMenu } from "./screens/main-menu";
 import { initLobby } from "./screens/lobby";
-import { initDevMapEditor } from "./screens/dev-map-editor";
-import { initDevEntities } from "./screens/dev-entities";
 import { initMapViewerGlobally } from "./screens/map_viewer";
 import * as screenManager from "./screens/screen-manager";
 import { audioManager } from "./audio";
@@ -476,7 +476,6 @@ const initClient = async () => {
 
   initMainMenu();
   initLobby();
-  initDevMapEditor();
   // initDevEntities(); deferred until activation
 
   // 2. Setup Three.js Stage Pipeline
@@ -741,6 +740,7 @@ const diagTempMatrix = new THREE.Matrix4();
 const diagTempPosition = new THREE.Vector3();
 const diagTempScale = new THREE.Vector3();
 const diagTempQuaternion = new THREE.Quaternion();
+const diagTempEuler = new THREE.Euler();
 
 let animationFrameId = 0;
 
@@ -850,9 +850,8 @@ const animateFrame = async () => {
     const finalYaw =
       match.playerYaw + match.visualRecoilSideOffset + swayX + shakeOffsetYaw;
 
-    camera.quaternion.setFromEuler(
-      new THREE.Euler(finalPitch, finalYaw, 0, "YXZ"),
-    );
+    diagTempEuler.set(finalPitch, finalYaw, 0, "YXZ");
+    camera.quaternion.setFromEuler(diagTempEuler);
 
     // 3. Movement & Physics Update
     if (match.input) {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { DS } from './design-system';
 import { listCachedFiles, deleteCachedFile, clearCache } from './asset-cache';
+import { IS_DEV } from '../shared/gate';
 
 export interface VexeaSettingsData {
     joySens: number;
@@ -243,8 +244,8 @@ function createOverlayHTML() {
             <button class="settings-tab" data-tab="ANTI-ALIASING">ANTI-ALIASING</button>
             <button class="settings-tab" data-tab="AUDIO">AUDIO</button>
             <button class="settings-tab" data-tab="ACCESSIBILITY">ACCESSIBILITY</button>
-            <button class="settings-tab" data-tab="SERVER">SERVER</button>
-            <button class="settings-tab" data-tab="DEV" id="btn-tab-dev">DEV</button>
+            ${IS_DEV ? `<button class="settings-tab" data-tab="SERVER">SERVER</button>` : ''}
+            ${IS_DEV ? `<button class="settings-tab" data-tab="DEV" id="btn-tab-dev">ASSET MANAGEMENT</button>` : ''}
             <button class="settings-tab" data-tab="LEGAL">LEGAL</button>
             <div class="flex-1"></div>
             <button id="btn-close-settings-overlay" style="background:${DS.colors.danger}; font-family:${DS.typography.fontFamily}; font-weight:bold; letter-spacing:2px; font-size:14px; padding:10px 20px; border-radius:4px; margin-top:20px; cursor:pointer; color:white; border:${DS.glass.border}; box-shadow:${DS.glass.glowInner}; transition: background 150ms ease;">CLOSE</button>
@@ -478,6 +479,7 @@ function createOverlayHTML() {
                 </div>
             </div>
             
+            ${IS_DEV ? `
             <div id="tab-SERVER" class="settings-page hidden">
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">SERVER CONNECTION</h3>
                 <div class="mb-4">
@@ -491,9 +493,11 @@ function createOverlayHTML() {
                 </div>
                 <button id="btn-save-server" class="preset-btn p-3 border border-gray-500 rounded bg-gray-800" style="padding: 10px 20px; font-weight: bold; width: 100%; max-width: 300px; border-color: ${DS.colors.accent} !important; color: ${DS.colors.accent} !important;">APPLY & RECONNECT</button>
             </div>
+            ` : ''}
 
+            ${IS_DEV ? `
             <div id="tab-DEV" class="settings-page hidden">
-                <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">DEVELOPER UTILS</h3>
+                <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">ASSET CACHE MANAGEMENT</h3>
                 <div class="mb-6">
                     <p class="text-sm text-gray-400 mb-4">Local asset cache management. Clear specific files to force the engine to refetch the latest versions from the CDN.</p>
                     <button id="btn-clear-cache" class="preset-btn p-3 border border-red-500 rounded bg-red-900/20 text-red-500 font-bold w-full max-w-[300px]" style="border-color: #ff4444 !important; color: #ff4444 !important;">CLEAR ENTIRE CACHE</button>
@@ -505,6 +509,7 @@ function createOverlayHTML() {
                     </div>
                 </div>
             </div>
+            ` : ''}
             
             <div id="tab-LEGAL" class="settings-page hidden">
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">LEGAL & ATTRIBUTION</h3>

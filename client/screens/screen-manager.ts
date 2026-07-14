@@ -1,5 +1,6 @@
 import { DS } from "../design-system";
 import { audioManager } from "../audio";
+import { IS_DEV } from "../../shared/gate";
 
 const screens = ['splash-screen', 'main-menu-screen', 'lobby-screen', 'dev-map-editor-screen', 'dev-entities-screen'];
 let transitionTimers: number[] = [];
@@ -58,13 +59,18 @@ export function showLobby() {
 }
 
 export function showDevMapEditor() {
-  showScreen('dev-map-editor-screen', 500, false);
+  if (!IS_DEV) return;
+  import("./dev-map-editor").then(({ initDevMapEditor }) => {
+    initDevMapEditor();
+    showScreen('dev-map-editor-screen', 500, false);
+  });
 }
 if (typeof window !== 'undefined') {
   (window as any).showDevMapEditor = showDevMapEditor;
 }
 
 export function showDevEntities() {
+  if (!IS_DEV) return;
   import("./dev-entities").then(({ initDevEntities, activateScreen }) => {
     initDevEntities().then(() => {
       activateScreen();

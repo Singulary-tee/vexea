@@ -1,6 +1,7 @@
 import { getVisualDiagnosisHTML } from "./dev_visual_diagnosis";
 (window as any).getVisualDiagnosisHTML = getVisualDiagnosisHTML;
-export const isDev = true;
+import { IS_DEV } from "../shared/gate";
+export const isDev = IS_DEV;
 import * as THREE from "three";
 import { camera } from "./main";
 import { ZONE_BOUNDS, WAYPOINTS, ZONES_ARRAY } from "../shared/constants";

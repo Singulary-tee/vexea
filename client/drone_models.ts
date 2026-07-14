@@ -21,7 +21,9 @@ export interface DroneNode {
   parentName: string | null;
   meshIndex: number; // -1 if not a mesh
   pivot?: THREE.Vector3;
+  modelPivot?: THREE.Vector3;
   localPivot?: THREE.Vector3;
+  baseInvWorldMatrix?: THREE.Matrix4;
 }
 
 export async function initDroneModels(scene: THREE.Scene): Promise<void> {
@@ -74,8 +76,10 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
               box.getCenter(pivot);
           }
           let localPivot = pivot.clone();
+          let baseInvWorldMatrix: THREE.Matrix4 | undefined = undefined;
           if (child.matrixWorld) {
               const invWorld = child.matrixWorld.clone().invert();
+              baseInvWorldMatrix = invWorld.clone();
               localPivot.applyMatrix4(invWorld);
           }
           
@@ -97,7 +101,9 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
             parentName: child.parent && child.parent !== gltf.scene ? child.parent.name : null,
             meshIndex: mIndex,
             pivot,
-            localPivot
+            modelPivot: pivot.clone(),
+            localPivot,
+            baseInvWorldMatrix
           });
         });
       }
@@ -219,12 +225,14 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
        scaleFactor,
        nodesInfo: useNodes.map(n => ({
          name: n.name,
+         isMesh: n.isMesh,
          parentName: n.parentName,
          localMatrix: n.localMatrix.clone(),
          baseLocalMatrix: n.localMatrix.clone(),
          meshIndex: n.meshIndex,
          pivot: n.pivot ? n.pivot.clone() : new THREE.Vector3(),
-          localPivot: (n as any).localPivot ? (n as any).localPivot.clone() : new THREE.Vector3()
+         localPivot: (n as any).localPivot ? (n as any).localPivot.clone() : new THREE.Vector3(),
+         baseInvWorldMatrix: (n as any).baseInvWorldMatrix ? (n as any).baseInvWorldMatrix.clone() : new THREE.Matrix4()
        }))
      };
   };
@@ -237,10 +245,10 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
   const gBox = new THREE.BoxGeometry(2, 0.5, 3);
 
   (window as any).droneBatches = [];
-  (window as any).droneBatches[0] = mkBatchDirect(rotaryParts, tMatAir, gBase, 50, 1.0);
-  (window as any).droneBatches[1] = mkBatchDirect(bomberParts, tMatBomber, gBase, 50, 1.0);
-  (window as any).droneBatches[2] = mkBatchDirect(reconParts, tMatAir, gBase, 50, 1.0);
-  (window as any).droneBatches[4] = mkBatchDirect(wheeledParts, tMatGround, gBox, 50, 1.5);
+  (window as any).droneBatches[0] = mkBatchDirect(rotaryParts, tMatAir, gBase, 50, DRONE_CONFIGS[DroneType.ROTARY_SHOOTER].visualRadius);
+  (window as any).droneBatches[1] = mkBatchDirect(bomberParts, tMatBomber, gBase, 50, DRONE_CONFIGS[DroneType.BOMBER].visualRadius);
+  (window as any).droneBatches[2] = mkBatchDirect(reconParts, tMatAir, gBase, 50, DRONE_CONFIGS[DroneType.RECON].visualRadius);
+  (window as any).droneBatches[4] = mkBatchDirect(wheeledParts, tMatGround, gBox, 50, DRONE_CONFIGS[DroneType.WHEELED].visualRadius);
   (window as any).droneBatches[5] = mkBatchDirect([], tMatGround, gBox, 50, 1.5);
   (window as any).droneBatches[6] = mkBatchDirect([], tMatGround, gBox, 50, 2.5);
 
