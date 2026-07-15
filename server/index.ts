@@ -58,7 +58,7 @@ console.log = function (...args: any[]) {
 let serviceAccount: any = null;
 try {
   const envSecret =
-    process.env["vexea-e0a37-firebase-adminsdk-fbsvc-2e76859592.json"];
+    process.env["FIREBASE_SERVICE_ACCOUNT"];
   if (envSecret) {
     serviceAccount = JSON.parse(envSecret);
   }
@@ -345,6 +345,10 @@ const PORT = 3000;
 const io = createTransport();
 
 app.use(express.json({limit: '10mb'}));
+
+app.get("/api/health", (req, res) => {
+  res.status(200).send("OK");
+});
 
 app.post("/api/log", (req, res) => {
     console.log("[CLIENT LOG]", ...req.body);
