@@ -1,2 +1,7 @@
 node_modules
 dist
+client/dist
+.git
+.github
+skills
+tmp
