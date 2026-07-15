@@ -107,6 +107,7 @@ export interface DroneConfig {
   gunPitchPivot?: [number, number, number];
   propPivotX?: number;
   propPivotZ?: number;
+  propellerOffset?: [number, number];
 
   // Category 3 - Client-Only Animation Values
   propellerSpinRate?: number;
@@ -160,11 +161,10 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     animations: ['spin', 'sway'],
     // Category 2
     lightPoints: [[-0.03, 0.01, 0.45], [0.03, 0.01, 0.45]],
-    propPivotX: 8.53,
-    propPivotZ: 7.28,
+    propPivotX: 0.6633333333333333,
+    propPivotZ: 0.5666666666666667,
+    propellerOffset: [0.6633333333333333, 0.5666666666666667],
     detonationTriggerRadius: 4,
-    turretYawPivot: [0, 0.45, -0.1],
-    gunPitchPivot: [0, 0.65, 0],
     // Category 3
     propellerSpinRate: 60,
     hoverSwayAmount: 0.02,
@@ -214,11 +214,10 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     animations: ['spin', 'sway'],
     // Category 2
     lightPoints: [[-0.03, 0.01, 0.45], [0.03, 0.01, 0.45]],
-    propPivotX: 8.53,
-    propPivotZ: 7.28,
+    propPivotX: 0.7296666666666666,
+    propPivotZ: 0.6233333333333334,
+    propellerOffset: [0.7296666666666666, 0.6233333333333334],
     detonationTriggerRadius: 4,
-    turretYawPivot: [0, 0.45, -0.1],
-    gunPitchPivot: [0, 0.65, 0],
     // Category 3
     propellerSpinRate: 60,
     hoverSwayAmount: 0.02,
@@ -268,11 +267,10 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     animations: ['spin', 'sway'],
     // Category 2
     lightPoints: [[-0.03, 0.01, 0.45], [0.03, 0.01, 0.45]],
-    propPivotX: 8.53,
-    propPivotZ: 7.28,
+    propPivotX: 0.5306666666666666,
+    propPivotZ: 0.45333333333333337,
+    propellerOffset: [0.5306666666666666, 0.45333333333333337],
     detonationTriggerRadius: 4,
-    turretYawPivot: [0, 0.45, -0.1],
-    gunPitchPivot: [0, 0.65, 0],
     // Category 3
     propellerSpinRate: 60,
     hoverSwayAmount: 0.02,

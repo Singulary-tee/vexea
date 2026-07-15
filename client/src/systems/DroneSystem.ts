@@ -311,34 +311,7 @@ export class DroneSystem {
                                      this.tempGunPivot.applyMatrix4((info as any).baseInvWorldMatrix);
                                      lp = this.tempGunPivot;
                                  }
-                             } else if ((typeId === DroneType.ROTARY_SHOOTER || typeId === DroneType.BOMBER || typeId === DroneType.RECON) && (info as any).baseInvWorldMatrix) {
-                                 const parentNameLower = info.parentName?.toLowerCase() || '';
-                                 const isPropellerMesh = info.isMesh && (parentNameLower.includes('prop') && parentNameLower !== 'prop');
-                                 if (isPropellerMesh) {
-                                     let px = 0;
-                                     let pz = 0;
-                                     const mirrorX = config.propPivotX ?? 0.5;
-                                     const mirrorZ = config.propPivotZ ?? 0.5;
-                                     const mpOrig = (info as any).modelPivot || this.zeroVector;
-                                     
-                                     if (mpOrig.x < 0 && mpOrig.z > 0) {
-                                         px = -mirrorX; pz = mirrorZ;
-                                     } else if (mpOrig.x > 0 && mpOrig.z > 0) {
-                                         px = mirrorX; pz = mirrorZ;
-                                     } else if (mpOrig.x < 0 && mpOrig.z < 0) {
-                                         px = -mirrorX; pz = -mirrorZ;
-                                      } else if (mpOrig.x > 0 && mpOrig.z < 0) {
-                                         px = mirrorX; pz = -mirrorZ;
-                                     } else {
-                                         px = mpOrig.x; pz = mpOrig.z;
-                                     }
-                                     
-                                     this.tempPropellerPivot.set(px, 0.05, pz);
-                                     this.tempPropellerPivot.applyMatrix4((info as any).baseInvWorldMatrix);
-                                     lp = this.tempPropellerPivot;
-                                 }
                              }
-                             
                              // Geometric Rule: M_local = T_position * T(P_local) * R * T(-P_local)
                              this.tempT1.makeTranslation(-lp.x, -lp.y, -lp.z);
                              this.tempT2.makeTranslation(lp.x, lp.y, lp.z);

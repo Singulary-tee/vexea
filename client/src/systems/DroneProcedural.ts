@@ -1,6 +1,8 @@
 import * as THREE from "three/webgpu";
 import { DroneType, DRONE_CONFIGS } from "../../../shared/constants";
 
+const tempEuler = new THREE.Euler();
+
 export interface DroneProceduralState {
   spinAngle: number;
   wheelAngle: number;
@@ -51,14 +53,21 @@ export function updateProceduralState(
     const timeSwayZ = Math.cos(state.accumulatedTime * swaySpeed * 0.9) * swayAmount;
 
     // Velocity-derived tilt
-    const velocityTiltX = smoothedVelocity.z * 0.05;
-    const velocityTiltZ = -smoothedVelocity.x * 0.05;
+    let velocityTiltX = smoothedVelocity.z * 0.05;
+    let velocityTiltZ = -smoothedVelocity.x * 0.05;
+
+    // Clamp by pitchAngle (Max forward/backward banking) and bankingAngle (Max sideways roll)
+    const maxPitch = config.pitchAngle ?? 0.35;
+    const maxBank = config.bankingAngle ?? 0.35;
+    velocityTiltX = Math.max(-maxPitch, Math.min(maxPitch, velocityTiltX));
+    velocityTiltZ = Math.max(-maxBank, Math.min(maxBank, velocityTiltZ));
 
     // Combine both
     const totalSwayX = timeSwayX + velocityTiltX;
     const totalSwayZ = timeSwayZ + velocityTiltZ;
 
-    outSwayQuaternion.setFromEuler(new THREE.Euler(totalSwayX, 0, totalSwayZ));
+    tempEuler.set(totalSwayX, 0, totalSwayZ);
+    outSwayQuaternion.setFromEuler(tempEuler);
   } else {
     outSwayQuaternion.identity();
   }

@@ -47,7 +47,7 @@ export function initMainMenu() {
       userSubscriptionUnsubscribe();
     }
     
-    userSubscriptionUnsubscribe = onSnapshot(doc(db, 'users', uid), (snapshot) => {
+    userSubscriptionUnsubscribe = onSnapshot(doc(db, 'Users', uid), (snapshot) => {
       if (snapshot.exists()) {
         registeredUserData = snapshot.data();
         userFaction = registeredUserData.faction || null;
@@ -55,7 +55,7 @@ export function initMainMenu() {
         const overlay = document.getElementById('vex-enlistment-overlay');
         if (overlay) overlay.remove();
         
-        checkDailyRefresh(registeredUserData, doc(db, 'users', uid));
+        checkDailyRefresh(registeredUserData, doc(db, 'Users', uid));
         enableLeftColumnMenu(true);
       } else {
         registeredUserData = null;
@@ -827,7 +827,7 @@ function renderRightPanel() {
                const uid = auth.currentUser?.uid;
                if (uid) {
                  import('firebase/firestore').then(({ updateDoc }) => {
-                   updateDoc(doc(getFirestore(), 'users', uid), {
+                   updateDoc(doc(getFirestore(), 'Users', uid), {
                      credits: 1000,
                      energy: 1000
                    });
@@ -1256,7 +1256,7 @@ function showEnlistmentOverlay(db: any, auth: any) {
     errText.textContent = '';
     
     try {
-      await setDoc(doc(db, 'users', auth.currentUser.uid), {
+      await setDoc(doc(db, 'Users', auth.currentUser.uid), {
         displayName: codename,
         faction: selectedFaction,
         credits: 100,

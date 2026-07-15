@@ -604,7 +604,7 @@ io.onConnection((channel: ChannelAdapter) => {
     if (!IS_DEV) return;
     const reqUid = args?.uid || playerId;
     try {
-      await updateDoc(doc(db, "users", reqUid), {
+      await updateDoc(doc(db, "Users", reqUid), {
         credits: 1000,
         energy: 1000
       });

@@ -2805,7 +2805,7 @@ export class MatchRoom {
   ) {
     const isWin = result === "win";
     runTransaction(db, async (transaction) => {
-      const userRef = doc(db, "users", playerId);
+      const userRef = doc(db, "Users", playerId);
       const userDoc = await transaction.get(userRef);
 
       const droneKills = playerStats.droneEliminations || 0;

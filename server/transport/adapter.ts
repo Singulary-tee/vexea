@@ -129,11 +129,6 @@ class GeckosChannelAdapter implements ChannelAdapter {
   }
 
   removeAllListeners(): void {
-    // Geckos doesn't have a simple removeAllListeners but we can try to clear by event if needed
-    // However, most geckos implementations allow re-binding.
-    // For now, we'll try to use the fact that we're wrapping it.
-    // Actually, Geckos channels don't expose removeAllListeners easily.
-    // We might need to handle this manually in the adapter.
     (this.channel as any).removeAllListeners?.();
   }
 }

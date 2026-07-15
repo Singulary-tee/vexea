@@ -45,6 +45,12 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
          (window as any).fixedWingAnimations = gltf.animations;
       }
 
+      let typeId: DroneType | null = null;
+      if (urlName === "quadcopter_rifle.glb") typeId = DroneType.ROTARY_SHOOTER;
+      else if (urlName === "quadcopter_bomb.glb") typeId = DroneType.BOMBER;
+      else if (urlName === "quadcopter_camera.glb") typeId = DroneType.RECON;
+      const config = typeId !== null ? DRONE_CONFIGS[typeId] : null;
+
       const nodes: DroneNode[] = [];
       if (gltf && gltf.scene) {
         if (gltf.animations && gltf.animations.length > 0) {
@@ -81,6 +87,31 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
               const invWorld = child.matrixWorld.clone().invert();
               baseInvWorldMatrix = invWorld.clone();
               localPivot.applyMatrix4(invWorld);
+          }
+
+          const parentNameLower = child.parent && child.parent !== gltf.scene ? child.parent.name.toLowerCase() : '';
+          const isPropellerMesh = child.isMesh && (parentNameLower.includes('prop') && parentNameLower !== 'prop');
+          if (isPropellerMesh && config && config.propellerOffset) {
+              const mirrorX = config.propellerOffset[0];
+              const mirrorZ = config.propellerOffset[1];
+              let px = 0;
+              let pz = 0;
+              if (pivot.x < 0 && pivot.z > 0) {
+                  px = -mirrorX; pz = mirrorZ;
+              } else if (pivot.x > 0 && pivot.z > 0) {
+                  px = mirrorX; pz = mirrorZ;
+              } else if (pivot.x < 0 && pivot.z < 0) {
+                  px = -mirrorX; pz = -mirrorZ;
+              } else if (pivot.x > 0 && pivot.z < 0) {
+                  px = mirrorX; pz = -mirrorZ;
+              } else {
+                  px = pivot.x; pz = pivot.z;
+              }
+              const tempPropellerPivot = new THREE.Vector3(px, 0.05, pz);
+              if (baseInvWorldMatrix) {
+                  tempPropellerPivot.applyMatrix4(baseInvWorldMatrix);
+              }
+              localPivot.copy(tempPropellerPivot);
           }
           
           let geom = null;

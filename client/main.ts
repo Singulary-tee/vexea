@@ -494,7 +494,7 @@ const connectEngineSocket = () => {
     const s = getSettings();
     let defaultUrl = window.location.origin;
     if (window.location.hostname.includes("web.app") || window.location.hostname.includes("firebaseapp.com")) {
-      defaultUrl = import.meta.env.VITE_SERVER_URL || "https://vexea-server.onrender.com";
+      defaultUrl = (import.meta as any).env.VITE_SERVER_URL || "https://vexea-server.onrender.com";
     }
     const serverUrl = s.serverUrl || defaultUrl;
 

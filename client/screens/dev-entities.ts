@@ -558,8 +558,8 @@ const buildSchema = (type: DroneType, name: string, glbUrl: string, baseDefaults
     }
 
     if (type === DroneType.ROTARY_SHOOTER || type === DroneType.BOMBER || type === DroneType.RECON) {
-        category2.propPivotX = { label: "Prop X Pivot (Mirror)", min: 0.0, max: 20.0, step: 0.01 };
-        category2.propPivotZ = { label: "Prop Z Pivot (Mirror)", min: 0.0, max: 20.0, step: 0.01 };
+        category2.propPivotX = { label: "Prop X Pivot (Mirror)", min: -20, max: 20.0, step: 0.01 };
+        category2.propPivotZ = { label: "Prop Z Pivot (Mirror)", min: -20, max: 20.0, step: 0.01 };
     }
 
     if (type === DroneType.BOMBER) {
@@ -605,6 +605,7 @@ const buildSchema = (type: DroneType, name: string, glbUrl: string, baseDefaults
         category4.maxRotationSpeed = { label: "Max Rotation Speed (rad/s)", min: 0.5, max: 10.0, step: 0.1 };
         category4.maxVerticalSpeed = { label: "Max Vertical Speed (m/s)", min: 1.0, max: 20.0, step: 0.5 };
         category4.bankingAngle = { label: "Banking Angle (rad)", min: 0.0, max: 1.2, step: 0.01 };
+        category4.pitchAngle = { label: "Max Pitch Angle (rad)", min: 0.0, max: 1.2, step: 0.01 };
     }
     if (type === DroneType.BOMBER) {
         category4.damage = { label: "Explosion Damage", min: 10, max: 200, step: 5 };
@@ -612,7 +613,6 @@ const buildSchema = (type: DroneType, name: string, glbUrl: string, baseDefaults
     if (type === DroneType.FIXED_WING) {
         category4.minSpeed = { label: "Min Speed (cannot hover)", min: 2.0, max: 20.0, step: 0.5 };
         category4.maxTurnRate = { label: "Max Turn Rate (rad/s)", min: 0.5, max: 5.0, step: 0.1 };
-        category4.pitchAngle = { label: "Max Pitch Angle (rad)", min: 0.0, max: 1.2, step: 0.01 };
         category4.engagementRange = { label: "Engagement Range (m)", min: 10.0, max: 100.0, step: 1.0 };
         category4.damage = { label: "Missile Damage", min: 5, max: 100, step: 1 };
     }
@@ -1679,6 +1679,46 @@ function onParamChanged(key: string, value: number) {
         updatePlayerRefPosition();
         updateMuzzleVisualLocation();
         updateColliderPositionAndDimensions();
+        if (key === "propPivotX" || key === "propPivotZ") {
+            const schema = DRONE_SCHEMAS.find(s => s.id === currentTab);
+            if (schema && activeGLBModel) {
+                const params = currentParams[currentTab];
+                const mirrorX = params.propPivotX !== undefined ? params.propPivotX : 0.5;
+                const mirrorZ = params.propPivotZ !== undefined ? params.propPivotZ : 0.5;
+                
+                const modelGroup = activeGLBModel.getObjectByName("VisualWrapper")?.children[0];
+                if (modelGroup) {
+                    modelGroup.traverse((child: any) => {
+                        const parentNameLower = child.parent?.name?.toLowerCase() || '';
+                        const isPropellerMesh = child.isMesh && (parentNameLower.includes('prop') && parentNameLower !== 'prop');
+                        if (isPropellerMesh) {
+                            const mpOrig = child.userData.modelPivot || new THREE.Vector3();
+                            let px = 0;
+                            let pz = 0;
+                            if (mpOrig.x < 0 && mpOrig.z > 0) {
+                                px = -mirrorX; pz = mirrorZ;
+                            } else if (mpOrig.x > 0 && mpOrig.z > 0) {
+                                px = mirrorX; pz = mirrorZ;
+                            } else if (mpOrig.x < 0 && mpOrig.z < 0) {
+                                px = -mirrorX; pz = -mirrorZ;
+                            } else if (mpOrig.x > 0 && mpOrig.z < 0) {
+                                px = mirrorX; pz = -mirrorZ;
+                            } else {
+                                px = mpOrig.x; pz = mpOrig.z;
+                            }
+                            const tempPropellerPivot = new THREE.Vector3(px, 0.05, pz);
+                            if (child.userData.baseInvWorldMatrix) {
+                                tempPropellerPivot.applyMatrix4(child.userData.baseInvWorldMatrix);
+                            }
+                            if (!child.userData.localPivot) {
+                                child.userData.localPivot = new THREE.Vector3();
+                            }
+                            child.userData.localPivot.copy(tempPropellerPivot);
+                        }
+                    });
+                }
+            }
+        }
     }
 }
 
@@ -2132,6 +2172,42 @@ async function loadActiveGLB() {
                 child.userData.baseInvWorldMatrix = invWorld.clone();
                 localPivot.applyMatrix4(invWorld);
             }
+
+            const parentNameLower = child.parent && child.parent !== modelGroup ? child.parent.name.toLowerCase() : '';
+            const isPropellerMesh = child.isMesh && (parentNameLower.includes('prop') && parentNameLower !== 'prop');
+            if (isPropellerMesh) {
+                const config = DRONE_CONFIGS[schema.type];
+                let offset_x = 0.5;
+                let offset_z = 0.5;
+                if (config) {
+                    if (config.propellerOffset) {
+                        offset_x = config.propellerOffset[0];
+                        offset_z = config.propellerOffset[1];
+                    } else if (config.propPivotX !== undefined && config.propPivotZ !== undefined) {
+                        offset_x = config.propPivotX;
+                        offset_z = config.propPivotZ;
+                    }
+                }
+                let px = 0;
+                let pz = 0;
+                if (pivot.x < 0 && pivot.z > 0) {
+                    px = -offset_x; pz = offset_z;
+                } else if (pivot.x > 0 && pivot.z > 0) {
+                    px = offset_x; pz = offset_z;
+                } else if (pivot.x < 0 && pivot.z < 0) {
+                    px = -offset_x; pz = -offset_z;
+                } else if (pivot.x > 0 && pivot.z < 0) {
+                    px = offset_x; pz = -offset_z;
+                } else {
+                    px = pivot.x; pz = pivot.z;
+                }
+                const tempPropellerPivot = new THREE.Vector3(px, 0.05, pz);
+                if (child.userData.baseInvWorldMatrix) {
+                    tempPropellerPivot.applyMatrix4(child.userData.baseInvWorldMatrix);
+                }
+                localPivot.copy(tempPropellerPivot);
+            }
+
             child.userData.localPivot = localPivot;
             child.matrixAutoUpdate = false; // Direct matrix manual updates
         });
@@ -2951,48 +3027,10 @@ function applyProceduralModelAnimations(dt: number) {
             const parentNameLower = child.parent?.name?.toLowerCase() || '';
             const isPropellerMesh = child.isMesh && (parentNameLower.includes('prop') && parentNameLower !== 'prop');
             if (isPropellerMesh) {
-                
-                const mirrorX = params.propPivotX !== undefined ? params.propPivotX : 0.5;
-                const mirrorZ = params.propPivotZ !== undefined ? params.propPivotZ : 0.5;
-                let px = 0.0;
-                let py = 0.05;
-                let pz = 0.0;
-                
-                const mpOrig = child.userData.modelPivot || new THREE.Vector3();
-                
-                if (mpOrig.x < 0 && mpOrig.z > 0) {
-                    px = -mirrorX;
-                    pz = mirrorZ;
-                } else if (mpOrig.x > 0 && mpOrig.z > 0) {
-                    px = mirrorX;
-                    pz = mirrorZ;
-                } else if (mpOrig.x < 0 && mpOrig.z < 0) {
-                    px = -mirrorX;
-                    pz = -mirrorZ;
-                } else if (mpOrig.x > 0 && mpOrig.z < 0) {
-                    px = mirrorX;
-                    pz = -mirrorZ;
-                } else {
-                    px = mpOrig.x;
-                    pz = mpOrig.z;
-                }
-                
-                tempModelPivot.set(px, py, pz);
-                tempLp.copy(tempModelPivot);
-                
-                if (child.userData.baseInvWorldMatrix && activeGLBModel) {
-                    const modelGroup = activeGLBModel.children[0]?.children[0] as THREE.Group;
-                    const baseWorldMat = modelGroup?.userData.baseWorldMatrix;
-                    if (baseWorldMat) {
-                        tempLp.applyMatrix4(baseWorldMat);
-                    }
-                    tempLp.applyMatrix4(child.userData.baseInvWorldMatrix);
-                }
-                
-                tempT1.makeTranslation(-tempLp.x, -tempLp.y, -tempLp.z);
-                tempT2.makeTranslation(tempLp.x, tempLp.y, tempLp.z);
+                const lp = child.userData.localPivot || new THREE.Vector3();
+                tempT1.makeTranslation(-lp.x, -lp.y, -lp.z);
+                tempT2.makeTranslation(lp.x, lp.y, lp.z);
                 r.makeRotationY(state.spinAngle);
-                
                 tempRotAroundPivot.multiplyMatrices(tempT2, r).multiply(tempT1);
                 localMat.copy(child.userData.baseLocalMatrix).multiply(tempRotAroundPivot);
                 didRotate = false;
