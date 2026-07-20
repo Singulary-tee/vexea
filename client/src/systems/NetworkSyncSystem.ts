@@ -341,7 +341,7 @@ export class NetworkSyncSystem {
 
       _droneFireDir.set(msg.dirX, msg.dirY, msg.dirZ).normalize();
       if (typeof (window as any).spawnTracer === "function") (window as any).spawnTracer(_droneMuzzlePos, _droneFireDir);
-      if (typeof (window as any).triggerFlash === "function") (window as any).triggerFlash(_droneMuzzlePos, scaleFactor);
+      if (typeof (window as any).triggerFlash === "function") (window as any).triggerFlash(_droneMuzzlePos, scaleFactor, false, msg.droneId, this.match);
 
       // Reusable Positional Audio to avoid dynamic allocation GC overhead during intense combat
       const camera = (window as any).camera;

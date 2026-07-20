@@ -1,6 +1,8 @@
 import * as THREE from "three/webgpu";
 import { uv, float, smoothstep, length as tslLength, vec2, vec4, mix } from "three/tsl";
 import { VFX_CONSTANTS } from "./constants";
+import { MatchController } from "../../MatchController";
+import { getMuzzleWorldPosition } from "../../weapons_model";
 
 export interface NiagaraMuzzleFlash {
   coreMesh: THREE.Mesh;
@@ -9,11 +11,27 @@ export interface NiagaraMuzzleFlash {
   life: number;
   maxLife: number;
   scaleFactor: number;
+  
+  // Zero-Allocation Attachment Fields
+  attachToPlayer: boolean;
+  attachToDroneId: number | null;
+  localOffset: THREE.Vector3;
+  localSpikeQuat: THREE.Quaternion;
 }
 
 const flashPool: NiagaraMuzzleFlash[] = [];
 const POOL_SIZE = 8;
 let _scene: THREE.Scene;
+
+// Pre-allocated math cache objects for Zero-GC during ticks
+const _tempDronePos = new THREE.Vector3();
+const _tempDroneQuat = new THREE.Quaternion();
+const _tempOffset = new THREE.Vector3();
+const _tempQuat = new THREE.Quaternion();
+
+export function getFirstNiagaraFlash(): NiagaraMuzzleFlash | null {
+  return flashPool.length > 0 ? flashPool[0] : null;
+}
 
 export function initFiringVFX(scene: THREE.Scene, hasLights: boolean) {
   _scene = scene;
@@ -81,7 +99,9 @@ export function initFiringVFX(scene: THREE.Scene, hasLights: boolean) {
         VFX_CONSTANTS.FIRING.LIGHT_DISTANCE,
         VFX_CONSTANTS.FIRING.LIGHT_DECAY
       );
-      light.visible = false;
+      // Keep visible = true constant under WebGPU to avoid cache invalidations/pipeline rebuilds.
+      // Modulate intensity between 0 and active intensity instead.
+      light.visible = true;
       _scene.add(light);
     }
 
@@ -91,12 +111,23 @@ export function initFiringVFX(scene: THREE.Scene, hasLights: boolean) {
       light,
       life: 0,
       maxLife: VFX_CONSTANTS.FIRING.FLASH_DURATION,
-      scaleFactor: 1.0
+      scaleFactor: 1.0,
+      attachToPlayer: false,
+      attachToDroneId: null,
+      localOffset: new THREE.Vector3(),
+      localSpikeQuat: new THREE.Quaternion()
     });
   }
 }
 
-export function triggerNiagaraFlash(muzzlePos: THREE.Vector3, direction: THREE.Vector3, scale = 1.0) {
+export function triggerNiagaraFlash(
+  muzzlePos: THREE.Vector3,
+  direction: THREE.Vector3,
+  scale = 1.0,
+  attachToPlayer = false,
+  attachToDroneId: number | null = null,
+  match?: MatchController
+) {
   let inst: NiagaraMuzzleFlash | null = null;
   for (let i = 0; i < POOL_SIZE; i++) {
     if (flashPool[i].life <= 0) {
@@ -123,6 +154,8 @@ export function triggerNiagaraFlash(muzzlePos: THREE.Vector3, direction: THREE.V
     inst.life = VFX_CONSTANTS.FIRING.FLASH_DURATION;
     inst.maxLife = VFX_CONSTANTS.FIRING.FLASH_DURATION;
     inst.scaleFactor = sFactor;
+    inst.attachToPlayer = attachToPlayer;
+    inst.attachToDroneId = attachToDroneId;
 
     // Position and align
     inst.coreMesh.position.copy(muzzlePos);
@@ -136,17 +169,56 @@ export function triggerNiagaraFlash(muzzlePos: THREE.Vector3, direction: THREE.V
     const q = new THREE.Quaternion();
     q.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
     inst.spikeMesh.quaternion.copy(q);
-    inst.spikeMesh.visible = false; // Disable glare spike mesh entirely as requested
+    inst.spikeMesh.visible = true; // Fully enable visual Niagara-style spikes
+
+    if (attachToPlayer) {
+      // Store camera relative local spike orientation so it rotates with player camera
+      const camera = (window as any).camera;
+      if (camera) {
+        _tempQuat.copy(camera.quaternion).invert();
+        inst.localSpikeQuat.copy(q).premultiply(_tempQuat);
+      } else {
+        inst.localSpikeQuat.copy(q);
+      }
+    } else if (attachToDroneId !== null && match && match.droneJitterMap) {
+      const buffer = match.droneJitterMap.get(attachToDroneId);
+      if (buffer && buffer.count > 0) {
+        const latest = buffer.getLatest();
+        const clientX = (latest as any).clientPosX !== undefined ? (latest as any).clientPosX : latest.posX;
+        const clientY = (latest as any).clientPosY !== undefined ? (latest as any).clientPosY : latest.posY;
+        const clientZ = (latest as any).clientPosZ !== undefined ? (latest as any).clientPosZ : latest.posZ;
+        
+        _tempDronePos.set(clientX, clientY, clientZ);
+        inst.localOffset.copy(muzzlePos).sub(_tempDronePos);
+
+        const clientRotX = (latest as any).clientRotX !== undefined ? (latest as any).clientRotX : latest.rotX;
+        const clientRotY = (latest as any).clientRotY !== undefined ? (latest as any).clientRotY : latest.rotY;
+        const clientRotZ = (latest as any).clientRotZ !== undefined ? (latest as any).clientRotZ : latest.rotZ;
+        const clientRotW = (latest as any).clientRotW !== undefined ? (latest as any).clientRotW : latest.rotW;
+
+        _tempDroneQuat.set(clientRotX, clientRotY, clientRotZ, clientRotW);
+        inst.localOffset.applyQuaternion(_tempDroneQuat.invert());
+
+        // Compute local spike rotation relative to the drone's orientation
+        _tempDroneQuat.set(clientRotX, clientRotY, clientRotZ, clientRotW).invert();
+        inst.localSpikeQuat.copy(q).premultiply(_tempDroneQuat);
+      } else {
+        inst.localOffset.set(0, 0, 0);
+        inst.localSpikeQuat.copy(q);
+      }
+    } else {
+      inst.localOffset.set(0, 0, 0);
+      inst.localSpikeQuat.copy(q);
+    }
 
     if (inst.light) {
       inst.light.position.copy(muzzlePos);
       inst.light.intensity = VFX_CONSTANTS.FIRING.LIGHT_INTENSITY * sFactor;
-      inst.light.visible = true;
     }
   }
 }
 
-export function updateFiringVFX(deltaTime: number, camera: THREE.PerspectiveCamera) {
+export function updateFiringVFX(deltaTime: number, camera: THREE.PerspectiveCamera, match?: MatchController) {
   for (let i = 0; i < flashPool.length; i++) {
     const inst = flashPool[i];
     if (inst.life > 0) {
@@ -155,10 +227,46 @@ export function updateFiringVFX(deltaTime: number, camera: THREE.PerspectiveCame
         inst.coreMesh.visible = false;
         inst.spikeMesh.visible = false;
         if (inst.light) {
-          inst.light.visible = false;
+          // Never change PointLight visibility under WebGPU. Keep visible = true and set intensity = 0 instead.
           inst.light.intensity = 0;
         }
       } else {
+        // Handle Dynamic Attachment
+        if (inst.attachToPlayer) {
+          getMuzzleWorldPosition(inst.coreMesh.position, camera);
+          inst.spikeMesh.position.copy(inst.coreMesh.position);
+          inst.spikeMesh.quaternion.copy(camera.quaternion).multiply(inst.localSpikeQuat);
+          if (inst.light) {
+            inst.light.position.copy(inst.coreMesh.position);
+          }
+        } else if (inst.attachToDroneId !== null && match && match.droneJitterMap) {
+          const buffer = match.droneJitterMap.get(inst.attachToDroneId);
+          if (buffer && buffer.count > 0) {
+            const latest = buffer.getLatest();
+            const clientX = (latest as any).clientPosX !== undefined ? (latest as any).clientPosX : latest.posX;
+            const clientY = (latest as any).clientPosY !== undefined ? (latest as any).clientPosY : latest.posY;
+            const clientZ = (latest as any).clientPosZ !== undefined ? (latest as any).clientPosZ : latest.posZ;
+            
+            const clientRotX = (latest as any).clientRotX !== undefined ? (latest as any).clientRotX : latest.rotX;
+            const clientRotY = (latest as any).clientRotY !== undefined ? (latest as any).clientRotY : latest.rotY;
+            const clientRotZ = (latest as any).clientRotZ !== undefined ? (latest as any).clientRotZ : latest.rotZ;
+            const clientRotW = (latest as any).clientRotW !== undefined ? (latest as any).clientRotW : latest.rotW;
+
+            _tempDronePos.set(clientX, clientY, clientZ);
+            _tempDroneQuat.set(clientRotX, clientRotY, clientRotZ, clientRotW);
+
+            _tempOffset.copy(inst.localOffset).applyQuaternion(_tempDroneQuat);
+            
+            inst.coreMesh.position.copy(_tempDronePos).add(_tempOffset);
+            inst.spikeMesh.position.copy(inst.coreMesh.position);
+            inst.spikeMesh.quaternion.copy(_tempDroneQuat).multiply(inst.localSpikeQuat);
+
+            if (inst.light) {
+              inst.light.position.copy(inst.coreMesh.position);
+            }
+          }
+        }
+
         // Core always faces the camera (billboard effect)
         inst.coreMesh.quaternion.copy(camera.quaternion);
         
@@ -187,7 +295,6 @@ export function clearFiringVFX() {
     inst.coreMesh.visible = false;
     inst.spikeMesh.visible = false;
     if (inst.light) {
-      inst.light.visible = false;
       inst.light.intensity = 0;
     }
   }

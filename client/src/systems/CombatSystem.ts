@@ -113,7 +113,7 @@ export class CombatSystem {
     this.weaponMuzzlePos.set(0, 0, 0);
     getMuzzleWorldPosition(this.weaponMuzzlePos, camera);
     spawnTracer(this.weaponMuzzlePos, this.weaponFireDir);
-    triggerFlash(this.weaponMuzzlePos);
+    triggerFlash(this.weaponMuzzlePos, 1.0, true, null, this.match);
 
     hitscanSystem.performClientHitscan(camera, this.match.scene, this.weaponFireDir, currentWeaponStats.falloff.minDamageRange);
     

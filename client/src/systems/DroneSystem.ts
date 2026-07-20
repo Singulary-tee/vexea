@@ -143,6 +143,10 @@ export class DroneSystem {
       (latest as any).clientPosX = this.diagTempPosition.x;
       (latest as any).clientPosY = this.diagTempPosition.y;
       (latest as any).clientPosZ = this.diagTempPosition.z;
+      (latest as any).clientRotX = this.diagTempQuaternion.x;
+      (latest as any).clientRotY = this.diagTempQuaternion.y;
+      (latest as any).clientRotZ = this.diagTempQuaternion.z;
+      (latest as any).clientRotW = this.diagTempQuaternion.w;
 
       const typeId = latest.type;
       if (typeId >= 0 && typeId <= 6 || typeId === DroneType.TEST_ENTITY) {

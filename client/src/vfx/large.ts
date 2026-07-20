@@ -93,7 +93,8 @@ export function initLargeVFX(scene: THREE.Scene, hasLights: boolean) {
         VFX_CONSTANTS.LARGE.EXPLOSION_LIGHT_DISTANCE,
         1.5
       );
-      light.visible = false;
+      // Keep PointLights visible at all times under WebGPU, setting intensity to 0 when inactive.
+      light.visible = true;
       _scene.add(light);
     }
 
@@ -130,7 +131,6 @@ export function triggerExplosion(pos: THREE.Vector3, scale = 1.0) {
     if (inst.light) {
       inst.light.position.copy(pos);
       inst.light.intensity = VFX_CONSTANTS.LARGE.EXPLOSION_LIGHT_INTENSITY * scale;
-      inst.light.visible = true;
     }
 
     // Spawn expanding fireball particles
@@ -168,7 +168,6 @@ export function updateLargeVFX(deltaTime: number, camera: THREE.PerspectiveCamer
       if (inst.life <= 0) {
         inst.active = false;
         if (inst.light) {
-          inst.light.visible = false;
           inst.light.intensity = 0;
         }
       } else {
@@ -226,7 +225,6 @@ export function clearLargeVFX() {
     inst.active = false;
     inst.life = 0;
     if (inst.light) {
-      inst.light.visible = false;
       inst.light.intensity = 0;
     }
   }

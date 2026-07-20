@@ -1,10 +1,10 @@
 import * as THREE from "three/webgpu";
 import { uv, float, smoothstep, length as tslLength, vec2, vec4, mix } from "three/tsl";
 import { getSettings } from "../../settings";
-import { getAssetUrl } from "../../asset-cache";
+import { MatchController } from "../../MatchController";
 
 // Import modular VFX components
-import { initFiringVFX, triggerNiagaraFlash, updateFiringVFX, clearFiringVFX } from "./firing";
+import { initFiringVFX, triggerNiagaraFlash, updateFiringVFX, clearFiringVFX, getFirstNiagaraFlash } from "./firing";
 import { initHitsVFX, spawnImpactSparks as hitsSpawnSparks, spawnEnvironmentDecalAndDust as hitsSpawnDecal, updateHitsVFX, clearHitsVFX, sparkBatch as hitsSparkBatch, dustBatch as hitsDustBatch, decalBatch as hitsDecalBatch, sparkActive as hitsSparkActive, dustActive as hitsDustActive } from "./hits";
 import { initLargeVFX, triggerExplosion, updateLargeVFX, clearLargeVFX } from "./large";
 import { VFX_CONSTANTS } from "./constants";
@@ -32,22 +32,13 @@ export let sparkBatch: THREE.BatchedMesh | null = null;
 export let decalBatch: THREE.BatchedMesh | null = null;
 export let dustBatch: THREE.BatchedMesh | null = null;
 export let smokeBatch: THREE.BatchedMesh | null = null;
+
+// Kept for backward compatibility signatures but initialized to null
 export let flashMesh: THREE.Mesh | null = null;
 export let flashLight: THREE.PointLight | null = null;
 
 // Re-export modular functions directly
-export { triggerExplosion };
-
-export interface MuzzleFlashInstance {
-  mesh: THREE.Mesh;
-  light: THREE.PointLight | null;
-  life: number;
-  maxLife: number;
-  scaleFactor: number;
-}
-
-export const FLASH_POOL_SIZE = 8;
-export const flashPool: MuzzleFlashInstance[] = [];
+export { triggerExplosion, getFirstNiagaraFlash };
 
 // Pool slot counts
 export let tracerSlots = 0;
@@ -189,46 +180,6 @@ export function initMatchVisuals(scene: THREE.Scene) {
     _scene.add(smokeBatch);
   }
 
-  // Legacy flash setup (kept for safety / simple meshes)
-  flashPool.length = 0;
-  const legacyFlashMat = new THREE.MeshBasicNodeMaterial();
-  legacyFlashMat.transparent = true;
-  legacyFlashMat.blending = THREE.AdditiveBlending;
-  legacyFlashMat.depthWrite = false;
-  legacyFlashMat.side = THREE.DoubleSide;
-  const fUV = uv().sub(vec2(0.5, 0.5));
-  const fDist = tslLength(fUV).mul(float(2.0));
-  const fAlpha = smoothstep(float(1.0), float(0.0), fDist);
-  legacyFlashMat.colorNode = vec4(float(1.0), float(1.0), float(1.0), fAlpha);
-
-  const _flashGeom = new THREE.PlaneGeometry(0.6, 0.6);
-  for (let i = 0; i < FLASH_POOL_SIZE; i++) {
-    const mesh = new THREE.Mesh(_flashGeom, legacyFlashMat);
-    mesh.name = `VFX_LegacyFlash_${i}`;
-    mesh.visible = false;
-    _scene.add(mesh);
-
-    let light: THREE.PointLight | null = null;
-    if (cfg.flashLight) {
-      light = new THREE.PointLight(0xFFF5E0, 0, 6);
-      light.visible = false;
-      _scene.add(light);
-    }
-
-    flashPool.push({
-      mesh,
-      light,
-      life: 0,
-      maxLife: 0,
-      scaleFactor: 1.0
-    });
-  }
-
-  if (flashPool.length > 0) {
-    flashMesh = flashPool[0].mesh;
-    flashLight = flashPool[0].light;
-  }
-
   console.log('[VFX:INIT] Modular pipeline loaded successfully. Preset:', preset);
   vfxInitialized = true;
 }
@@ -253,7 +204,13 @@ export function spawnTracer(muzzlePos: THREE.Vector3, direction: THREE.Vector3) 
   }
 }
 
-export function triggerFlash(muzzlePos?: THREE.Vector3, scaleFactor = 1.0) {
+export function triggerFlash(
+  muzzlePos?: THREE.Vector3,
+  scaleFactor = 1.0,
+  attachToPlayer = false,
+  attachToDroneId: number | null = null,
+  match?: MatchController
+) {
   if (!vfxInitialized || !muzzlePos) return;
 
   // 1. Point Camera direction Vector
@@ -264,37 +221,7 @@ export function triggerFlash(muzzlePos?: THREE.Vector3, scaleFactor = 1.0) {
   }
 
   // 2. Trigger Advanced Niagara Muzzle Flash
-  triggerNiagaraFlash(muzzlePos, _vfxDir, scaleFactor);
-
-  // 3. Fallback / Simple Flash Pool (Legacy support)
-  let inst: MuzzleFlashInstance | null = null;
-  for (let i = 0; i < FLASH_POOL_SIZE; i++) {
-    if (flashPool[i].life <= 0) {
-      inst = flashPool[i];
-      break;
-    }
-  }
-
-  if (!inst && flashPool.length > 0) {
-    inst = flashPool[0];
-  }
-
-  if (inst) {
-    inst.life = VFX_CONSTANTS.FIRING.FLASH_DURATION;
-    inst.maxLife = VFX_CONSTANTS.FIRING.FLASH_DURATION;
-    inst.scaleFactor = scaleFactor;
-    inst.mesh.position.copy(muzzlePos);
-    inst.mesh.visible = true;
-    inst.mesh.scale.setScalar(scaleFactor);
-    if (camera) {
-      inst.mesh.quaternion.copy(camera.quaternion);
-    }
-    if (inst.light) {
-      inst.light.position.copy(muzzlePos);
-      inst.light.visible = true;
-      inst.light.intensity = 15.0 * scaleFactor;
-    }
-  }
+  triggerNiagaraFlash(muzzlePos, _vfxDir, scaleFactor, attachToPlayer, attachToDroneId, match);
 }
 
 export function spawnImpactSparks(x: number, y: number, z: number, sparksToSpawn: number, nx = 0, ny = 1, nz = 0) {
@@ -332,11 +259,11 @@ export function spawnBarrelSmoke(camera: THREE.PerspectiveCamera, muzzlePos?: TH
   }
 }
 
-export function updateVFX(deltaTime: number, camera: THREE.PerspectiveCamera): void {
+export function updateVFX(deltaTime: number, camera: THREE.PerspectiveCamera, match?: MatchController): void {
   if (!vfxInitialized) return;
 
   // 1. Update modular components
-  updateFiringVFX(deltaTime, camera);
+  updateFiringVFX(deltaTime, camera, match);
   updateHitsVFX(deltaTime, camera);
   updateLargeVFX(deltaTime, camera);
 
@@ -387,29 +314,7 @@ export function updateVFX(deltaTime: number, camera: THREE.PerspectiveCamera): v
     }
   }
 
-  // 3. Update Legacy Flash Pool
-  for (let i = 0; i < flashPool.length; i++) {
-    const inst = flashPool[i];
-    if (inst.life > 0) {
-      inst.life -= deltaTime;
-      if (inst.life <= 0) {
-        inst.mesh.visible = false;
-        if (inst.light) {
-          inst.light.visible = false;
-          inst.light.intensity = 0;
-        }
-      } else {
-        inst.mesh.quaternion.copy(camera.quaternion);
-        const fScale = inst.life / inst.maxLife;
-        inst.mesh.scale.setScalar(inst.scaleFactor * fScale);
-        if (inst.light) {
-          inst.light.intensity = 15.0 * inst.scaleFactor * fScale;
-        }
-      }
-    }
-  }
-
-  // 4. Update Smoke
+  // 3. Update Smoke
   if (smokeBatch && smokeActive && smokeInstIds) {
     let smokeUpdateNeeded = false;
     for (let i = 0; i < barrelSmokeCount; i++) {
@@ -454,15 +359,6 @@ export function clearAllVisuals() {
   if (smokeBatch && smokeInstIds && smokeActive) {
     smokeActive.fill(0);
     for (let i = 0; i < smokeInstIds.length; i++) smokeBatch.setVisibleAt(smokeInstIds[i], false);
-  }
-  for (let i = 0; i < flashPool.length; i++) {
-    const inst = flashPool[i];
-    inst.life = 0;
-    inst.mesh.visible = false;
-    if (inst.light) {
-      inst.light.visible = false;
-      inst.light.intensity = 0;
-    }
   }
   flashLife = 0;
 }
