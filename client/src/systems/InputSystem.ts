@@ -16,6 +16,8 @@ import {
   setWeaponReloading 
 } from "../../weapons_model";
 
+import { IS_DESKTOP } from "../../platform-gate";
+
 export class InputSystem {
   private camera: THREE.PerspectiveCamera;
   private canvasContainer: HTMLElement | null;
@@ -39,8 +41,14 @@ export class InputSystem {
     const signal = this.abortController.signal;
 
     if (this.canvasContainer) {
-      this.canvasContainer.addEventListener("click", () => {
+      this.canvasContainer.addEventListener("click", (e) => {
+        if (this.isUIElement(e.target) || this.isGameInputLocked()) return;
         if (!this.match || this.match.isLocalPlayerDead) return;
+        if (IS_DESKTOP && this.canvasContainer) {
+          try {
+             this.canvasContainer.requestPointerLock();
+          } catch(err) {}
+        }
         this.match.combat?.fireActiveShot(this.camera);
       }, { signal });
 
@@ -48,6 +56,7 @@ export class InputSystem {
     }
 
     document.addEventListener("mousedown", (e) => {
+      if (this.isUIElement(e.target) || this.isGameInputLocked()) return;
       if (!this.match || this.match.isLocalPlayerDead) return;
       if (isSwitchingWeapon()) return;
       if (e.button === 2) {
@@ -57,6 +66,7 @@ export class InputSystem {
     }, { signal });
 
     document.addEventListener("mouseup", (e) => {
+      if (this.isUIElement(e.target) || this.isGameInputLocked()) return;
       if (!this.match || this.match.isLocalPlayerDead) return;
       if (e.button === 2) {
         e.preventDefault();
@@ -65,6 +75,7 @@ export class InputSystem {
     }, { signal });
 
     document.addEventListener("mousemove", (e) => {
+      if (this.isGameInputLocked()) return;
       if (!this.match || this.match.isLocalPlayerDead) return;
       const currentWeaponStats =
         this.match.activeWeapon === 1 ? DETAILED_WEAPONS.rifle : DETAILED_WEAPONS.pistol;
@@ -131,6 +142,8 @@ export class InputSystem {
   }
 
   private setupTouchControls() {
+    if (IS_DESKTOP) return;
+
     const joystickKnob = document.getElementById("joystick-knob");
     const joystickBoundary = document.getElementById("joystick-boundary");
 
@@ -144,6 +157,7 @@ export class InputSystem {
 
       const startJoystick = (e: PointerEvent) => {
         if ((window as any).isEditMode) return;
+        if (this.isGameInputLocked()) return;
         if (!this.match || this.match.isLocalPlayerDead) return;
         if (e.pointerType === "mouse") return;
         e.preventDefault(); e.stopPropagation();
@@ -214,6 +228,7 @@ export class InputSystem {
 
       const startLook = (e: PointerEvent) => {
         if ((window as any).isEditMode) return;
+        if (this.isGameInputLocked()) return;
         if (!this.match || this.match.isLocalPlayerDead) return;
         if (e.pointerType === "mouse") return;
         e.preventDefault(); e.stopPropagation();
@@ -283,6 +298,7 @@ export class InputSystem {
       ws1.style.pointerEvents = "auto";
       ws1.addEventListener("pointerdown", (e) => {
         if ((window as any).isEditMode) return;
+        if (this.isGameInputLocked()) return;
         e.preventDefault(); e.stopPropagation();
         this.selectWeapon(1);
       }, { signal: this.abortController.signal });
@@ -292,6 +308,7 @@ export class InputSystem {
       ws2.style.pointerEvents = "auto";
       ws2.addEventListener("pointerdown", (e) => {
         if ((window as any).isEditMode) return;
+        if (this.isGameInputLocked()) return;
         e.preventDefault(); e.stopPropagation();
         this.selectWeapon(2);
       }, { signal: this.abortController.signal });
@@ -355,6 +372,7 @@ export class InputSystem {
 
     el.addEventListener("pointerdown", (e: PointerEvent) => {
       if ((window as any).isEditMode) return;
+      if (this.isGameInputLocked()) return;
       if (!this.match || this.match.isLocalPlayerDead) return;
       if (e.pointerType === "mouse") return;
       e.preventDefault();
@@ -403,6 +421,7 @@ export class InputSystem {
 
     const onStart = (e: PointerEvent) => {
       if ((window as any).isEditMode) return;
+      if (this.isGameInputLocked()) return;
       if (e.pointerType === "mouse") return;
       if (!this.match || this.match.isLocalPlayerDead) return;
       e.preventDefault(); e.stopPropagation();
@@ -458,6 +477,18 @@ export class InputSystem {
   }
 
   public step(dt: number) {
+    if (this.isGameInputLocked()) {
+      // Clear movement keys and vectors instantly on input lock to prevent infinite running/sliding
+      this.match.tempMoveDir.set(0, 0, 0);
+      if (this.match.physicsData) {
+        this.match.physicsData[0] = 0;
+        this.match.physicsData[1] = 0;
+        this.match.physicsData[2] = 0;
+        this.match.physicsData[3] = 0;
+        this.match.physicsData[9] = 0;
+      }
+      return;
+    }
     if (!this.match || this.match.isLocalPlayerDead) return;
 
     let mask = 0;
@@ -508,8 +539,19 @@ export class InputSystem {
         });
       }
     } else {
-      targetSpeed = keys.Shift ? 15.0 : 5.5;
-      if (keys.Crouch) targetSpeed = 2.5;
+      let curveT = 0.0;
+      const isMoving = keys.w || keys.a || keys.s || keys.d || GlobalState.__forceWalk;
+      const isSprinting = isMoving && keys.Shift && !keys.Crouch;
+
+      if (this.match.cameraEffects) {
+        curveT = this.match.cameraEffects.updateSpeedBlend(dt, isMoving, isSprinting);
+      } else {
+        curveT = isSprinting ? 1.0 : 0.0;
+      }
+
+      const baseWalkSpeed = keys.Crouch ? 2.5 : 5.5;
+      const maxSprintSpeed = 15.0;
+      targetSpeed = baseWalkSpeed + (maxSprintSpeed - baseWalkSpeed) * curveT;
       targetSpeed *= (GlobalState.speedMultiplier || 1.0);
 
       let targetCamY = keys.Crouch ? PLAYER_EYE_LEVEL_CROUCH : PLAYER_EYE_LEVEL;
@@ -569,5 +611,62 @@ export class InputSystem {
 
     const currentSpeed = len > 0 ? targetSpeed : 0;
     audioManager.updateFootsteps(dt, currentSpeed, this.match.playerPos, this.match.localGrounded);
+  }
+
+  public isGameInputLocked(): boolean {
+    if (!this.match) return true;
+    if (this.match.isLocalPlayerDead) return true;
+    if ((window as any).gameState !== "ACTIVE_MATCH") return true;
+    
+    // Check if any overlays/menus are active
+    const splash = document.getElementById("splash-screen");
+    if (splash && splash.style.display !== "none") return true;
+
+    const portraitLock = document.getElementById("portrait-lock");
+    if (portraitLock && portraitLock.style.pointerEvents !== "none" && portraitLock.style.opacity !== "0") return true;
+
+    const loadingOverlay = document.querySelector(".loading-overlay") as HTMLElement;
+    if (loadingOverlay && loadingOverlay.style.display !== "none") return true;
+
+    const devMenu = document.getElementById("dev-overlay");
+    if (devMenu && devMenu.style.display !== "none") return true;
+    
+    const mapEditor = document.getElementById("dev-map-editor-screen");
+    if (mapEditor && mapEditor.style.display !== "none") return true;
+    
+    const minimap = document.getElementById("minimap-container");
+    if (minimap && minimap.classList.contains("fullscreen-minimap")) return true;
+    
+    const settings = document.getElementById("vexea-settings-overlay");
+    if (settings && settings.style.display !== "none") return true;
+
+    const uiEditor = document.getElementById("ui-editor-bar");
+    if (uiEditor && uiEditor.style.display !== "none") return true;
+    
+    return false;
+  }
+
+  private isUIElement(target: EventTarget | null): boolean {
+    if (!target) return false;
+    let el = target as HTMLElement;
+    while (el) {
+      if (el.tagName === 'BUTTON' || el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'A') {
+        return true;
+      }
+      if (
+        el.id === 'dev-overlay' || 
+        el.id === 'minimap-container' || 
+        el.classList?.contains('fullscreen-minimap') || 
+        el.id === 'vexea-settings-overlay' ||
+        el.id === 'ui-editor-bar' ||
+        el.id === 'splash-screen' ||
+        el.id === 'portrait-lock' ||
+        el.classList?.contains('loading-overlay')
+      ) {
+        return true;
+      }
+      el = el.parentElement as HTMLElement;
+    }
+    return false;
   }
 }

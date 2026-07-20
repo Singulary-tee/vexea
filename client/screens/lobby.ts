@@ -1,6 +1,7 @@
 import * as screenManager from "./screen-manager";
 import { getDefaultMap } from "../../shared/maps/map-registry";
 import { ensureAssetsDownloaded } from "../asset-cache";
+import { IS_DESKTOP } from "../platform-gate";
 
 export function initLobby() {
   let el = document.getElementById('lobby-screen');
@@ -12,18 +13,16 @@ export function initLobby() {
       width: '100vw', height: '100vh'
     });
 
-    const isDesktop = window.innerWidth > window.innerHeight;
+    // We use a CSS class to handle responsive layout without platform checks
+    el.classList.add('lobby-responsive');
 
     // Top Section
     const topSection = document.createElement('div');
     Object.assign(topSection.style, {
-      height: '60%', display: 'flex', flexDirection: 'row', boxSizing: 'border-box'
+      height: 'clamp(50%, 60%, 70%)', display: 'flex', flexDirection: 'row', boxSizing: 'border-box',
+      overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch'
     });
-    if (!isDesktop) {
-       Object.assign(topSection.style, {
-          overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch'
-       });
-    }
+    topSection.classList.add('lobby-top-section');
 
     let selectedClassIdx = 0;
     const cards: HTMLElement[] = [];
@@ -31,10 +30,11 @@ export function initLobby() {
     const createClassCard = (idx: number, name: string, desc: string, utils: string[], gradient: string) => {
         const card = document.createElement('div');
         Object.assign(card.style, {
-           flex: isDesktop ? '1' : 'none', minWidth: '180px', height: '100%', position: 'relative',
+           flex: '1', minWidth: 'clamp(240px, 25vw, 400px)', height: '100%', position: 'relative',
            overflow: 'hidden', cursor: 'pointer', borderRadius: '0', scrollSnapAlign: 'start',
            marginRight: idx < 3 ? '8px' : '0'
         });
+        card.classList.add('lobby-class-card');
 
         const imgLayer = document.createElement('div');
         Object.assign(imgLayer.style, {
@@ -63,14 +63,14 @@ export function initLobby() {
 
         const content = document.createElement('div');
         Object.assign(content.style, {
-           position: 'absolute', bottom: '0', left: '0', right: '0', zIndex: '3', padding: '8px 16px', boxSizing: 'border-box',
-           maxHeight: '30%', overflow: 'hidden'
+           position: 'absolute', bottom: '0', left: '0', right: '0', zIndex: '3', padding: 'clamp(8px, 2vh, 24px) clamp(12px, 2vw, 32px)', boxSizing: 'border-box',
+           maxHeight: 'clamp(30%, 40%, 50%)', overflow: 'hidden'
         });
 
         const clsName = document.createElement('div');
         clsName.textContent = name;
         Object.assign(clsName.style, {
-           fontFamily: "'Barlow Condensed', sans-serif", fontSize: '18px', textTransform: 'uppercase',
+           fontFamily: "'Barlow Condensed', sans-serif", fontSize: 'clamp(18px, 3vh, 32px)', textTransform: 'uppercase',
            fontWeight: 'bold', color: '#E8E8E8'
         });
         content.appendChild(clsName);
@@ -78,7 +78,7 @@ export function initLobby() {
         const clsDesc = document.createElement('div');
         clsDesc.textContent = desc;
         Object.assign(clsDesc.style, {
-           fontFamily: "'Barlow Condensed', sans-serif", fontSize: '13px', color: '#888888', marginTop: '4px'
+           fontFamily: "'Barlow Condensed', sans-serif", fontSize: 'clamp(12px, 1.5vh, 18px)', color: '#888888', marginTop: '4px'
         });
         content.appendChild(clsDesc);
 
@@ -86,7 +86,7 @@ export function initLobby() {
             const uDiv = document.createElement('div');
             uDiv.textContent = u;
             Object.assign(uDiv.style, {
-               fontFamily: "'Barlow Condensed', sans-serif", fontSize: '12px', color: '#555555'
+               fontFamily: "'Barlow Condensed', sans-serif", fontSize: 'clamp(11px, 1.2vh, 16px)', color: '#555555'
             });
             content.appendChild(uDiv);
         });
@@ -205,11 +205,13 @@ export function initLobby() {
     // Emit ready logic can be wired later
     readyBtn.addEventListener('click', () => {
         // Synchronously request fullscreen and pointer lock on canvas-container
+        if (!IS_DESKTOP) {
             const docEl = document.documentElement as any;
             if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
                 if (docEl.requestFullscreen) docEl.requestFullscreen();
                 else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
             }
+        }
 
         const map = getDefaultMap();
         ensureAssetsDownloaded(() => {

@@ -19,6 +19,7 @@ import "./index.css";
 if ((import.meta as any).env?.DEV) {
   import("./dev_menu");
 }
+import { initPlatformGate, IS_MOBILE } from "./platform-gate";
 import { initSplash } from "./screens/splash";
 import map1Spec from "../shared/maps/map_1_facility.spec.json";
 import { initMainMenu } from "./screens/main-menu";
@@ -51,6 +52,7 @@ import {
   decalBatch,
   decalSlots,
   dustBatch,
+  triggerExplosion,
 } from "./src/vfx/VFXOrchestrator";
 import { hitscanSystem } from "./hitscan";
 
@@ -185,10 +187,6 @@ Object.defineProperty(window, '_physicsWorker', {
     },
     configurable: true
 });
-const isMobileDevice =
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent,
-  );
 let updateWeaponUI: () => void = () => {};
 let lastFrameTime = performance.now();
 
@@ -269,12 +267,97 @@ const initClient = async () => {
     });
   }
 
+  const isUIInteractionLocked = () => {
+    const splash = document.getElementById("splash-screen");
+    if (splash && splash.style.display !== "none" && splash.style.pointerEvents !== "none") return true;
+
+    const portraitLock = document.getElementById("portrait-lock");
+    if (portraitLock && portraitLock.style.pointerEvents !== "none" && portraitLock.style.opacity !== "0") return true;
+
+    const loadingOverlay = document.querySelector(".loading-overlay") as HTMLElement;
+    if (loadingOverlay && loadingOverlay.style.display !== "none") return true;
+
+    const devMenu = document.getElementById("dev-overlay");
+    if (devMenu && devMenu.style.display !== "none") return true;
+
+    const settings = document.getElementById("vexea-settings-overlay");
+    if (settings && settings.style.display !== "none") return true;
+
+    const mapEditor = document.getElementById("dev-map-editor-screen");
+    if (mapEditor && mapEditor.style.display !== "none") return true;
+
+    return false;
+  };
+  (window as any).isUIInteractionLocked = isUIInteractionLocked;
+
   const minimapContainer = document.getElementById("minimap-container");
   if (minimapContainer) {
-    minimapContainer.addEventListener("click", () => {
-      audioManager.play("click");
-      minimapContainer.classList.toggle("fullscreen-minimap");
-    });
+    const styleProps = [
+      "position",
+      "left",
+      "top",
+      "right",
+      "bottom",
+      "margin",
+      "width",
+      "min-width",
+      "height",
+      "min-height",
+      "transform",
+      "transform-origin"
+    ];
+
+    const setFullscreenMinimap = (active: boolean) => {
+      if (active) {
+        styleProps.forEach(prop => {
+          const val = minimapContainer.style.getPropertyValue(prop);
+          const priority = minimapContainer.style.getPropertyPriority(prop);
+          if (val) {
+            minimapContainer.setAttribute(`data-saved-${prop}`, val);
+            if (priority) {
+              minimapContainer.setAttribute(`data-saved-${prop}-priority`, priority);
+            }
+          }
+          minimapContainer.style.removeProperty(prop);
+        });
+        minimapContainer.classList.add("fullscreen-minimap");
+      } else {
+        minimapContainer.classList.remove("fullscreen-minimap");
+        styleProps.forEach(prop => {
+          const val = minimapContainer.getAttribute(`data-saved-${prop}`);
+          const priority = minimapContainer.getAttribute(`data-saved-${prop}-priority`) || "";
+          if (val !== null) {
+            minimapContainer.style.setProperty(prop, val, priority);
+            minimapContainer.removeAttribute(`data-saved-${prop}`);
+            minimapContainer.removeAttribute(`data-saved-${prop}-priority`);
+          } else {
+            minimapContainer.style.removeProperty(prop);
+          }
+        });
+      }
+    };
+
+    document.addEventListener("click", (e) => {
+      if (isUIInteractionLocked()) return;
+
+      const isFS = minimapContainer.classList.contains("fullscreen-minimap");
+      const clickedInside = minimapContainer.contains(e.target as Node);
+      if (isFS) {
+        if (!clickedInside) {
+          audioManager.play("click");
+          setFullscreenMinimap(false);
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      } else {
+        if (clickedInside) {
+          audioManager.play("click");
+          setFullscreenMinimap(true);
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      }
+    }, { capture: true });
   }
 
   canvasContainer = document.getElementById(
@@ -655,7 +738,7 @@ const setup3DStage = async () => {
         1 / (window.innerHeight * pixelRatio);
     }
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(IS_MOBILE ? Math.min(window.devicePixelRatio, 1.5) : window.devicePixelRatio);
 
   const W = window as any;
   W.renderer = renderer;
@@ -692,7 +775,9 @@ const setup3DStage = async () => {
 
   (window as any).weaponsContainer = weaponsContainer;
   (window as any).camera = camera;
+  (window as any).renderer = renderer;
   (window as any).triggerFlash = triggerFlash;
+  (window as any).triggerExplosion = triggerExplosion;
   (window as any).spawnTracer = spawnTracer;
 };
 
@@ -857,14 +942,30 @@ const animateFrame = async () => {
     diagTempEuler.set(finalPitch, finalYaw, 0, "YXZ");
     camera.quaternion.setFromEuler(diagTempEuler);
 
-    // 3. Movement & Physics Update
-    if (match.input) {
-      const _p0 = performance.now();
-      match.input.step(dt);
-      (window as any).devSubsystems.physics = performance.now() - _p0;
-    }
+     // 3. Movement & Physics Update
+     if (match.input) {
+       const _p0 = performance.now();
+       match.input.step(dt);
+       (window as any).devSubsystems.physics = performance.now() - _p0;
+     }
 
-    syncVisualProjectiles(dt);
+     // Apply Camera & Viewmodel Effects (Point 9: head bobbing, tilting, landing jolts, FOV stretch)
+     if (match.cameraEffects) {
+       const isMoving = inputManager.moveX !== 0 || inputManager.moveZ !== 0;
+       const isMovingOnGround = isMoving && match.localGrounded;
+       const isSprinting = isMoving && inputManager.isSprinting && !inputManager.isCrouching;
+
+       match.cameraEffects.step(
+         dt,
+         camera,
+         isMovingOnGround,
+         isSprinting,
+         match.isADS,
+         match.currentAdsLerp
+       );
+     }
+
+     syncVisualProjectiles(dt);
 
     if (match.visuals) {
         const _v0 = performance.now();
@@ -985,6 +1086,11 @@ const animateFrame = async () => {
       (window as any).devSubsystems.minimap = performance.now() - _m0;
     }
 
+    // 4.7 Compass Draw
+    if (match && match.compass) {
+      match.compass.update(dt);
+    }
+
     // 5. Render Step
     const tLogicEnd = performance.now();
     if ((window as any).isWebGPU && (window as any).renderPipeline) {
@@ -1072,6 +1178,7 @@ let serverCubeMesh: THREE.Mesh | undefined;
 };
 
 window.addEventListener("DOMContentLoaded", () => {
+  initPlatformGate();
   initMapViewerGlobally();
   initClient();
   initUIEditor();

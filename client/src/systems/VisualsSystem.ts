@@ -116,6 +116,23 @@ export class VisualsSystem {
       if (pistolGroup) pistolGroup.visible = true;
       if (rifleGroup) rifleGroup.visible = true;
       
+      // Temporarily position WeaponsContainer in front of camera so it is inside the view frustum and compiled
+      const weaponsContainer = scene.getObjectByName("WeaponsContainer");
+      const wasWeaponsContainerPos = new THREE.Vector3();
+      const wasWeaponsContainerQuat = new THREE.Quaternion();
+      if (weaponsContainer) {
+        wasWeaponsContainerPos.copy(weaponsContainer.position);
+        wasWeaponsContainerQuat.copy(weaponsContainer.quaternion);
+        
+        weaponsContainer.position.copy(camera.position);
+        weaponsContainer.quaternion.copy(camera.quaternion);
+        // Spin 180 degrees around Y (weapons face forward along Z) and translate forward so they are centered in view
+        weaponsContainer.rotateY(Math.PI);
+        weaponsContainer.translateZ(0.8);
+        weaponsContainer.translateY(-0.25);
+        weaponsContainer.updateMatrixWorld(true);
+      }
+      
       // Temporarily show flashMesh to compile its shader
       const wasFlashVisible = flashMesh ? flashMesh.visible : false;
       if (flashMesh) flashMesh.visible = true;
@@ -132,6 +149,13 @@ export class VisualsSystem {
         (window as any).renderPipeline.render();
       } else {
         renderer.render(scene, camera);
+      }
+
+      // Restore original positions and orientations
+      if (weaponsContainer) {
+        weaponsContainer.position.copy(wasWeaponsContainerPos);
+        weaponsContainer.quaternion.copy(wasWeaponsContainerQuat);
+        weaponsContainer.updateMatrixWorld(true);
       }
 
       // Restore visibility

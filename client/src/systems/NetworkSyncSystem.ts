@@ -52,7 +52,10 @@ class PositionalAudioPool {
       }
       
       item.audio.setBuffer(buffer);
-      item.audio.setRefDistance(15);
+      item.audio.setDistanceModel('linear');
+      item.audio.setRefDistance(5);
+      item.audio.setMaxDistance(150);
+      item.audio.setRolloffFactor(1.0);
       item.audio.setVolume(volume);
       item.audio.setPlaybackRate(playbackRate);
       
@@ -227,6 +230,15 @@ export class NetworkSyncSystem {
           pos: { x: json.position.x, y: json.position.y, z: json.position.z },
         });
       }
+      
+      // Calculate look direction towards the center of the map (384, 0, 384)
+      const dx = 384 - json.position.x;
+      const dz = 384 - json.position.z;
+      // In Three.js, default looking direction is along negative Z (yaw = 0)
+      // So to look at (dx, dz), we compute Math.atan2(dx, -dz)
+      const initialYaw = Math.atan2(dx, -dz);
+      this.match.playerYaw = initialYaw;
+      this.match.playerPitch = 0; // look level horizontally
     }
   }
 
@@ -324,7 +336,7 @@ export class NetworkSyncSystem {
       const type = msg.droneType;
 
       const config = DRONE_CONFIGS[type as DroneType];
-      let playbackRate = config?.firingSoundPitch ?? 1.0;
+      let playbackRate = (config?.firingSoundPitch ?? 1.0) * (0.95 + Math.random() * 0.1); // Add small random pitch variation
       let scaleFactor = config?.muzzleFlashScale ?? 1.0;
 
       _droneFireDir.set(msg.dirX, msg.dirY, msg.dirZ).normalize();
@@ -351,7 +363,9 @@ export class NetworkSyncSystem {
         if (typeof (window as any).spawnImpactSparks === "function") {
           (window as any).spawnImpactSparks(msg.posX, msg.posY, msg.posZ, 40); // 40 large sparks
         }
-        if (typeof (window as any).triggerFlash === "function") {
+        if (typeof (window as any).triggerExplosion === "function") {
+          (window as any).triggerExplosion(_droneDeathPos);
+        } else if (typeof (window as any).triggerFlash === "function") {
           (window as any).triggerFlash(_droneDeathPos);
         }
       }
@@ -397,6 +411,16 @@ export class NetworkSyncSystem {
           pos: { x: msg.position.x, y: msg.position.y, z: msg.position.z },
         });
       }
+      
+      // Calculate look direction towards the center of the map (384, 0, 384) to avoid spawning looking in the wrong direction
+      const dx = 384 - msg.position.x;
+      const dz = 384 - msg.position.z;
+      // In Three.js, default looking direction is along negative Z (yaw = 0)
+      // So to look at (dx, dz), we compute Math.atan2(dx, -dz)
+      const initialYaw = Math.atan2(dx, -dz);
+      match.playerYaw = initialYaw;
+      match.playerPitch = 0; // look level horizontally
+
       if (match.hud) match.hud.updateHUD();
     }
 

@@ -2,12 +2,19 @@ import * as THREE from "three/webgpu";
 import { DETAILED_WEAPONS } from "../shared/weapons";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { getCachedOrFetchUrl } from "./asset-cache";
+import { CAMERA_EFFECTS_CONFIG } from "./src/camera/constants";
+import { getMatch } from "./MatchController";
 
 // Zero-GC pre-allocated math variables for frame loop optimization
 const _pos = new THREE.Vector3();
 const _rot = new THREE.Euler();
 const _targetPos = new THREE.Vector3();
 const _muzzleWorldPos = new THREE.Vector3();
+
+// Weapon follow slerp tracking state (O(1) allocation)
+let weaponBaseQuat = new THREE.Quaternion();
+let isFirstFrame = true;
+
 
 // Weapon Container Group (attached directly to the camera)
 export let weaponsContainer: THREE.Group | null = null;
@@ -88,6 +95,7 @@ let lastBaseState: WeaponAnimState = WeaponAnimState.IDLE;
 let isWeaponReloading = false;
 
 export async function initPlayerWeapons(scene: THREE.Scene, camera: THREE.Camera): Promise<THREE.Group> {
+  isFirstFrame = true;
   weaponsContainer = new THREE.Group();
   weaponsContainer.name = "WeaponsContainer";
   scene.add(weaponsContainer);
@@ -460,13 +468,36 @@ export function updateWeaponsContainer(
   const baseTargetY = hipY + (adsY - hipY) * currentAdsLerp;
   const baseTargetZ = hipZ + (adsZ - hipZ) * currentAdsLerp;
 
+  let pullBackZ = 0.0;
+  const match = getMatch();
+  if (match && match.cameraEffects) {
+    pullBackZ = match.cameraEffects.runPullBack;
+  }
+
   const finalX = baseTargetX + swayX + (weaponVisualState.recoilYaw * 0.05);
   const finalY = baseTargetY + switchYOffset + (weaponVisualState.recoilPitch * 0.12);
-  const finalZ = baseTargetZ - weaponVisualState.recoilZ; 
+  const finalZ = baseTargetZ - weaponVisualState.recoilZ - pullBackZ; 
 
   weaponsContainer.position.copy(camera.position);
-  // Match camera rotation perfectly
-  weaponsContainer.quaternion.copy(camera.quaternion);
+  
+  // Implement Weapon Follow slerp lag with non-linear snapping drag
+  if (isFirstFrame) {
+    weaponBaseQuat.copy(camera.quaternion);
+    isFirstFrame = false;
+  } else {
+    const config = CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW;
+    // Calculate angular difference
+    const angle = weaponBaseQuat.angleTo(camera.quaternion);
+    // Non-linear lag multiplier: follow speed gets slower as the angle gets larger (harder snap)
+    const angleFactor = Math.max(config.MIN_FOLLOW_SPEED_MULT, Math.exp(-angle * config.LAG_FACTOR));
+    const currentSpeed = config.BASE_SPEED * angleFactor;
+    
+    // Mathematically correct frame-rate independent exponential decay slerp interpolant
+    const t = 1.0 - Math.exp(-currentSpeed * dt);
+    weaponBaseQuat.slerp(camera.quaternion, t);
+  }
+  
+  weaponsContainer.quaternion.copy(weaponBaseQuat);
 
   // Apply recoil rotation relative to the camera
   weaponsContainer.rotateX(weaponVisualState.recoilPitch + (swayY * 1.5));

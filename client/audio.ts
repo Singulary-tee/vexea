@@ -125,6 +125,14 @@ class AudioManager {
     
     public play(name: string) {
         if (this.sounds[name]) {
+            const category = SOUND_CATEGORIES[name] || 'sfx';
+            if (category === 'sfx' || category === 'ui') {
+                // Apply a small random pitch variation to break monotony
+                const pitch = 0.93 + Math.random() * 0.14; // Range 0.93 to 1.07
+                this.sounds[name].rate(pitch);
+            } else {
+                this.sounds[name].rate(1.0); // Keep theme music at default speed
+            }
             this.sounds[name].play();
         } else {
             console.warn(`Audio ${name} not found`);
@@ -234,11 +242,13 @@ class AudioManager {
             this.activeFootstepKey = targetKey;
             const targetSound = this.sounds[targetKey];
             if (targetSound && !targetSound.playing()) {
+                targetSound.rate(0.95 + Math.random() * 0.1); // Add small random pitch variation
                 targetSound.play();
             }
         } else {
             const targetSound = this.sounds[targetKey];
             if (targetSound && !targetSound.playing()) {
+                targetSound.rate(0.95 + Math.random() * 0.1); // Add small random pitch variation
                 targetSound.play();
             }
         }

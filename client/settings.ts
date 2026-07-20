@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { DS } from './design-system';
 import { listCachedFiles, deleteCachedFile, clearCache } from './asset-cache';
 import { IS_DEV } from '../shared/gate';
+import { IS_MOBILE } from './platform-gate';
 
 export interface VexeaSettingsData {
     joySens: number;
@@ -14,6 +15,7 @@ export interface VexeaSettingsData {
     musicVolume: number;
     sfxVolume: number;
     uiVolume: number;
+    voiceVolume: number;
     spatialAudio: boolean;
     music: boolean;
     uiSounds: boolean;
@@ -50,31 +52,32 @@ const DEFAULT_SETTINGS: VexeaSettingsData = {
     joySens: 1.0,
     camSens: 1.0,
     invertY: false,
-    graphicsPreset: 'Medium',
-    fpsCap: 60,
+    graphicsPreset: IS_MOBILE ? 'Low' : 'Medium',
+    fpsCap: IS_MOBILE ? 30 : 60,
     fxaa: false,
     masterVolume: 1.0,
     musicVolume: 0.7,
     sfxVolume: 1.0,
     uiVolume: 0.8,
+    voiceVolume: 0.8,
     spatialAudio: true,
     music: true,
     uiSounds: true,
     hudScale: 1.0,
     crosshairColor: 'white',
     crosshairSize: 20,
-    particleCount: 50,
-    lodLow: 30,
-    lodBillboard: 60,
+    particleCount: IS_MOBILE ? 20 : 50,
+    lodLow: IS_MOBILE ? 15 : 30,
+    lodBillboard: IS_MOBILE ? 30 : 60,
     fov: 75,
     rendererType: 'auto',
     fullscreen: false,
     serverUrl: "",
 
     // Graphics defaults
-    shadows: true,
+    shadows: !IS_MOBILE,
     ssao: false,
-    bloom: true,
+    bloom: !IS_MOBILE,
     bloomStrength: 1.0,
     bloomRadius: 0.5,
     bloomThreshold: 0.5,
@@ -84,9 +87,9 @@ const DEFAULT_SETTINGS: VexeaSettingsData = {
     chromaticAberrationIntensity: 0.005,
     toneMapping: 'aces',
     exposure: 1.0,
-    parallaxOcclusion: true,
-    pbrMaterials: true,
-    instancedProps: true
+    parallaxOcclusion: !IS_MOBILE,
+    pbrMaterials: !IS_MOBILE,
+    instancedProps: !IS_MOBILE
 };
 
 export const getSettings = (): VexeaSettingsData => {
@@ -237,7 +240,7 @@ function createOverlayHTML() {
     <div id="vexea-settings-overlay" style="position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.85); backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; display:flex; flex-direction:row; font-family:${DS.typography.fontFamily}; color:white; pointer-events:auto;" class="flex-col md:flex-row">
         <!-- Sidebar -->
         <div id="settings-sidebar" style="background:${DS.glass.background}; backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; border-right:${DS.glass.border}; overflow-x:auto; display:flex;" class="w-full md:w-64 flex-row md:flex-col shrink-0 p-4 gap-2">
-            <h2 class="text-2xl font-bold mb-4 hidden md:block" style="color:${DS.colors.accent}; letter-spacing: 2px;">SETTINGS</h2>
+            <h2 class="text-2xl font-bold mb-4 hidden md:block" style="color:${DS.colors.accent}; letter-spacing: 2px; font-size:clamp(1.2rem, 3vw, 1.5rem);">SETTINGS</h2>
             <button class="settings-tab active" data-tab="CONTROLS">CONTROLS</button>
             <button class="settings-tab" data-tab="GRAPHICS">GRAPHICS</button>
             <button class="settings-tab" data-tab="FRAME RATE">FRAME RATE</button>
@@ -248,27 +251,27 @@ function createOverlayHTML() {
             ${IS_DEV ? `<button class="settings-tab" data-tab="DEV" id="btn-tab-dev">ASSET MANAGEMENT</button>` : ''}
             <button class="settings-tab" data-tab="LEGAL">LEGAL</button>
             <div class="flex-1"></div>
-            <button id="btn-close-settings-overlay" style="background:${DS.colors.danger}; font-family:${DS.typography.fontFamily}; font-weight:bold; letter-spacing:2px; font-size:14px; padding:10px 20px; border-radius:4px; margin-top:20px; cursor:pointer; color:white; border:${DS.glass.border}; box-shadow:${DS.glass.glowInner}; transition: background 150ms ease;">CLOSE</button>
+            <button id="btn-close-settings-overlay" style="background:${DS.colors.danger}; font-family:${DS.typography.fontFamily}; font-weight:bold; letter-spacing:2px; font-size:clamp(12px, 1.5vw, 14px); padding:clamp(8px, 1.5vh, 10px) clamp(16px, 2vw, 20px); border-radius:4px; margin-top:clamp(10px, 2vh, 20px); cursor:pointer; color:white; border:${DS.glass.border}; box-shadow:${DS.glass.glowInner}; transition: background 150ms ease;">CLOSE</button>
         </div>
         
         <!-- Content -->
-        <div id="settings-content" style="flex:1; overflow-y:auto; padding:30px; font-size:16px; background:rgba(10,10,10,0.4); backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; border-left:${DS.glass.border};">
+        <div id="settings-content" style="flex:1; overflow-y:auto; padding:clamp(16px, 4vw, 30px); font-size:clamp(14px, 1.5vw, 16px); background:rgba(10,10,10,0.4); backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; border-left:${DS.glass.border};">
             
             <div id="tab-CONTROLS" class="settings-page active">
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">CONTROLS</h3>
                 <div class="mb-4">
                     <label class="block mb-1">Joystick Sensitivity (Multiplier)</label>
-                    <input type="range" id="inp-joySens" min="0.1" max="2.0" step="0.1" style="width:100%;max-width:300px;">
+                    <input type="range" id="inp-joySens" min="0.1" max="2.0" step="0.1" style="width:100%;max-width:clamp(200px, 40vw, 300px);">
                     <span id="val-joySens" class="ml-2"></span>
                 </div>
                 <div class="mb-4">
                     <label class="block mb-1">Camera Sensitivity (Multiplier)</label>
-                    <input type="range" id="inp-camSens" min="0.1" max="2.0" step="0.1" style="width:100%;max-width:300px;">
+                    <input type="range" id="inp-camSens" min="0.1" max="2.0" step="0.1" style="width:100%;max-width:clamp(200px, 40vw, 300px);">
                     <span id="val-camSens" class="ml-2"></span>
                 </div>
                 <div class="mb-4 flex items-center gap-2">
                     <label>Invert Y Axis</label>
-                    <input type="checkbox" id="inp-invertY" style="width:20px;height:20px;">
+                    <input type="checkbox" id="inp-invertY" style="width:clamp(16px, 2vw, 20px);height:clamp(16px, 2vw, 20px);">
                 </div>
             </div>
 
@@ -434,9 +437,14 @@ function createOverlayHTML() {
                     <span id="val-sfxVol" class="ml-2"></span>
                 </div>
                 <div class="mb-4">
-                    <label class="block mb-1">UI/Voice Volume</label>
+                    <label class="block mb-1">UI Volume</label>
                     <input type="range" id="inp-uiVol" min="0" max="1" step="0.05" style="width:100%;max-width:300px;">
                     <span id="val-uiVol" class="ml-2"></span>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1">Voice Volume</label>
+                    <input type="range" id="inp-voiceVol" min="0" max="1" step="0.05" style="width:100%;max-width:300px;">
+                    <span id="val-voiceVol" class="ml-2"></span>
                 </div>
                 <div class="mb-4 flex items-center gap-2">
                     <label>Spatial Audio (HRTF)</label>
@@ -672,6 +680,7 @@ export function openSettings() {
     let musicVol = document.getElementById('inp-musicVol') as HTMLInputElement;
     let sfxVol = document.getElementById('inp-sfxVol') as HTMLInputElement;
     let uiVol = document.getElementById('inp-uiVol') as HTMLInputElement;
+    let voiceVol = document.getElementById('inp-voiceVol') as HTMLInputElement;
     let spatial = document.getElementById('inp-spatial') as HTMLInputElement;
     let music = document.getElementById('inp-music') as HTMLInputElement;
     let ui = document.getElementById('inp-uiSounds') as HTMLInputElement;
@@ -679,6 +688,7 @@ export function openSettings() {
     musicVol.value = s.musicVolume.toString();
     sfxVol.value = s.sfxVolume.toString();
     uiVol.value = s.uiVolume.toString();
+    if (voiceVol) voiceVol.value = (s.voiceVolume ?? 0.8).toString();
     spatial.checked = s.spatialAudio;
     music.checked = s.music;
     ui.checked = s.uiSounds;
@@ -790,6 +800,7 @@ export function openSettings() {
         s.musicVolume = parseFloat(musicVol.value);
         s.sfxVolume = parseFloat(sfxVol.value);
         s.uiVolume = parseFloat(uiVol.value);
+        if (voiceVol) s.voiceVolume = parseFloat(voiceVol.value);
         s.spatialAudio = spatial.checked;
         s.music = music.checked;
         s.uiSounds = ui.checked;
@@ -823,6 +834,7 @@ export function openSettings() {
         if (document.getElementById('val-musicVol')) document.getElementById('val-musicVol')!.innerText = s.musicVolume.toFixed(2);
         if (document.getElementById('val-sfxVol')) document.getElementById('val-sfxVol')!.innerText = s.sfxVolume.toFixed(2);
         if (document.getElementById('val-uiVol')) document.getElementById('val-uiVol')!.innerText = s.uiVolume.toFixed(2);
+        if (document.getElementById('val-voiceVol') && voiceVol) document.getElementById('val-voiceVol')!.innerText = (s.voiceVolume ?? 0.8).toFixed(2);
         if (document.getElementById('val-hud')) document.getElementById('val-hud')!.innerText = s.hudScale.toFixed(2);
         if (document.getElementById('val-crossSize')) document.getElementById('val-crossSize')!.innerText = s.crosshairSize + 'px';
         if (document.getElementById('val-fov')) document.getElementById('val-fov')!.innerText = s.fov.toString();
@@ -844,7 +856,7 @@ export function openSettings() {
         applySettings(s);
     };
 
-    [joySens, camSens, invY, fxaa, vol, musicVol, sfxVol, uiVol, spatial, music, ui, hud, crossSize, fov, rendType].forEach(el => {
+    [joySens, camSens, invY, fxaa, vol, musicVol, sfxVol, uiVol, voiceVol, spatial, music, ui, hud, crossSize, fov, rendType].forEach(el => {
         if (!el) return;
         bind(el as HTMLElement, 'input', triggerApply);
         bind(el as HTMLElement, 'change', triggerApply);

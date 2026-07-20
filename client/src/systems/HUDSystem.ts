@@ -1,4 +1,5 @@
 import { MatchController } from "../../MatchController";
+import { ACTIVE_GAMEMODE } from "../../../shared/gamemode-configs";
 
 export class HUDSystem {
   private match: MatchController;
@@ -40,12 +41,15 @@ export class HUDSystem {
   }
 
   public updateTimer(tick: number) {
+    const totalSeconds = ACTIVE_GAMEMODE.matchDuration;
     const elapsedSeconds = Math.floor(tick / 60);
-    const minutes = Math.floor(elapsedSeconds / 60).toString().padStart(2, "0");
-    const seconds = (elapsedSeconds % 60).toString().padStart(2, "0");
+    const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+    const minutes = Math.floor(remainingSeconds / 60).toString().padStart(2, "0");
+    const seconds = (remainingSeconds % 60).toString().padStart(2, "0");
     const elapsedVal = document.getElementById("hud-timer");
-    if (elapsedVal) elapsedVal.innerText = `TURN TIMER: ${minutes}:${seconds}`;
+    if (elapsedVal) elapsedVal.innerText = `${ACTIVE_GAMEMODE.timerLabel.toUpperCase()}: ${minutes}:${seconds}`;
   }
+
 
   public triggerUIFlash(color: string = "255, 0, 0", duration: number = 0.5) {
     let flashDiv = document.getElementById("ui-damage-flash");

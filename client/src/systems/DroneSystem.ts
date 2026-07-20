@@ -155,10 +155,14 @@ export class DroneSystem {
                  const geo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
                  const mat = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
                  fw = new THREE.Mesh(geo, mat) as any;
+                 fw.name = "TestDrone";
+                 (fw as any).isDrone = true;
                  this.match.scene.add(fw);
                  this.standaloneDrones.set(id, fw);
               } else if ((window as any).fixedWingModel) {
                  fw = SkeletonUtils.clone((window as any).fixedWingModel) as THREE.Group;
+                 fw.name = "FixedWingDrone";
+                 (fw as any).isDrone = true;
                  this.match.scene.add(fw);
                  this.standaloneDrones.set(id, fw);
                  

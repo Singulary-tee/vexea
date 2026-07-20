@@ -1,5 +1,6 @@
 import * as screenManager from "./screen-manager";
 import { getCachedOrFetchUrl, getAssetUrl, populateBlobUrlMap } from "../asset-cache";
+import { IS_DESKTOP } from "../platform-gate";
 
 const SOUNDS_TO_PRELOAD = [
   'click.mp3', 'vexea_theme.mp3'
@@ -40,6 +41,8 @@ export const EXTENDED_TEXTURES = [
   'rocky_trail_diff_1k.jpg', 'rocky_trail_nor_gl_1k.jpg', 'rocky_trail_arm_1k.jpg'
 ];
 
+(window as any).interactionStarted = false;
+
 export function initSplash() {
   let el = document.getElementById('splash-screen');
   if (!el) {
@@ -54,8 +57,83 @@ export function initSplash() {
     zIndex: '1000',
     backgroundSize: 'cover',
     backgroundPosition: 'center center',
-    backgroundColor: '#0A0A0A'
+    backgroundColor: '#0A0A0A',
+    pointerEvents: 'auto'
   });
+
+  let canInteract = false;
+  let interactionProcessed = false;
+  let breathingInterval: number;
+
+  const blocker = (e: Event) => {
+    if (canInteract) return;
+    e.stopPropagation();
+    e.preventDefault();
+  };
+
+  const blockEvents = ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "mousemove", "click", "touchstart", "touchend", "touchmove"];
+  blockEvents.forEach(evt => {
+    el!.addEventListener(evt, blocker, { capture: true });
+  });
+
+  const attemptFullscreenAndGlitch = () => {
+    console.log('[Splash] Interaction started');
+    (window as any).interactionStarted = true;
+    if (interactionProcessed || !canInteract) {
+      console.log(`[Splash] Ignored: processed=${interactionProcessed}, can=${canInteract}`);
+      return;
+    }
+    interactionProcessed = true;
+    
+    clearInterval(breathingInterval);
+
+    blockEvents.forEach(evt => {
+      el!.removeEventListener(evt, blocker, { capture: true });
+    });
+    
+    const docEl = document.documentElement as any;
+    if (!IS_DESKTOP && !document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+        if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {});
+        else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(() => {});
+    }
+
+    el!.removeEventListener('pointerdown', attemptFullscreenAndGlitch);
+    el!.removeEventListener('click', attemptFullscreenAndGlitch);
+    el!.removeEventListener('touchend', attemptFullscreenAndGlitch);
+    document.removeEventListener('keydown', attemptFullscreenAndGlitch);
+
+    let toggles = 0;
+    const glitchFn = () => {
+      toggles++;
+      if (toggles <= 4) {
+         el!.style.opacity = toggles % 2 === 1 ? '0' : '1';
+         if (toggles <= 2) {
+             el!.style.filter = 'hue-rotate(90deg) brightness(2)';
+         } else {
+             el!.style.filter = 'none';
+         }
+         setTimeout(glitchFn, 80);
+      } else {
+         el!.style.opacity = '1';
+         el!.style.filter = 'none';
+         el!.style.pointerEvents = 'none';
+         screenManager.showMainMenu();
+      }
+    };
+    glitchFn();
+
+    const scanline = document.createElement('div');
+    Object.assign(scanline.style, {
+       position: 'fixed', width: '100%', height: '3px', background: '#C8882A',
+       top: '0', zIndex: '9999', transition: 'top 320ms linear'
+    });
+    document.body.appendChild(scanline);
+    void scanline.offsetWidth;
+    scanline.style.top = '100vh';
+    setTimeout(() => {
+       scanline.remove();
+    }, 320);
+  };
 
   // Attempt to resolve from cache immediately. If cached, apply background.
   populateBlobUrlMap().then(() => {
@@ -105,7 +183,20 @@ export function initSplash() {
     contentWrapper.appendChild(loadingBarWrapper);
     contentWrapper.appendChild(initText);
     el.appendChild(contentWrapper);
-    document.body.appendChild(el);
+
+    const startInteractions = () => {
+      console.log('[Splash] startInteractions called');
+      (window as any).interactionsInitialized = true;
+      let breathHigh = false;
+      breathingInterval = window.setInterval(() => {
+        initText.style.transition = 'opacity 2000ms ease-in-out';
+        initText.style.opacity = breathHigh ? '0.6' : '1.0';
+        breathHigh = !breathHigh;
+      }, 2000);
+
+      el!.addEventListener('click', attemptFullscreenAndGlitch);
+      document.addEventListener('keydown', attemptFullscreenAndGlitch);
+    };
 
     const preloadAll = async () => {
       const allFiles = [
@@ -157,74 +248,15 @@ export function initSplash() {
 
       setTimeout(() => {
         initText.textContent = 'CLICK TO INITIALIZE';
-        startInteractions();
+        canInteract = true;
+        (window as any).canInteract = true;
+        blockEvents.forEach(evt => {
+          el!.removeEventListener(evt, blocker, { capture: true });
+        });
       }, 1000);
     };
 
-    let breathingInterval: number;
-    let interactionProcessed = false;
-
-    const startInteractions = () => {
-      let breathHigh = false;
-      breathingInterval = window.setInterval(() => {
-        initText.style.transition = 'opacity 2000ms ease-in-out';
-        initText.style.opacity = breathHigh ? '0.6' : '1.0';
-        breathHigh = !breathHigh;
-      }, 2000);
-
-      const attemptFullscreenAndGlitch = () => {
-        if (interactionProcessed) return;
-        interactionProcessed = true;
-        clearInterval(breathingInterval);
-        
-        const docEl = document.documentElement as any;
-        if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-            if (docEl.requestFullscreen) docEl.requestFullscreen();
-            else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
-        }
-
-        document.removeEventListener('keydown', attemptFullscreenAndGlitch);
-        document.removeEventListener('click', attemptFullscreenAndGlitch);
-        document.removeEventListener('touchend', attemptFullscreenAndGlitch);
-
-        let toggles = 0;
-        const glitchFn = () => {
-          toggles++;
-          if (toggles <= 4) {
-             el!.style.opacity = toggles % 2 === 1 ? '0' : '1';
-             if (toggles <= 2) {
-                 el!.style.filter = 'hue-rotate(90deg) brightness(2)';
-             } else {
-                 el!.style.filter = 'none';
-             }
-             setTimeout(glitchFn, 80);
-          } else {
-             el!.style.opacity = '1';
-             el!.style.filter = 'none';
-             screenManager.showMainMenu();
-          }
-        };
-        glitchFn();
-
-        const scanline = document.createElement('div');
-        Object.assign(scanline.style, {
-           position: 'fixed', width: '100%', height: '3px', background: '#C8882A',
-           top: '0', zIndex: '9999', transition: 'top 320ms linear'
-        });
-        document.body.appendChild(scanline);
-        void scanline.offsetWidth;
-        scanline.style.top = '100vh';
-        setTimeout(() => {
-           scanline.remove();
-        }, 320);
-      };
-
-      document.addEventListener('keydown', attemptFullscreenAndGlitch);
-      document.addEventListener('click', attemptFullscreenAndGlitch);
-      document.addEventListener('touchend', attemptFullscreenAndGlitch);
-    };
-
+    startInteractions();
     preloadAll();
   }
 }
-

@@ -1,7 +1,10 @@
 import { TRANSPORT_MODE } from "../../shared/transport.config";
-import geckos, { GeckosServer, ServerChannel } from "@geckos.io/server";
 import { Server as SocketIOServer, Socket } from "socket.io";
 import { Server as HttpServer } from "http";
+
+// Use dynamic import/type imports for Geckos so it doesn't crash on module load
+type GeckosServerType = any;
+type ServerChannelType = any;
 
 export interface ChannelAdapter {
   id: string;
@@ -31,11 +34,12 @@ export function createTransport(): ServerTransport {
 }
 
 class GeckosAdapter implements ServerTransport {
-  private io: GeckosServer;
-  private connections: Map<string, ServerChannel> = new Map();
+  private io: GeckosServerType;
+  private connections: Map<string, ServerChannelType> = new Map();
   private onConnectionCallback?: (channel: ChannelAdapter) => void;
 
   constructor() {
+    const geckos = require("@geckos.io/server").default;
     this.io = geckos({ cors: { origin: "*" } });
   }
 
@@ -45,7 +49,7 @@ class GeckosAdapter implements ServerTransport {
     }
     console.log(`[TRANSPORT] Mode: geckos | Listening on port ${port}`);
 
-    this.io.onConnection((channel: ServerChannel) => {
+    this.io.onConnection((channel: ServerChannelType) => {
       const id = channel.id || Math.random().toString(36).substring(7);
       this.connections.set(id, channel);
       console.log(`[TRANSPORT] Client connected: ${id} | Total: ${this.getConnectedCount()}`);
@@ -91,7 +95,7 @@ class GeckosAdapter implements ServerTransport {
 class GeckosChannelAdapter implements ChannelAdapter {
   private _id: string;
   private _connected: boolean = true;
-  constructor(private channel: ServerChannel, id: string, private onDisconnectCb: () => void) {
+  constructor(private channel: ServerChannelType, id: string, private onDisconnectCb: () => void) {
       this._id = id;
       this.channel.onDisconnect(() => {
           this._connected = false;

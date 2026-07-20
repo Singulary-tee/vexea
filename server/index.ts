@@ -341,7 +341,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = (process.env.NODE_ENV === "production" && process.env.PORT) ? parseInt(process.env.PORT, 10) : 3000;
 const io = createTransport();
 
 app.use(express.json({limit: '10mb'}));
@@ -451,11 +451,21 @@ io.onConnection((channel: ChannelAdapter) => {
 
     // Complete room transfer registration
     pState = targetRoom.registerPlayer(reqUid, channel, null);
-    targetRoom.triggerStartMatch();
+    if (reqMap === "map_0_dev") {
+      targetRoom.triggerStartMatch();
+    }
     currentRoom = targetRoom;
 
     // Re-associate binding pointer
     currentRoom = targetRoom;
+  });
+
+  channel.on("player_ready", () => {
+    if (currentRoom && currentRoom.roomId !== "lobby") {
+      if (pState) {
+        currentRoom.setPlayerReady(pState.id);
+      }
+    }
   });
 
   channel.on("rewarded_ad", () => {

@@ -79,6 +79,9 @@ export enum DroneType {
 }
 
 // Numerical limits and Network constraints
+export const CAMERA_MAX_HP = 50;
+export const PLAYER_MAX_HP = 100;
+export const PLAYER_RESPAWN_DELAY_DEFAULT = 5.0;
 export const RECOIL_ANGLE_KICK = 0.05;
 export const WEAPON_COOLDOWN = 0.12;
 export const DRONE_RENDER_INTERPOLATION_DELAY_MS = 100;
@@ -97,6 +100,7 @@ export interface DroneConfig {
   collider: { type: 'cuboid' | 'capsule' | 'ball', halfExtents?: [number, number, number], halfHeight?: number, radius?: number, offset?: [number, number, number] };
   muzzleOffset?: [number, number, number]; // [x,y,z] relative to drone center
   visualRadius: number; // Target radius for visual scaling
+  maxAccelPerTick?: number;
   orientationOffset?: [number, number, number]; // [x,y,z] rotation offsets in radians to align forward axis
   animations: string[]; // Available animation loops (e.g. ['spin', 'sway'] or ['wheels', 'turret'] or ['hold'])
 
@@ -149,7 +153,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     hp: 40,
     maxHp: 40,
     damage: 8,
-    speed: 12,
+    speed: 10,
+    maxAccelPerTick: 0.3,
     apCost: 2,
     isAirUnit: true,
     groupSizeMin: 3,
@@ -202,7 +207,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     hp: 40,
     maxHp: 40,
     damage: 8,
-    speed: 12,
+    speed: 20,
+    maxAccelPerTick: 0.8,
     apCost: 2,
     isAirUnit: true,
     groupSizeMin: 3,
@@ -255,7 +261,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     hp: 40,
     maxHp: 40,
     damage: 8,
-    speed: 12,
+    speed: 15,
+    maxAccelPerTick: 0.5,
     apCost: 2,
     isAirUnit: true,
     groupSizeMin: 3,
@@ -309,6 +316,7 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     maxHp: 60,
     damage: 15,
     speed: 25,
+    maxAccelPerTick: 0.4,
     apCost: 5,
     isAirUnit: true,
     groupSizeMin: 1,
@@ -335,6 +343,7 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     maxHp: 80,
     damage: 12,
     speed: 8,
+    maxAccelPerTick: 0.4,
     apCost: 3,
     isAirUnit: false,
     groupSizeMin: 2,
@@ -381,7 +390,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     hp: 150,
     maxHp: 150,
     damage: 18,
-    speed: 5,
+    speed: 10,
+    maxAccelPerTick: 0.4,
     apCost: 4,
     isAirUnit: false,
     groupSizeMin: 1,
@@ -401,7 +411,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     hp: 200,
     maxHp: 200,
     damage: 20,
-    speed: 3,
+    speed: 6,
+    maxAccelPerTick: 0.4,
     apCost: 6,
     isAirUnit: false,
     groupSizeMin: 1,

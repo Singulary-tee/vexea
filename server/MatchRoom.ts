@@ -22,6 +22,9 @@ import {
   TOTAL_STATE_BUFFER_SIZE as CONST_BUFFER_SIZE,
   PLAYER_CENTER_OFFSET,
   PLAYER_TOTAL_HEIGHT,
+  CAMERA_MAX_HP,
+  PLAYER_MAX_HP,
+  PLAYER_RESPAWN_DELAY_DEFAULT,
   getDroneMuzzleWorldPosition,
 } from "../shared/constants";
 import { ChannelAdapter } from "./transport/adapter";
@@ -54,6 +57,8 @@ export interface PlayerState {
   kcc: RAPIER.KinematicCharacterController | null;
   body: RAPIER.RigidBody | null;
   collider: RAPIER.Collider | null;
+  isReady?: boolean;
+  isBot?: boolean;
 
   inputMask: number;
   fire: number;
@@ -457,7 +462,7 @@ export class MatchRoom {
     }
     for (let i = 0; i < ZONES_ARRAY.length; i++) {
       this.cameras[i].isActive = true;
-      this.cameras[i].hp = 50;
+      this.cameras[i].hp = CAMERA_MAX_HP;
       this.cameras[i].posX = WAYPOINTS[ZONES_ARRAY[i]].x;
       this.cameras[i].posY = 8;
       this.cameras[i].posZ = WAYPOINTS[ZONES_ARRAY[i]].z;
@@ -684,6 +689,8 @@ export class MatchRoom {
       kcc: null,
       body: null,
       collider: null,
+      isReady: false,
+      isBot: false,
       inputMask: 0,
       fire: 0,
       timestamp: Date.now(),
@@ -727,7 +734,7 @@ export class MatchRoom {
       velEmaZ: 0,
       adMultiplier: 1,
       firedThisTick: false,
-      maxHp: 100,
+      maxHp: PLAYER_MAX_HP,
       isAlive: true,
       isDead: false,
       respawnTimer: 0,
@@ -792,7 +799,8 @@ export class MatchRoom {
       
       const pState = this.registerPlayer(botId, dummyChannel as ChannelAdapter, {});
       pState.inputMask = 0; // stands still
-      (pState as any).isBot = true;
+      pState.isBot = true;
+      pState.isReady = true; // bots are always ready
       return pState;
   }
 
@@ -1551,7 +1559,7 @@ export class MatchRoom {
             d.posZ = b.center.z + (Math.random() - 0.5) * b.halfSize.z * 0.4;
           }
         }
-        d.hp = 100;
+        d.hp = DRONE_CONFIGS[d.type]?.hp ?? 100;
         d.groupId = "G_DEV";
         d.cooldown = 40;
         this.initDronePhysics(d);
@@ -1880,7 +1888,7 @@ export class MatchRoom {
       }
     }
 
-    processDroneIntelligence(nowMs, this.drones, this.players, this.rapierWorld, RAPIER);
+    processDroneIntelligence(nowMs, this.drones, this.players, this.rapierWorld, RAPIER, 0.0166, this.collisionMap);
 
     // Drone state updates
     for (let i = 0; i < this.drones.length; i++) {
@@ -1937,8 +1945,10 @@ export class MatchRoom {
            d.state = DroneState.PURSUING;
            if (dist >= conf.engagementMin && dist <= conf.engagementMax && hasLOS) {
              const angleToTarget = Math.atan2(dx, dz);
-             let angleDiff = Math.abs(d.rotY - angleToTarget);
+             const currentEulerY = Math.atan2(d.currentHeadingX, d.currentHeadingZ);
+             let angleDiff = currentEulerY - angleToTarget;
              while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+             while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
              angleDiff = Math.abs(angleDiff);
              if (angleDiff <= conf.fireArcTolerance) shouldFire = true;
            }
@@ -2060,30 +2070,7 @@ export class MatchRoom {
       let maxYawRatePerTick = (conf.maxTurnRate ?? 3.0) * (1 / 60);
       let minSpeed = conf.minSpeed ?? 0.0;
       let maxSpeed = conf.speed;
-      let maxAccelPerTick = 0.4;
-
-      if (d.type === DroneType.RECON) {
-         maxSpeed = 15.0;
-         maxAccelPerTick = 0.5;
-      } else if (d.type === DroneType.BOMBER) {
-         maxSpeed = 20.0;
-         maxAccelPerTick = 0.8;
-      } else if (d.type === DroneType.ROTARY_SHOOTER) {
-         maxSpeed = 10.0;
-         maxAccelPerTick = 0.3;
-      } else if (d.type === DroneType.FIXED_WING) {
-         maxSpeed = 25.0;
-         maxAccelPerTick = 0.4;
-      } else if (d.type === DroneType.WHEELED) {
-         maxSpeed = 8.0;
-         maxAccelPerTick = 0.4;
-      } else if (d.type === DroneType.ROBOT_DOG) {
-         maxSpeed = 10.0;
-         maxAccelPerTick = 0.4;
-      } else if (d.type === DroneType.HUMANOID) {
-         maxSpeed = 6.0;
-         maxAccelPerTick = 0.4;
-      }
+      let maxAccelPerTick = conf.maxAccelPerTick ?? 0.4;
 
       // Compute desired target speed with arrival deceleration
       const desiredSpeed = distToTarget < 0.1 ? 0.0 : (distToTarget < decelRadius ? maxSpeed * (distToTarget / decelRadius) : maxSpeed);
@@ -2537,6 +2524,11 @@ export class MatchRoom {
       this.projDist[pIdx] = 0;
       this.projEnemy[pIdx] = isEnemy ? 1 : 0;
       this.projSourceId[pIdx] = sourceId;
+      
+      const p = this.players.get(sourceId);
+      if (p) {
+         p.firedThisTick = true;
+      }
     }
   }
 
@@ -2613,7 +2605,7 @@ export class MatchRoom {
             d.posY = isAir ? b.center.y + 4 : b.center.y + 0.5;
             d.posZ = b.center.z + (Math.random() - 0.5) * b.halfSize.z * 0.5;
           }
-          d.hp = 100;
+          d.hp = DRONE_CONFIGS[d.type]?.hp ?? 100;
 
           const possibleGroupNames = ["G_ALPHA", "G_BETA", "G_GAMMA"];
           d.groupId =
@@ -2659,7 +2651,7 @@ export class MatchRoom {
     if (!p || !p.isAlive) return;
 
     if (p.godMode) {
-      p.hp = 100; // Force-maintain max HP
+      p.hp = PLAYER_MAX_HP; // Force-maintain max HP
       p.channel.emit("reliable_event", {
         type: "PLAYER_HIT",
         hp: p.hp,
@@ -2682,13 +2674,13 @@ export class MatchRoom {
       p.hp = 0;
       p.isAlive = false;
       p.isDead = true;
-      p.respawnTimer = 5.0; // 5 seconds respawn time
+      p.respawnTimer = PLAYER_RESPAWN_DELAY_DEFAULT; // 5 seconds respawn time
       p.deathPosition = { x: p.posX, y: p.posY, z: p.posZ };
       p.stats.deaths++;
 
       console.log("[DEATH] player died:", playerId, "source:", type);
 
-      p.channel.emit("reliable_event", { type: "YOU_DIED", respawnTime: 5.0 });
+      p.channel.emit("reliable_event", { type: "YOU_DIED", respawnTime: PLAYER_RESPAWN_DELAY_DEFAULT });
       this.broadcastReliableEvent({
         type: "PLAYER_DEATH",
         playerId,
@@ -2939,6 +2931,19 @@ export class MatchRoom {
     return this.preallocatedBuffer;
   }
 
+  public setPlayerReady(playerId: string) {
+    const p = this.players.get(playerId);
+    if (!p) return;
+
+    p.isReady = true;
+    console.log(`[VEXEA SERVER] Received player_ready for player: ${playerId} in Room: ${this.roomId}`);
+
+    if (!this.matchActive) {
+      console.log(`[VEXEA SERVER] Player ready. Starting match loop in Room: ${this.roomId}`);
+      this.triggerStartMatch();
+    }
+  }
+
   public triggerStartMatch() {
     if (!this.matchActive) {
       this.matchActive = true;
@@ -2969,7 +2974,7 @@ export class MatchRoom {
         d.posX = x;
         d.posY = y;
         d.posZ = z;
-        d.hp = 100;
+        d.hp = DRONE_CONFIGS[d.type]?.hp ?? 100;
         d.groupId = "G_TEST";
         d.cooldown = 40;
         (d as any).history = [];

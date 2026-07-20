@@ -7,6 +7,8 @@ import { camera } from "./main";
 import { ZONE_BOUNDS, WAYPOINTS, ZONES_ARRAY } from "../shared/constants";
 import { GlobalState } from "./state";
 import { getMatch } from "./MatchController";
+import { PanZoomSurface } from "./src/ui/PanZoomSurface";
+import { CAMERA_EFFECTS_CONFIG } from "./src/camera/constants";
 
 let isMenuOpen = false;
 let activePanel = "CONSOLE";
@@ -35,6 +37,7 @@ let lastInspectedZoneId: string | null = null;
 let lastOutlierTick = 0;
 let navDroneTrailBuffers = new Map<number, {x:number, z:number}[]>();
 let navDroneStateTimers = new Map<number, {state:number, time:number}>();
+let navPanZoomInstance: any = null;
 
 // Dev Physics state
 let devPhysicsGravityY = -9.81;
@@ -681,7 +684,7 @@ export function initDevMenu(channel: any, jitterMap: any) {
     overlay.id = "dev-overlay";
     overlay.style.cssText = "display:none;position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:999998;pointer-events:auto;color:#0f0;font-family:monospace;padding:10px;flex-direction:column;";
     
-    const tabs = ["VIS DIAG", "GAME CONTROL", "PHYSICS", "CHEATS", "WEPS", "CONSOLE", "LLM FEED", "AI NAV", "PERF", "NETWORK", "ZONES", "ENTITIES", "COLLISIONS"];
+    const tabs = ["VIS DIAG", "GAME CONTROL", "PHYSICS", "CHEATS", "WEPS", "CAM_FX", "CONSOLE", "LLM FEED", "AI NAV", "PERF", "NETWORK", "ZONES", "ENTITIES", "COLLISIONS"];
     const header = document.createElement("div");
     header.style.cssText = "display:flex;gap:10px;margin-bottom:10px;overflow-x:auto;";
     tabs.forEach(t => {
@@ -731,6 +734,10 @@ function toggleDevMenu() {
 (window as any).toggleDevMenu = toggleDevMenu;
 
 function renderPanel() {
+    if (activePanel !== "AI NAV" && navPanZoomInstance) {
+        navPanZoomInstance.destroy();
+        navPanZoomInstance = null;
+    }
     const c = document.getElementById("dev-content");
     if (!c) return;
     
@@ -1275,6 +1282,290 @@ function renderPanel() {
             });
         }
     }
+    else if (activePanel === "CAM_FX") {
+        c.innerHTML = `
+            <div style="padding: 10px; font-family: monospace; color: #0f0;">
+                <h2 style="color: #0f0; margin-top: 0;">Camera & Viewmodel Effects Constants</h2>
+                <p style="color: #888; font-size: 11px; margin-bottom: 15px;">Tweak these settings to instantly adjust camera movement, bobbing, tilt, pulling back, and landing effects.</p>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <!-- Movement Category -->
+                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                        <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">MOVEMENT</h3>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>RUN ACCEL RATE (s):</span>
+                                <span id="val-movement-accel" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.MOVEMENT.RUN_ACCEL_RATE.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-movement-accel" min="0.1" max="10.0" step="0.1" value="${CAMERA_EFFECTS_CONFIG.MOVEMENT.RUN_ACCEL_RATE}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>RUN DECEL RATE (s):</span>
+                                <span id="val-movement-decel" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.MOVEMENT.RUN_DECEL_RATE.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-movement-decel" min="0.1" max="10.0" step="0.1" value="${CAMERA_EFFECTS_CONFIG.MOVEMENT.RUN_DECEL_RATE}" style="width: 100%;">
+                        </label>
+                    </div>
+
+                    <!-- Weapon Follow Category -->
+                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                        <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">WEAPON FOLLOW</h3>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>BASE FOLLOW SPEED:</span>
+                                <span id="val-follow-base" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW.BASE_SPEED.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-follow-base" min="1.0" max="50.0" step="0.5" value="${CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW.BASE_SPEED}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>LAG FACTOR:</span>
+                                <span id="val-follow-lag" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW.LAG_FACTOR.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-follow-lag" min="0.1" max="10.0" step="0.1" value="${CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW.LAG_FACTOR}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>MIN FOLLOW SPEED MULT:</span>
+                                <span id="val-follow-min" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW.MIN_FOLLOW_SPEED_MULT.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-follow-min" min="0.01" max="1.0" step="0.01" value="${CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW.MIN_FOLLOW_SPEED_MULT}" style="width: 100%;">
+                        </label>
+                    </div>
+
+                    <!-- Head Bob Walk Category -->
+                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                        <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">HEAD BOB (WALK)</h3>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>WALK FREQUENCY:</span>
+                                <span id="val-bob-walk-freq" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.WALK_FREQ.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-walk-freq" min="1.0" max="30.0" step="0.5" value="${CAMERA_EFFECTS_CONFIG.BOB.WALK_FREQ}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>WALK AMP Y (Vert):</span>
+                                <span id="val-bob-walk-amp-y" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.WALK_AMP_Y.toFixed(4)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-walk-amp-y" min="0.001" max="0.2" step="0.001" value="${CAMERA_EFFECTS_CONFIG.BOB.WALK_AMP_Y}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>WALK AMP X (Sway):</span>
+                                <span id="val-bob-walk-amp-x" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.WALK_AMP_X.toFixed(4)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-walk-amp-x" min="0.001" max="0.2" step="0.001" value="${CAMERA_EFFECTS_CONFIG.BOB.WALK_AMP_X}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>WALK AMP ROLL (Tilt):</span>
+                                <span id="val-bob-walk-amp-roll" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.WALK_AMP_ROLL.toFixed(4)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-walk-amp-roll" min="0.001" max="0.05" step="0.001" value="${CAMERA_EFFECTS_CONFIG.BOB.WALK_AMP_ROLL}" style="width: 100%;">
+                        </label>
+                    </div>
+
+                    <!-- Head Bob Sprint Category -->
+                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                        <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">HEAD BOB (SPRINT)</h3>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>SPRINT FREQUENCY:</span>
+                                <span id="val-bob-sprint-freq" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.SPRINT_FREQ.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-sprint-freq" min="1.0" max="30.0" step="0.5" value="${CAMERA_EFFECTS_CONFIG.BOB.SPRINT_FREQ}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>SPRINT AMP Y (Vert):</span>
+                                <span id="val-bob-sprint-amp-y" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.SPRINT_AMP_Y.toFixed(4)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-sprint-amp-y" min="0.001" max="0.4" step="0.001" value="${CAMERA_EFFECTS_CONFIG.BOB.SPRINT_AMP_Y}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>SPRINT AMP X (Sway):</span>
+                                <span id="val-bob-sprint-amp-x" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.SPRINT_AMP_X.toFixed(4)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-sprint-amp-x" min="0.001" max="0.3" step="0.001" value="${CAMERA_EFFECTS_CONFIG.BOB.SPRINT_AMP_X}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>SPRINT AMP ROLL (Tilt):</span>
+                                <span id="val-bob-sprint-amp-roll" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.SPRINT_AMP_ROLL.toFixed(4)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-sprint-amp-roll" min="0.001" max="0.1" step="0.001" value="${CAMERA_EFFECTS_CONFIG.BOB.SPRINT_AMP_ROLL}" style="width: 100%;">
+                        </label>
+                    </div>
+
+                    <!-- General Bob Tuning -->
+                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                        <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">GENERAL BOB / TILT</h3>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>ADS REDUCTION FACTOR:</span>
+                                <span id="val-bob-ads-reduc" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.ADS_REDUCTION.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-ads-reduc" min="0.0" max="1.0" step="0.05" value="${CAMERA_EFFECTS_CONFIG.BOB.ADS_REDUCTION}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>SMOOTHING RATE:</span>
+                                <span id="val-bob-smoothing" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.BOB.SMOOTHING_RATE.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-bob-smoothing" min="1.0" max="20.0" step="0.5" value="${CAMERA_EFFECTS_CONFIG.BOB.SMOOTHING_RATE}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>RUN TILT STRENGTH:</span>
+                                <span id="val-tilt-strength" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.TILT.RUN_TILT_STRENGTH.toFixed(3)}</span>
+                            </span>
+                            <input type="range" id="slide-tilt-strength" min="0.001" max="0.5" step="0.005" value="${CAMERA_EFFECTS_CONFIG.TILT.RUN_TILT_STRENGTH}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>RUN TILT SPRING:</span>
+                                <span id="val-tilt-spring" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.TILT.RUN_TILT_SPRING.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-tilt-spring" min="1.0" max="20.0" step="0.5" value="${CAMERA_EFFECTS_CONFIG.TILT.RUN_TILT_SPRING}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>MAX ROLL (RAD):</span>
+                                <span id="val-tilt-max-roll" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.TILT.MAX_ROLL.toFixed(3)}</span>
+                            </span>
+                            <input type="range" id="slide-tilt-max-roll" min="0.01" max="0.5" step="0.01" value="${CAMERA_EFFECTS_CONFIG.TILT.MAX_ROLL}" style="width: 100%;">
+                        </label>
+                    </div>
+
+                    <!-- Pull Back & FOV Stretch & Landing -->
+                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                        <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">PULLBACK / FOV / IMPACT</h3>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>MAX PULL BACK Z:</span>
+                                <span id="val-pullback-max" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.PULL_BACK.MAX_PULL_BACK_Z.toFixed(3)}</span>
+                            </span>
+                            <input type="range" id="slide-pullback-max" min="0.0" max="0.5" step="0.01" value="${CAMERA_EFFECTS_CONFIG.PULL_BACK.MAX_PULL_BACK_Z}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>PULLBACK CHARGE SPEED:</span>
+                                <span id="val-pullback-charge" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.PULL_BACK.CHARGE_SPEED.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-pullback-charge" min="0.1" max="10.0" step="0.1" value="${CAMERA_EFFECTS_CONFIG.PULL_BACK.CHARGE_SPEED}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>PULLBACK DECAY SPEED:</span>
+                                <span id="val-pullback-decay" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.PULL_BACK.DECAY_SPEED.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-pullback-decay" min="0.1" max="10.0" step="0.1" value="${CAMERA_EFFECTS_CONFIG.PULL_BACK.DECAY_SPEED}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>MAX FOV STRETCH:</span>
+                                <span id="val-fov-max" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.FOV_STRETCH.MAX_STRETCH.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-fov-max" min="0.0" max="25.0" step="0.5" value="${CAMERA_EFFECTS_CONFIG.FOV_STRETCH.MAX_STRETCH}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>FOV CHARGE SPEED:</span>
+                                <span id="val-fov-charge" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.FOV_STRETCH.CHARGE_SPEED.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-fov-charge" min="0.1" max="10.0" step="0.1" value="${CAMERA_EFFECTS_CONFIG.FOV_STRETCH.CHARGE_SPEED}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>FOV DECAY SPEED:</span>
+                                <span id="val-fov-decay" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.FOV_STRETCH.DECAY_SPEED.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-fov-decay" min="0.1" max="10.0" step="0.1" value="${CAMERA_EFFECTS_CONFIG.FOV_STRETCH.DECAY_SPEED}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>LANDING JOLT FORCE:</span>
+                                <span id="val-landing-force" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.LANDING.FORCE.toFixed(3)}</span>
+                            </span>
+                            <input type="range" id="slide-landing-force" min="0.01" max="0.5" step="0.01" value="${CAMERA_EFFECTS_CONFIG.LANDING.FORCE}" style="width: 100%;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="display: flex; justify-content: space-between;">
+                                <span>LANDING JOLT DECAY:</span>
+                                <span id="val-landing-decay" style="color: #0f0; font-weight: bold;">${CAMERA_EFFECTS_CONFIG.LANDING.DECAY.toFixed(2)}</span>
+                            </span>
+                            <input type="range" id="slide-landing-decay" min="1.0" max="20.0" step="0.5" value="${CAMERA_EFFECTS_CONFIG.LANDING.DECAY}" style="width: 100%;">
+                        </label>
+                    </div>
+                </div>
+
+                <button id="dev-export-camfx" style="padding: 10px 20px; background: #0f0; color: black; font-weight: bold; border: none; cursor: pointer; border-radius: 4px; font-family: monospace;">EXPORT CONFIG (JSON)</button>
+            </div>
+        `;
+
+        const bindCamSlider = (id: string, updateFn: (v: number) => void) => {
+            const input = document.getElementById(`slide-${id}`) as HTMLInputElement;
+            const val = document.getElementById(`val-${id}`);
+            if (input && val) {
+                input.addEventListener('input', (e) => {
+                    const v = parseFloat((e.target as HTMLInputElement).value);
+                    const decimals = input.step.includes('0.001') ? 4 : input.step.includes('0.01') ? 3 : 2;
+                    val.innerText = v.toFixed(decimals);
+                    updateFn(v);
+                });
+            }
+        };
+
+        bindCamSlider('movement-accel', (v) => { (CAMERA_EFFECTS_CONFIG.MOVEMENT as any).RUN_ACCEL_RATE = v; });
+        bindCamSlider('movement-decel', (v) => { (CAMERA_EFFECTS_CONFIG.MOVEMENT as any).RUN_DECEL_RATE = v; });
+        
+        bindCamSlider('follow-base', (v) => { (CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW as any).BASE_SPEED = v; });
+        bindCamSlider('follow-lag', (v) => { (CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW as any).LAG_FACTOR = v; });
+        bindCamSlider('follow-min', (v) => { (CAMERA_EFFECTS_CONFIG.WEAPON_FOLLOW as any).MIN_FOLLOW_SPEED_MULT = v; });
+        
+        bindCamSlider('bob-walk-freq', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).WALK_FREQ = v; });
+        bindCamSlider('bob-walk-amp-y', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).WALK_AMP_Y = v; });
+        bindCamSlider('bob-walk-amp-x', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).WALK_AMP_X = v; });
+        bindCamSlider('bob-walk-amp-roll', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).WALK_AMP_ROLL = v; });
+        
+        bindCamSlider('bob-sprint-freq', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).SPRINT_FREQ = v; });
+        bindCamSlider('bob-sprint-amp-y', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).SPRINT_AMP_Y = v; });
+        bindCamSlider('bob-sprint-amp-x', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).SPRINT_AMP_X = v; });
+        bindCamSlider('bob-sprint-amp-roll', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).SPRINT_AMP_ROLL = v; });
+        
+        bindCamSlider('bob-ads-reduc', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).ADS_REDUCTION = v; });
+        bindCamSlider('bob-smoothing', (v) => { (CAMERA_EFFECTS_CONFIG.BOB as any).SMOOTHING_RATE = v; });
+        
+        bindCamSlider('tilt-strength', (v) => { (CAMERA_EFFECTS_CONFIG.TILT as any).RUN_TILT_STRENGTH = v; });
+        bindCamSlider('tilt-spring', (v) => { (CAMERA_EFFECTS_CONFIG.TILT as any).RUN_TILT_SPRING = v; });
+        bindCamSlider('tilt-max-roll', (v) => { (CAMERA_EFFECTS_CONFIG.TILT as any).MAX_ROLL = v; });
+        
+        bindCamSlider('pullback-max', (v) => { (CAMERA_EFFECTS_CONFIG.PULL_BACK as any).MAX_PULL_BACK_Z = v; });
+        bindCamSlider('pullback-charge', (v) => { (CAMERA_EFFECTS_CONFIG.PULL_BACK as any).CHARGE_SPEED = v; });
+        bindCamSlider('pullback-decay', (v) => { (CAMERA_EFFECTS_CONFIG.PULL_BACK as any).DECAY_SPEED = v; });
+        
+        bindCamSlider('fov-max', (v) => { (CAMERA_EFFECTS_CONFIG.FOV_STRETCH as any).MAX_STRETCH = v; });
+        bindCamSlider('fov-charge', (v) => { (CAMERA_EFFECTS_CONFIG.FOV_STRETCH as any).CHARGE_SPEED = v; });
+        bindCamSlider('fov-decay', (v) => { (CAMERA_EFFECTS_CONFIG.FOV_STRETCH as any).DECAY_SPEED = v; });
+        
+        bindCamSlider('landing-force', (v) => { (CAMERA_EFFECTS_CONFIG.LANDING as any).FORCE = v; });
+        bindCamSlider('landing-decay', (v) => { (CAMERA_EFFECTS_CONFIG.LANDING as any).DECAY = v; });
+
+        const expBtn = document.getElementById('dev-export-camfx');
+        if (expBtn) {
+            expBtn.addEventListener('click', () => {
+                const out = JSON.stringify(CAMERA_EFFECTS_CONFIG, null, 2);
+                navigator.clipboard.writeText(out).then(() => {
+                    const old = expBtn.innerText;
+                    expBtn.innerText = "COPIED TO CLIPBOARD!";
+                    setTimeout(() => expBtn.innerText = old, 1500);
+                });
+            });
+        }
+    }
     else if (activePanel === "CHEATS") {
         c.innerHTML = `
             <h2 style="color:#0f0; margin-top:0;">DEVELOPER CHEAT SUITE</h2>
@@ -1685,31 +1976,49 @@ function setupNavEvents() {
     if (resetBtn) {
         resetBtn.onclick = () => {
             navPanX = 0; navPanY = 0; navZoom = 1;
+            if (navPanZoomInstance) {
+                navPanZoomInstance.reset(1.0, 0, 0);
+            }
         };
     }
     if (canvas) {
-        let evCache: PointerEvent[] = [];
-        const updateCache = (e: PointerEvent) => {
-            const index = evCache.findIndex(ev => ev.pointerId === e.pointerId);
-            if (index !== -1) evCache[index] = e;
-            else evCache.push(e);
-        };
-        const removeCache = (e: PointerEvent) => {
-            const index = evCache.findIndex(ev => ev.pointerId === e.pointerId);
-            if (index !== -1) evCache.splice(index, 1);
-            if (evCache.length < 2) initialPinchDist = 0;
-        };
+        if (navPanZoomInstance) {
+            navPanZoomInstance.destroy();
+            navPanZoomInstance = null;
+        }
+
+        navPanZoomInstance = new PanZoomSurface(canvas, {
+            initialZoom: navZoom,
+            initialPanX: navPanX,
+            initialPanY: navPanY,
+            minZoom: 0.5,
+            maxZoom: 3.0,
+            onChange: (z, px, py) => {
+                navZoom = z;
+                navPanX = px;
+                navPanY = py;
+            }
+        });
+
+        let downX = 0;
+        let downY = 0;
+        let downTime = 0;
 
         canvas.addEventListener("pointerdown", (e) => {
-            updateCache(e);
-            canvas.setPointerCapture(e.pointerId);
-            if (evCache.length === 1) {
-                isNavPanning = true;
-                startNavPanX = e.clientX;
-                startNavPanY = e.clientY;
-                baseNavPanX = navPanX;
-                baseNavPanY = navPanY;
-                
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            downX = e.clientX;
+            downY = e.clientY;
+            downTime = performance.now();
+        });
+
+        canvas.addEventListener("pointerup", (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            const dx = e.clientX - downX;
+            const dy = e.clientY - downY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const duration = performance.now() - downTime;
+
+            if (dist < 5 && duration < 300) { // small move, quick click/tap
                 const rect = canvas.getBoundingClientRect();
                 const cx = e.clientX - rect.left;
                 const cy = e.clientY - rect.top;
@@ -1737,7 +2046,6 @@ function setupNavEvents() {
                 }
                 if (clickedDrone !== null) {
                     selectedNavDroneId = clickedDrone;
-                    isNavPanning = false; 
                     
                     // Determine which zone it is in physically
                     lastInspectedZoneId = null;
@@ -1764,31 +2072,6 @@ function setupNavEvents() {
                 }
             }
         });
-        canvas.addEventListener("pointermove", (e) => {
-            updateCache(e);
-            if (evCache.length === 2) {
-                const dx = evCache[0].clientX - evCache[1].clientX;
-                const dy = evCache[0].clientY - evCache[1].clientY;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                if (initialPinchDist === 0) {
-                    initialPinchDist = dist;
-                    baseNavZoom = navZoom;
-                } else {
-                    navZoom = baseNavZoom * (dist / initialPinchDist);
-                    navZoom = Math.max(0.5, Math.min(navZoom, 3.0));
-                }
-            } else if (evCache.length === 1 && isNavPanning) {
-                navPanX = baseNavPanX + (e.clientX - startNavPanX);
-                navPanY = baseNavPanY + (e.clientY - startNavPanY);
-            }
-        });
-        const upHandler = (e: PointerEvent) => {
-            removeCache(e);
-            if (evCache.length === 0) isNavPanning = false;
-            canvas.releasePointerCapture(e.pointerId);
-        };
-        canvas.addEventListener("pointerup", upHandler);
-        canvas.addEventListener("pointercancel", upHandler);
     }
 }
 

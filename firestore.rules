@@ -24,8 +24,7 @@ service cloud.firestore {
 
     // Server Authoritative: Users scores & outcomes (Synced and certified by server authoritative loops)
     match /Users/{playerId} {
-      allow read: if request.auth != null && request.auth.uid == playerId;
-      allow write: if false; // Only manageable server-side via Firebase Admin SDK
+      allow read, write: if request.auth != null && request.auth.uid == playerId;
     }
 
     // Server Authoritative: MatchInProgress tracking

@@ -1,6 +1,7 @@
 import { DroneType, DroneState, getDroneMuzzleWorldPosition, DRONE_CONFIGS } from "../../shared/constants";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import type { PlayerState, ServerDrone } from "../MatchRoom";
+import { CollisionSystem } from "../../shared/collision";
 
 export interface DroneIntelConfig {
   sightDistance: number;
@@ -55,7 +56,8 @@ export function processDroneIntelligence(
   players: Map<string, PlayerState>,
   rapierWorld: RAPIER.World | null,
   RAPIER_MOD: typeof RAPIER,
-  dt: number = 0.0166
+  dt: number = 0.0166,
+  collisionMap: CollisionSystem | null = null
 ) {
   const livingPlayers: PlayerState[] = [];
   for (const player of players.values()) {
@@ -85,9 +87,9 @@ export function processDroneIntelligence(
 
     for (const player of livingPlayers) {
       // Stage 1: Distance check (Cheapest)
-      const sensorPos = getDroneMuzzleWorldPosition(d, { x: player.posX, y: player.posY, z: player.posZ });
+      const sensorPos = { x: d.posX, y: d.posY + 0.5, z: d.posZ };
       const dx = player.posX - sensorPos.x;
-      const dy = player.posY - sensorPos.y;
+      const dy = (player.posY + 0.5) - sensorPos.y;
       const dz = player.posZ - sensorPos.z;
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
@@ -105,6 +107,7 @@ export function processDroneIntelligence(
         const qz = d.rotZ;
         const qw = d.rotW;
 
+        // Assuming forward is +Z (0, 0, 1) in local space
         const forwardX = 2 * (qx * qz + qw * qy);
         const forwardY = 2 * (qy * qz - qw * qx);
         const forwardZ = 1 - 2 * (qx * qx + qy * qy);
@@ -137,11 +140,18 @@ export function processDroneIntelligence(
       if (inDistance && inFOV) {
         // Stage 3: Line-of-sight raycast (Most expensive)
         hasLOS = true;
-        if (rapierWorld) {
-          const rOrigin = sensorPos;
-          const rDir = { x: dx / dist, y: dy / dist, z: dz / dist };
-          const rapierRay = new RAPIER_MOD.Ray(rOrigin, rDir);
+        const rDir = { x: dx / dist, y: dy / dist, z: dz / dist };
 
+        // 1. Check against static map structures
+        if (collisionMap) {
+          if (collisionMap.rayIntersectsAny(sensorPos, rDir, dist)) {
+            hasLOS = false;
+          }
+        }
+
+        // 2. Check against dynamic/other structures in rapierWorld (fallback)
+        if (hasLOS && rapierWorld) {
+          const rapierRay = new RAPIER_MOD.Ray(sensorPos, rDir);
           const hit = rapierWorld.castRay(rapierRay, dist, true, RAPIER_MOD.QueryFilterFlags.EXCLUDE_DYNAMIC);
           if (hit && hit.timeOfImpact < dist - 0.1) {
             hasLOS = false;
@@ -149,9 +159,27 @@ export function processDroneIntelligence(
         }
       }
 
-      const detected = inDistance && inFOV && hasLOS;
+      let detected = inDistance && inFOV && hasLOS;
 
-      if (detected) {
+      // 4. Hearing reaction (Gunshot sound)
+      let heard = false;
+      if (!detected && player.firedThisTick) {
+        if (dist <= conf.hearingRadius) {
+          heard = true;
+        }
+      }
+
+      // 5. Damage reaction
+      let reactedToDamage = false;
+      if (!detected && !heard && d.damageLog && d.damageLog.length > 0) {
+        // Check if latest damage log was caused by this player recently (within 2 seconds)
+        const latestDamage = d.damageLog[d.damageLog.length - 1];
+        if (latestDamage.playerId === player.id && (nowMs - latestDamage.timestamp) < 2000) {
+          reactedToDamage = true;
+        }
+      }
+
+      if (detected || heard || reactedToDamage) {
         let record = d.memoryRecords.find((r: any) => r.entityId === player.id);
         if (!record) {
           record = { entityId: player.id, lastSensedPosition: { x: 0, y: 0, z: 0 }, timeLastSensed: 0, confidence: 0 };
@@ -162,6 +190,7 @@ export function processDroneIntelligence(
         record.lastSensedPosition = { x: player.posX, y: player.posY, z: player.posZ };
         record.timeLastSensed = nowMs / 1000;
         record.touchedThisTick = true;
+        detected = true; // treat as detected for logging
       }
 
       // Tick-gated representative logging for a single drone (e.g., first active drone)
@@ -189,6 +218,25 @@ export function processDroneIntelligence(
       if (!record.touchedThisTick) {
         record.confidence = Math.max(0, record.confidence - (DECAY_RATE * dt));
       }
+    }
+
+    // STATE MACHINE SYNCHRONIZER
+    // Find the highest-confidence player memory record
+    let bestRecord: any = null;
+    let maxConf = 0;
+    for (let r = 0; r < records.length; r++) {
+      if (records[r].confidence > maxConf) {
+        maxConf = records[r].confidence;
+        bestRecord = records[r];
+      }
+    }
+
+    if (maxConf > UNKNOWN_THRESHOLD) {
+      d.mode = "COMBAT";
+      d.combatTarget = bestRecord;
+    } else {
+      d.mode = "NORMAL";
+      d.combatTarget = null;
     }
   }
 }

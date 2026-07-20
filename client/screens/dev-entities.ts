@@ -2294,16 +2294,26 @@ function triggerSingleShot() {
     const params = currentParams[currentTab];
     
     // Firing Sound
-    const pitch = params.firingSoundPitch ?? 1.0;
+    const basePitch = params.firingSoundPitch ?? 1.0;
+    const pitch = basePitch * (0.95 + Math.random() * 0.1); // Pitch variation to break monotony
     const audioCtx = (window as any).audioCtx || new (window.AudioContext || (window as any).webkitAudioContext)();
     if (audioCtx) {
         (window as any).audioCtx = audioCtx;
         const shotBuffer = (window as any).shotBuffer;
         if (shotBuffer) {
             const source = audioCtx.createBufferSource();
+            const gainNode = audioCtx.createGain();
+            
+            // Strictly gate via master and sfx settings
+            const s = (window as any).vexeaSettings;
+            const masterVol = s ? s.masterVolume : 1.0;
+            const sfxVol = s ? s.sfxVolume : 1.0;
+            gainNode.gain.value = masterVol * sfxVol;
+
             source.buffer = shotBuffer;
             source.playbackRate.value = pitch;
-            source.connect(audioCtx.destination);
+            source.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
             source.start();
         }
     }

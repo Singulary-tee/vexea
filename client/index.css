@@ -13,6 +13,19 @@
     display: none; /* Controlled by JS but z-index is high */
 }
 
+/* Hide mobile controls on desktop */
+body:not(.ui-editor-active).platform-desktop #joystick-boundary,
+body:not(.ui-editor-active).platform-desktop #btn-sprint,
+body:not(.ui-editor-active).platform-desktop #btn-fire-left,
+body:not(.ui-editor-active).platform-desktop #btn-fire-right,
+body:not(.ui-editor-active).platform-desktop #btn-ads,
+body:not(.ui-editor-active).platform-desktop #btn-reload,
+body:not(.ui-editor-active).platform-desktop #btn-jump,
+body:not(.ui-editor-active).platform-desktop #btn-crouch,
+body:not(.ui-editor-active).platform-desktop #btn-dash {
+    display: none !important;
+}
+
 #dev-entities-screen.active-dev {
     display: flex !important;
     opacity: 1 !important;

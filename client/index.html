@@ -10,7 +10,7 @@
   </head>
   <body class="bg-black text-white overflow-hidden select-none overscroll-none" style="touch-action: none; font-family: 'Barlow Condensed', sans-serif; background: #0A0A0A; text-transform: uppercase;">
     <div id="portrait-lock" style="
-      display: none;
+      display: flex;
       position: fixed;
       inset: 0;
       background: #0A0A0A;
@@ -22,13 +22,30 @@
       letter-spacing: 8px;
       color: #C8882A;
       text-transform: uppercase;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-in-out;
     ">ROTATE DEVICE</div>
     <script>
       (function() {
         const lock = document.getElementById('portrait-lock');
+        const blockEvents = ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "mousemove", "click", "touchstart", "touchend", "touchmove"];
+        blockEvents.forEach(evt => {
+          lock.addEventListener(evt, (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }, { capture: true });
+        });
         function checkOrientation() {
-          const isPortrait = window.innerHeight > window.innerWidth;
-          lock.style.display = isPortrait ? 'flex' : 'none';
+          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          const isPortrait = isMobile && (window.innerHeight > window.innerWidth);
+          if (isPortrait) {
+            lock.style.opacity = '1';
+            lock.style.pointerEvents = 'auto';
+          } else {
+            lock.style.opacity = '0';
+            lock.style.pointerEvents = 'none';
+          }
         }
         window.addEventListener('resize', checkOrientation);
         window.addEventListener('orientationchange', checkOrientation);

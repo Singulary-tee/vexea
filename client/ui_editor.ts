@@ -56,6 +56,13 @@ export const initUIEditor = () => {
     editorBar.style.cursor = "move";
     editorBar.style.boxShadow = "0 8px 32px rgba(0,0,0,0.8)";
 
+    const blockEvents = ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "mousemove", "click", "touchstart", "touchend", "touchmove"];
+    blockEvents.forEach(evt => {
+        editorBar.addEventListener(evt, (e) => {
+            e.stopPropagation();
+        });
+    });
+
     editorBar.innerHTML = `
         <div style="font-weight: bold; color: #22c55e; margin-bottom: 15px; text-align: center; pointer-events: none; font-family: monospace; font-size: 14px; letter-spacing: 1px;">VEXEA HUD EDITOR</div>
         <div id="editor-selected" style="margin-bottom: 15px; text-align: center; pointer-events: none; font-family: monospace; font-size: 11px; color: #aaa; background: #151515; padding: 6px; border-radius: 4px;">Selected: None</div>
@@ -817,6 +824,7 @@ export const initUIEditor = () => {
         editorBar.style.display = "flex";
         bgImage.style.display = "block";
         (window as any).isEditMode = true; // Flag for main.ts 
+        document.body.classList.add("ui-editor-active");
         
         const canvasContainer = document.getElementById("canvas-container");
         if (canvasContainer) {
@@ -883,6 +891,7 @@ export const initUIEditor = () => {
         widthSlider.disabled = true; widthNum.disabled = true;
         heightSlider.disabled = true; heightNum.disabled = true;
         (window as any).isEditMode = false;
+        document.body.classList.remove("ui-editor-active");
 
         // Hide HUD container if not in active match
         if ((window as any).gameState !== "ACTIVE_MATCH") {

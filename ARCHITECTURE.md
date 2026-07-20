@@ -36,6 +36,7 @@
 ---
 
 ## 4. The Geckos Serialization & Networking Stack
+*   **CRITICAL MANDATE:** You are not allowed to delete Geckos.io under any circumstances.
 *   **Protocol:** Geckos.io (WebRTC Data Channels) for authoritative UDP-like client-server communication.
 *   **Network vs. Physics Loops:**
     *   *Physics Tick:* 60Hz (16.66ms) using Node `setInterval` (Rapier, A* validation, hitscans).
@@ -171,3 +172,9 @@
     }
   ]
 }
+
+---
+
+## 9. Codebase Index and Audit Protocol
+*   **Unified Index File:** The complete layout, purpose, and export structure of every directory and source file is cataloged inside `/CODEBASE_INDEX.md`. This index serves as the strict, single-source authority for file purposes to prevent assumptions.
+*   **Audit Protocol:** Any modification to the codebase must consult `/CODEBASE_INDEX.md` first to confirm system-wide impacts. Changes must be registered in the active log section of the index prior to execution, and finalized with testing results upon completion. No unindexed file edits are permitted.

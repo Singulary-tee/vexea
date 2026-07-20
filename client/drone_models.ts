@@ -248,6 +248,8 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
          instanceGroup.push(subIds);
      }
 
+     batchMesh.name = "DroneBatch";
+     (batchMesh as any).isDrone = true;
      scene.add(batchMesh);
      
      return { 

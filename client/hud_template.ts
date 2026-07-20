@@ -112,6 +112,7 @@ export const HUD_HTML = `
   border: 1px solid rgba(255, 255, 255, 0.8) !important;
   border-radius: 15px !important;
   overflow: hidden !important;
+  z-index: 100 !important;
 }
 #minimap-player-arrow {
   filter: drop-shadow(0 0 4px rgba(255,255,255,0.85)) !important;
@@ -119,13 +120,16 @@ export const HUD_HTML = `
 #minimap-container.fullscreen-minimap {
  position: absolute !important;
   top: 5vh !important;
-  left: auto !important;
-  right: auto !important;
+  left: 5vw !important;
+  right: 5vw !important;
   width: 90vw !important;
   height: 90vh !important;
   z-index: 10000 !important;
   background: rgba(0, 0, 0, 0.95) !important;
   border-radius: 4px !important;
+}
+#minimap-container.fullscreen-minimap ~ #minimap-label {
+  display: none !important;
 }
 #minimap-canvas {
   width: 100% !important;
@@ -637,7 +641,7 @@ fill="#ffffff" stroke="none">
   </div>
 
   <div id="hud-timer-container">
-    <div id="hud-timer">TURN TIMER: 00:00</div>
+    <div id="hud-timer">TIME LEFT: 00:00</div>
   </div>
 
   <div id="compass-placeholder" style="position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); width: 20vw; height: 4vh; border: none !important; background: rgba(0, 0, 0, 0.3) !important; z-index: 11 !important;"></div>

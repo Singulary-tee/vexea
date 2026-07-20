@@ -66,6 +66,7 @@ export interface GameModeConfig {
   };
 
   postMatchStats: string[];
+  timerLabel: string;
 }
 
 export const GAMEMODES: Record<string, GameModeConfig> = {
@@ -73,7 +74,8 @@ export const GAMEMODES: Record<string, GameModeConfig> = {
     id: 'STANDARD',
     displayName: 'INFILTRATION',
     description: 'Disable the rogue AI before the timer expires. 5–10 contractors. Respawn enabled.',
-    matchDuration: 480,
+    matchDuration: 600,
+    timerLabel: 'Time Left',
     minPlayers: 1,
     maxPlayers: 10,
     winCondition: 'OBJECTIVE',

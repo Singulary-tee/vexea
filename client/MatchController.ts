@@ -11,6 +11,9 @@ import { DiagnosisSystem } from "./src/systems/DiagnosisSystem";
 import { HUDSystem } from "./src/systems/HUDSystem";
 import { VisualsSystem } from "./src/systems/VisualsSystem";
 import { ReconnectionSystem } from "./src/systems/ReconnectionSystem";
+import { CameraEffectsSystem } from "./src/camera/CameraEffects";
+import { CompassSystem } from "./src/systems/CompassSystem";
+
 
 export interface NetworkDroneState {
   t: number; // local receive timestamp
@@ -119,8 +122,11 @@ export class MatchController {
   public drones: DroneSystem | null = null;
   public diagnosis: DiagnosisSystem | null = null;
   public hud: HUDSystem | null = null;
+  public compass: CompassSystem | null = null;
   public visuals: VisualsSystem | null = null;
   public reconnection: ReconnectionSystem | null = null;
+  public cameraEffects: CameraEffectsSystem | null = null;
+
 
   // Match State
   public localPlayerId = "";
@@ -219,9 +225,13 @@ export class MatchController {
     this.drones.init();
     this.hud = new HUDSystem(this);
     this.hud.init();
+    this.compass = new CompassSystem(this);
+    this.compass.init();
     this.visuals = new VisualsSystem(this);
     this.visuals.init();
+    this.cameraEffects = new CameraEffectsSystem(this);
     this.reconnection = new ReconnectionSystem(this);
+
     this.reconnection.init();
   }
 
@@ -315,6 +325,10 @@ export class MatchController {
         this.hud = null;
     }
 
+    if (this.compass) {
+        this.compass = null;
+    }
+
     if (this.drones) {
         this.drones = null;
     }
@@ -326,6 +340,11 @@ export class MatchController {
     if (this.reconnection) {
         this.reconnection = null;
     }
+
+    if (this.cameraEffects) {
+        this.cameraEffects = null;
+    }
+
 
     // 5. Reset primitives
     this.playerHP = 100;

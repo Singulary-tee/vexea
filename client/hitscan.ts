@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { spawnEnvironmentDecalAndDust } from "./src/vfx/VFXOrchestrator";
+import { spawnEnvironmentDecalAndDust, spawnImpactSparks } from "./src/vfx/VFXOrchestrator";
 
 export class HitscanSystem {
   private raycaster = new THREE.Raycaster();
@@ -35,6 +35,7 @@ export class HitscanSystem {
       let currItems: THREE.Object3D | null = hit.object;
       let isWeapon = false;
       let isPlayer = false;
+      let isDrone = false;
       while (currItems) {
         if (currItems.name === "WeaponsContainer") {
           isWeapon = true;
@@ -42,6 +43,9 @@ export class HitscanSystem {
         }
         if (currItems.name === "RemotePlayer") {
           isPlayer = true;
+        }
+        if (currItems.name === "DroneBatch" || (currItems as any).isDrone || currItems.name === "FixedWingStandalone" || currItems.name === "FixedWingDrone" || currItems.name === "TestDrone") {
+          isDrone = true;
         }
         currItems = currItems.parent;
       }
@@ -53,7 +57,6 @@ export class HitscanSystem {
       if (hit.object.name.includes("VFX")) continue;
 
       // If we hit a drone or player, we just stop the ray (let the server handle the hit confirmation)
-      const isDrone = (hit.object as any).isBatchedMesh && hit.object.name === "DroneBatch";
       if (isDrone || isPlayer) {
         break; // Ray is blocked by entity, so no environment decal is made
       }
@@ -61,7 +64,16 @@ export class HitscanSystem {
       // If we reach here, it's environment geometry!
       const impact = hit.point;
       if (impact.distanceTo(camera.position) < maxFalloffDist * 2.0) {
-        spawnEnvironmentDecalAndDust(impact.x, impact.y, impact.z);
+        // Calculate world-space surface normal
+        const normal = new THREE.Vector3(0, 1, 0);
+        if (hit.face) {
+          normal.copy(hit.face.normal);
+          normal.transformDirection(hit.object.matrixWorld);
+        }
+        
+        // Spawn decal, dust, and sparks immediately with correct orientation
+        spawnEnvironmentDecalAndDust(impact.x, impact.y, impact.z, normal.x, normal.y, normal.z);
+        spawnImpactSparks(impact.x, impact.y, impact.z, 10, normal.x, normal.y, normal.z);
       }
       break; // Only process the first valid hit
     }

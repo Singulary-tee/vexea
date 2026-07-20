@@ -1,29 +1,32 @@
 import * as THREE from "three/webgpu";
 import { uv, float, smoothstep, length as tslLength, vec2, vec4, mix } from "three/tsl";
 import { getSettings } from "../../settings";
-import { audioManager } from "../../audio";
 import { getAssetUrl } from "../../asset-cache";
+
+// Import modular VFX components
+import { initFiringVFX, triggerNiagaraFlash, updateFiringVFX, clearFiringVFX } from "./firing";
+import { initHitsVFX, spawnImpactSparks as hitsSpawnSparks, spawnEnvironmentDecalAndDust as hitsSpawnDecal, updateHitsVFX, clearHitsVFX, sparkBatch as hitsSparkBatch, dustBatch as hitsDustBatch, decalBatch as hitsDecalBatch, sparkActive as hitsSparkActive, dustActive as hitsDustActive } from "./hits";
+import { initLargeVFX, triggerExplosion, updateLargeVFX, clearLargeVFX } from "./large";
+import { VFX_CONSTANTS } from "./constants";
 
 // Pre-allocated math objects for Zero-GC loops
 const _vfxPos = new THREE.Vector3();
 const _vfxDir = new THREE.Vector3();
 const _vfxUp = new THREE.Vector3();
 const _vfxRight = new THREE.Vector3();
-const _vfxNormal = new THREE.Vector3();
+const _vfxCamFwd = new THREE.Vector3();
+const _vfxCamUp = new THREE.Vector3(0, 1, 0);
 const _vfxQuat = new THREE.Quaternion();
 const _vfxScale = new THREE.Vector3();
 const _vfxMatrix = new THREE.Matrix4();
-const _vfxZAxis = new THREE.Vector3(0, 0, 1);
-const _vfxCamFwd = new THREE.Vector3();
-const _vfxCamUp = new THREE.Vector3(0, 1, 0);
 
 const VISUAL_CONFIG: Record<string, any> = {
   High:   { decalSlots: 30, dustPerHit: 8,  sparksPerHit: 10, tracerSlots: 10, barrelSmokeSprites: 4,  flashLight: true  },
-  Medium: { decalSlots: 15, dustPerHit: 4,  sparksPerHit: 5,  tracerSlots: 6,  barrelSmokeSprites: 2,  flashLight: false },
+  Medium: { decalSlots: 15, dustPerHit: 4,  sparksPerHit: 5,  tracerSlots: 6,  barrelSmokeSprites: 2,  flashLight: true  },
   Low:    { decalSlots: 0,  dustPerHit: 0,  sparksPerHit: 0,  tracerSlots: 4,  barrelSmokeSprites: 0,  flashLight: false },
 } as const;
 
-// Pool batch references
+// Pool batch references (bound/aliased for backwards compatibility)
 export let tracerBatch: THREE.BatchedMesh | null = null;
 export let sparkBatch: THREE.BatchedMesh | null = null;
 export let decalBatch: THREE.BatchedMesh | null = null;
@@ -31,6 +34,9 @@ export let dustBatch: THREE.BatchedMesh | null = null;
 export let smokeBatch: THREE.BatchedMesh | null = null;
 export let flashMesh: THREE.Mesh | null = null;
 export let flashLight: THREE.PointLight | null = null;
+
+// Re-export modular functions directly
+export { triggerExplosion };
 
 export interface MuzzleFlashInstance {
   mesh: THREE.Mesh;
@@ -52,9 +58,6 @@ export let barrelSmokeCount = 0;
 
 // Instance ID arrays
 let tracerInstIds: Int32Array | null = null;
-let sparkInstIds: Int32Array | null = null;
-let decalInstIds: Int32Array | null = null;
-let dustInstIds: Int32Array | null = null;
 let smokeInstIds: Int32Array | null = null;
 
 // Active/life flat typed arrays
@@ -68,22 +71,7 @@ let tracerDirY: Float32Array | null = null;
 let tracerDirZ: Float32Array | null = null;
 
 export let sparkActive: Uint8Array | null = null;
-let sparkLife: Float32Array | null = null;
-let sparkPosX: Float32Array | null = null;
-let sparkPosY: Float32Array | null = null;
-let sparkPosZ: Float32Array | null = null;
-let sparkVelX: Float32Array | null = null;
-let sparkVelY: Float32Array | null = null;
-let sparkVelZ: Float32Array | null = null;
-
 export let dustActive: Uint8Array | null = null;
-let dustLife: Float32Array | null = null;
-let dustPosX: Float32Array | null = null;
-let dustPosY: Float32Array | null = null;
-let dustPosZ: Float32Array | null = null;
-let dustVelX: Float32Array | null = null;
-let dustVelY: Float32Array | null = null;
-let dustVelZ: Float32Array | null = null;
 
 export let smokeActive: Uint8Array | null = null;
 let smokeLife: Float32Array | null = null;
@@ -114,6 +102,18 @@ export function initMatchVisuals(scene: THREE.Scene) {
   const cfg = VISUAL_CONFIG[preset] || VISUAL_CONFIG['Medium'];
   currentVisualConfig = cfg;
 
+  // Initialize Modular Sub-systems
+  initFiringVFX(scene, cfg.flashLight);
+  initHitsVFX(scene, cfg);
+  initLargeVFX(scene, cfg.flashLight);
+
+  // Map references to hits module batches
+  sparkBatch = hitsSparkBatch;
+  dustBatch = hitsDustBatch;
+  decalBatch = hitsDecalBatch;
+  sparkActive = hitsSparkActive;
+  dustActive = hitsDustActive;
+
   // TRACER MAT
   const tracerMat = new THREE.MeshBasicNodeMaterial();
   tracerMat.transparent = true;
@@ -130,31 +130,6 @@ export function initMatchVisuals(scene: THREE.Scene) {
   const tracerColor = mix(tracerAmber, tracerWhite, smoothstep(float(0.3), float(0.7), tracerU));
   tracerMat.colorNode = vec4(tracerColor.x, tracerColor.y, tracerColor.z, tracerAlpha);
 
-  // SPARK MAT
-  const sparkMat = new THREE.MeshBasicNodeMaterial();
-  sparkMat.transparent = true;
-  sparkMat.blending = THREE.AdditiveBlending;
-  sparkMat.depthWrite = false;
-  sparkMat.side = THREE.DoubleSide;
-  const sparkUV = uv().sub(vec2(0.5, 0.5));
-  const sparkDist = tslLength(sparkUV).mul(float(2.0));
-  const sparkCore = smoothstep(float(1.0), float(0.0), sparkDist);
-  const sparkAmber = vec4(1.0, 0.533, 0.165, 0.0);
-  const sparkWhite = vec4(1.0, 1.0, 1.0, 0.0);
-  const sparkColor = mix(sparkAmber, sparkWhite, smoothstep(float(0.3), float(0.0), sparkDist));
-  sparkMat.colorNode = vec4(sparkColor.x, sparkColor.y, sparkColor.z, sparkCore);
-
-  // DUST MAT
-  const dustMat = new THREE.MeshBasicNodeMaterial();
-  dustMat.transparent = true;
-  dustMat.depthWrite = false;
-  dustMat.side = THREE.DoubleSide;
-  const dustUV = uv().sub(vec2(0.5, 0.5));
-  const dustDist = tslLength(dustUV).mul(float(2.0));
-  const dustAlpha = smoothstep(float(1.0), float(0.2), dustDist).mul(float(0.7));
-  const dustGrey = vec4(0.22, 0.22, 0.22, 0.0);
-  dustMat.colorNode = vec4(dustGrey.x, dustGrey.y, dustGrey.z, dustAlpha);
-
   // SMOKE MAT
   const smokeMat = new THREE.MeshBasicNodeMaterial();
   smokeMat.transparent = true;
@@ -166,29 +141,7 @@ export function initMatchVisuals(scene: THREE.Scene) {
   const smokeGrey = vec4(0.53, 0.53, 0.53, 0.0);
   smokeMat.colorNode = vec4(smokeGrey.x, smokeGrey.y, smokeGrey.z, smokeAlpha);
 
-  // FLASH MAT
-  const flashMat = new THREE.MeshBasicNodeMaterial();
-  flashMat.transparent = true;
-  flashMat.blending = THREE.AdditiveBlending;
-  flashMat.depthWrite = false;
-  flashMat.side = THREE.DoubleSide;
-  const flashUVNode = uv();
-  const offsetNode = vec2(0.5, 0.5);
-  const flashUV = flashUVNode.sub(offsetNode);
-  const flashDist = tslLength(flashUV).mul(float(2.0));
-  const flashAlpha = smoothstep(float(1.0), float(0.0), flashDist);
-  flashMat.colorNode = vec4(float(1.0), float(1.0), float(1.0), flashAlpha);
-
-  // DECAL MAT
-  const decalTexture = new THREE.TextureLoader().load(getAssetUrl('Surface_Impact.png'));
-  const decalMat = new THREE.MeshBasicNodeMaterial();
-  decalMat.map = decalTexture;
-  decalMat.transparent = true;
-  decalMat.depthWrite = false;
-  decalMat.polygonOffset = true;
-  decalMat.polygonOffsetFactor = -4;
-  decalMat.side = THREE.DoubleSide;
-
+  // Setup tracer batch
   if (cfg.tracerSlots > 0) {
     tracerSlots = cfg.tracerSlots;
     tracerInstIds = new Int32Array(tracerSlots);
@@ -213,56 +166,7 @@ export function initMatchVisuals(scene: THREE.Scene) {
     _scene.add(tracerBatch);
   }
 
-  sparksPerHitCount = cfg.sparksPerHit;
-  if (sparksPerHitCount > 0) {
-    const sSlots = sparksPerHitCount * 10;
-    sparkInstIds = new Int32Array(sSlots);
-    sparkActive = new Uint8Array(sSlots);
-    sparkLife = new Float32Array(sSlots);
-    sparkPosX = new Float32Array(sSlots);
-    sparkPosY = new Float32Array(sSlots);
-    sparkPosZ = new Float32Array(sSlots);
-    sparkVelX = new Float32Array(sSlots);
-    sparkVelY = new Float32Array(sSlots);
-    sparkVelZ = new Float32Array(sSlots);
-
-    sparkBatch = new THREE.BatchedMesh(sSlots, 4, 6, sparkMat);
-    sparkBatch.name = "VFX_Spark";
-    sparkBatch.frustumCulled = false;
-    const _sparkGeom = new THREE.PlaneGeometry(0.08, 0.08);
-    const _sparkGeomId = sparkBatch.addGeometry(_sparkGeom);
-    for (let i = 0; i < sSlots; i++) {
-        sparkInstIds[i] = sparkBatch.addInstance(_sparkGeomId);
-        sparkBatch.setVisibleAt(sparkInstIds[i], false);
-    }
-    _scene.add(sparkBatch);
-  }
-
-  dustPerHitCount = cfg.dustPerHit;
-  if (dustPerHitCount > 0) {
-    const dSlots = dustPerHitCount * 8;
-    dustInstIds = new Int32Array(dSlots);
-    dustActive = new Uint8Array(dSlots);
-    dustLife = new Float32Array(dSlots);
-    dustPosX = new Float32Array(dSlots);
-    dustPosY = new Float32Array(dSlots);
-    dustPosZ = new Float32Array(dSlots);
-    dustVelX = new Float32Array(dSlots);
-    dustVelY = new Float32Array(dSlots);
-    dustVelZ = new Float32Array(dSlots);
-
-    dustBatch = new THREE.BatchedMesh(dSlots, 4, 6, dustMat);
-    dustBatch.name = "VFX_Dust";
-    dustBatch.frustumCulled = false;
-    const _dustGeom = new THREE.PlaneGeometry(0.15, 0.15);
-    const _dustGeomId = dustBatch.addGeometry(_dustGeom);
-    for (let i = 0; i < dSlots; i++) {
-        dustInstIds[i] = dustBatch.addInstance(_dustGeomId);
-        dustBatch.setVisibleAt(dustInstIds[i], false);
-    }
-    _scene.add(dustBatch);
-  }
-
+  // Setup smoke batch
   barrelSmokeCount = cfg.barrelSmokeSprites;
   if (barrelSmokeCount > 0) {
     const smSlots = barrelSmokeCount;
@@ -285,27 +189,22 @@ export function initMatchVisuals(scene: THREE.Scene) {
     _scene.add(smokeBatch);
   }
 
-  if (cfg.decalSlots > 0) {
-    decalSlots = cfg.decalSlots;
-    decalInstIds = new Int32Array(decalSlots);
-    decalBatch = new THREE.BatchedMesh(decalSlots, 4, 6, decalMat);
-    decalBatch.name = "VFX_Decal";
-    decalBatch.frustumCulled = false;
-    const _decalGeom = new THREE.PlaneGeometry(0.3, 0.3);
-    const _decalGeomId = decalBatch.addGeometry(_decalGeom);
-    for (let i = 0; i < decalSlots; i++) {
-        decalInstIds[i] = decalBatch.addInstance(_decalGeomId);
-        decalBatch.setVisibleAt(decalInstIds[i], false);
-    }
-    _scene.add(decalBatch);
-  }
-  
-  // Initialize the flash pool
+  // Legacy flash setup (kept for safety / simple meshes)
   flashPool.length = 0;
+  const legacyFlashMat = new THREE.MeshBasicNodeMaterial();
+  legacyFlashMat.transparent = true;
+  legacyFlashMat.blending = THREE.AdditiveBlending;
+  legacyFlashMat.depthWrite = false;
+  legacyFlashMat.side = THREE.DoubleSide;
+  const fUV = uv().sub(vec2(0.5, 0.5));
+  const fDist = tslLength(fUV).mul(float(2.0));
+  const fAlpha = smoothstep(float(1.0), float(0.0), fDist);
+  legacyFlashMat.colorNode = vec4(float(1.0), float(1.0), float(1.0), fAlpha);
+
   const _flashGeom = new THREE.PlaneGeometry(0.6, 0.6);
   for (let i = 0; i < FLASH_POOL_SIZE; i++) {
-    const mesh = new THREE.Mesh(_flashGeom, flashMat);
-    mesh.name = `VFX_Flash_${i}`;
+    const mesh = new THREE.Mesh(_flashGeom, legacyFlashMat);
+    mesh.name = `VFX_LegacyFlash_${i}`;
     mesh.visible = false;
     _scene.add(mesh);
 
@@ -325,13 +224,12 @@ export function initMatchVisuals(scene: THREE.Scene) {
     });
   }
 
-  // Keep references to first element for pre-warming and backwards-compatibility
   if (flashPool.length > 0) {
     flashMesh = flashPool[0].mesh;
     flashLight = flashPool[0].light;
   }
 
-  console.log('[VFX:INIT]', 'preset:', getSettings().graphicsPreset, 'tracerSlots:', tracerSlots, 'sparks:', sparksPerHitCount, 'decals:', decalSlots, 'dust:', dustPerHitCount, 'flashPoolSize:', flashPool.length);
+  console.log('[VFX:INIT] Modular pipeline loaded successfully. Preset:', preset);
   vfxInitialized = true;
 }
 
@@ -358,7 +256,17 @@ export function spawnTracer(muzzlePos: THREE.Vector3, direction: THREE.Vector3) 
 export function triggerFlash(muzzlePos?: THREE.Vector3, scaleFactor = 1.0) {
   if (!vfxInitialized || !muzzlePos) return;
 
-  // Find the first available (inactive or oldest) flash in the pool
+  // 1. Point Camera direction Vector
+  const camera = (window as any).camera;
+  _vfxDir.set(0, 0, 1);
+  if (camera) {
+    camera.getWorldDirection(_vfxDir);
+  }
+
+  // 2. Trigger Advanced Niagara Muzzle Flash
+  triggerNiagaraFlash(muzzlePos, _vfxDir, scaleFactor);
+
+  // 3. Fallback / Simple Flash Pool (Legacy support)
   let inst: MuzzleFlashInstance | null = null;
   for (let i = 0; i < FLASH_POOL_SIZE; i++) {
     if (flashPool[i].life <= 0) {
@@ -367,33 +275,20 @@ export function triggerFlash(muzzlePos?: THREE.Vector3, scaleFactor = 1.0) {
     }
   }
 
-  // Fallback to oldest if all are active
   if (!inst && flashPool.length > 0) {
-    let oldestIdx = 0;
-    let minLife = flashPool[0].life;
-    for (let i = 1; i < FLASH_POOL_SIZE; i++) {
-      if (flashPool[i].life < minLife) {
-        minLife = flashPool[i].life;
-        oldestIdx = i;
-      }
-    }
-    inst = flashPool[oldestIdx];
+    inst = flashPool[0];
   }
 
   if (inst) {
-    inst.life = 0.06; // 60ms duration
-    inst.maxLife = 0.06;
+    inst.life = VFX_CONSTANTS.FIRING.FLASH_DURATION;
+    inst.maxLife = VFX_CONSTANTS.FIRING.FLASH_DURATION;
     inst.scaleFactor = scaleFactor;
-
     inst.mesh.position.copy(muzzlePos);
     inst.mesh.visible = true;
     inst.mesh.scale.setScalar(scaleFactor);
-
-    const camera = (window as any).camera;
     if (camera) {
       inst.mesh.quaternion.copy(camera.quaternion);
     }
-
     if (inst.light) {
       inst.light.position.copy(muzzlePos);
       inst.light.visible = true;
@@ -402,106 +297,50 @@ export function triggerFlash(muzzlePos?: THREE.Vector3, scaleFactor = 1.0) {
   }
 }
 
-export function clearAllVisuals() {
-  vfxInitialized = false;
-  if (tracerBatch && tracerInstIds && tracerActive) {
-    tracerActive.fill(0);
-    for (let i = 0; i < tracerInstIds.length; i++) tracerBatch.setVisibleAt(tracerInstIds[i], false);
-  }
-  if (sparkBatch && sparkInstIds && sparkActive) {
-    sparkActive.fill(0);
-    for (let i = 0; i < sparkInstIds.length; i++) sparkBatch.setVisibleAt(sparkInstIds[i], false);
-  }
-  if (dustBatch && dustInstIds && dustActive) {
-    dustActive.fill(0);
-    for (let i = 0; i < dustInstIds.length; i++) dustBatch.setVisibleAt(dustInstIds[i], false);
-  }
-  if (smokeBatch && smokeInstIds && smokeActive) {
-    smokeActive.fill(0);
-    for (let i = 0; i < smokeInstIds.length; i++) smokeBatch.setVisibleAt(smokeInstIds[i], false);
-  }
-  if (decalBatch && decalInstIds) {
-    for (let i = 0; i < decalInstIds.length; i++) decalBatch.setVisibleAt(decalInstIds[i], false);
-    decalIndex = 0;
-  }
-  for (let i = 0; i < flashPool.length; i++) {
-    const inst = flashPool[i];
-    inst.life = 0;
-    inst.mesh.visible = false;
-    if (inst.light) {
-      inst.light.visible = false;
-      inst.light.intensity = 0;
-    }
-  }
-  flashLife = 0;
+export function spawnImpactSparks(x: number, y: number, z: number, sparksToSpawn: number, nx = 0, ny = 1, nz = 0) {
+  hitsSpawnSparks(x, y, z, sparksToSpawn, nx, ny, nz);
 }
 
-export function spawnImpactSparks(x: number, y: number, z: number, sparksToSpawn: number) {
-  if (!sparkBatch || !sparkActive || !sparkInstIds || sparksToSpawn <= 0) return;
-
-  let activated = 0;
-  for (let i = 0; i < sparkInstIds.length && activated < sparksToSpawn; i++) {
-    if (!sparkActive[i]) {
-      sparkActive[i] = 1;
-      sparkLife![i] = 8;
-      sparkPosX![i] = x;
-      sparkPosY![i] = y;
-      sparkPosZ![i] = z;
-      
-      const angle = Math.random() * Math.PI * 2;
-      const elevation = Math.random() * Math.PI * 0.5;
-      const speed = 2 + Math.random() * 6;
-      sparkVelX![i] = Math.cos(angle) * Math.cos(elevation) * speed;
-      sparkVelY![i] = Math.sin(elevation) * speed;
-      sparkVelZ![i] = Math.sin(angle) * Math.cos(elevation) * speed;
-      
-      sparkBatch.setVisibleAt(sparkInstIds[i], true);
-      activated++;
-    }
-  }
+export function spawnEnvironmentDecalAndDust(ix: number, iy: number, iz: number, nx = 0, ny = 1, nz = 0) {
+  hitsSpawnDecal(ix, iy, iz, nx, ny, nz);
 }
 
-export function spawnEnvironmentDecalAndDust(ix: number, iy: number, iz: number) {
-  if (!currentVisualConfig) return;
-
-  if (decalBatch && decalInstIds && decalSlots > 0) {
-    const dInstId = decalInstIds[decalIndex];
-    _vfxPos.set(ix, iy + 0.01, iz);
-    _vfxNormal.set(0, 1, 0);
-    _vfxQuat.setFromUnitVectors(_vfxZAxis, _vfxNormal);
-    _vfxScale.set(1, 1, 1);
-    _vfxMatrix.compose(_vfxPos, _vfxQuat, _vfxScale);
+export function spawnBarrelSmoke(camera: THREE.PerspectiveCamera, muzzlePos?: THREE.Vector3): void {
+  if (smokeBatch && smokeActive && smokeInstIds && barrelSmokeCount > 0) {
+    if (muzzlePos) {
+      _vfxPos.copy(muzzlePos);
+    } else {
+      camera.getWorldPosition(_vfxPos);
+      camera.getWorldDirection(_vfxDir);
+      _vfxPos.addScaledVector(_vfxDir, 0.5);
+      _vfxPos.y -= 0.15;
+    }
     
-    decalBatch.setMatrixAt(dInstId, _vfxMatrix);
-    decalBatch.setVisibleAt(dInstId, true);
-    
-    decalIndex = (decalIndex + 1) % decalSlots;
-  }
-  
-  if (dustBatch && dustActive && dustInstIds && dustPerHitCount > 0) {
-    let activated = 0;
-    for (let i = 0; i < dustInstIds.length && activated < dustPerHitCount; i++) {
-      if (!dustActive[i]) {
-        dustActive[i] = 1;
-        dustLife![i] = 20;
-        dustPosX![i] = ix;
-        dustPosY![i] = iy;
-        dustPosZ![i] = iz;
-        
-        const angle = Math.random() * Math.PI * 2;
-        dustVelX![i] = Math.cos(angle) * (0.5 + Math.random() * 1.5);
-        dustVelY![i] = 1.5 + Math.random() * 2.0;
-        dustVelZ![i] = Math.sin(angle) * (0.5 + Math.random() * 1.5);
-        
-        dustBatch.setVisibleAt(dustInstIds[i], true);
-        activated++;
+    for (let i = 0; i < barrelSmokeCount; i++) {
+      if (smokeInstIds[i] !== undefined) {
+        smokeActive[i] = 1;
+        smokeLife![i] = VFX_CONSTANTS.FIRING.SMOKE_LIFETIME;
+        smokePosX![i] = _vfxPos.x + (Math.random() - 0.5) * 0.05;
+        smokePosY![i] = _vfxPos.y;
+        smokePosZ![i] = _vfxPos.z + (Math.random() - 0.5) * 0.05;
+        smokeBatch.setVisibleAt(smokeInstIds[i], true);
       }
+    }
+    if ((smokeBatch as any).instanceMatrix) {
+      (smokeBatch as any).instanceMatrix.needsUpdate = true;
     }
   }
 }
 
 export function updateVFX(deltaTime: number, camera: THREE.PerspectiveCamera): void {
-  // --- TRACER UPDATE ---
+  if (!vfxInitialized) return;
+
+  // 1. Update modular components
+  updateFiringVFX(deltaTime, camera);
+  updateHitsVFX(deltaTime, camera);
+  updateLargeVFX(deltaTime, camera);
+
+  // 2. Update Tracers
   if (tracerBatch && tracerActive && tracerInstIds) {
     let tracerUpdateNeeded = false;
     for (let i = 0; i < tracerSlots; i++) {
@@ -547,8 +386,8 @@ export function updateVFX(deltaTime: number, camera: THREE.PerspectiveCamera): v
       (tracerBatch as any).instanceMatrix.needsUpdate = true;
     }
   }
-  
-  // --- FLASH POOL UPDATE ---
+
+  // 3. Update Legacy Flash Pool
   for (let i = 0; i < flashPool.length; i++) {
     const inst = flashPool[i];
     if (inst.life > 0) {
@@ -569,75 +408,8 @@ export function updateVFX(deltaTime: number, camera: THREE.PerspectiveCamera): v
       }
     }
   }
-  
-  // --- SPARK UPDATE ---
-  if (sparkBatch && sparkActive && sparkInstIds) {
-    let sparkUpdateNeeded = false;
-    for (let i = 0; i < sparkInstIds.length; i++) {
-      if (!sparkActive[i]) continue;
-      
-      sparkLife![i]--;
-      if (sparkLife![i] <= 0) {
-        sparkActive[i] = 0;
-        sparkBatch.setVisibleAt(sparkInstIds[i], false);
-        sparkUpdateNeeded = true;
-        continue;
-      }
-      
-      sparkVelY![i] -= 9.81 * deltaTime;
-      sparkPosX![i] += sparkVelX![i] * deltaTime;
-      sparkPosY![i] += sparkVelY![i] * deltaTime;
-      sparkPosZ![i] += sparkVelZ![i] * deltaTime;
-      
-      _vfxPos.set(sparkPosX![i], sparkPosY![i], sparkPosZ![i]);
-      _vfxQuat.copy(camera.quaternion);
-      const sAlpha = sparkLife![i] / 8;
-      _vfxScale.setScalar(0.08 * sAlpha);
-      
-      _vfxMatrix.compose(_vfxPos, _vfxQuat, _vfxScale);
-      sparkBatch.setMatrixAt(sparkInstIds[i], _vfxMatrix);
-      sparkUpdateNeeded = true;
-    }
-    if (sparkUpdateNeeded && (sparkBatch as any).instanceMatrix) {
-      (sparkBatch as any).instanceMatrix.needsUpdate = true;
-    }
-  }
-  
-  // --- DUST UPDATE ---
-  if (dustBatch && dustActive && dustInstIds) {
-    let dustUpdateNeeded = false;
-    for (let i = 0; i < dustInstIds.length; i++) {
-      if (!dustActive[i]) continue;
-      
-      dustLife![i]--;
-      if (dustLife![i] <= 0) {
-        dustActive[i] = 0;
-        dustBatch.setVisibleAt(dustInstIds[i], false);
-        dustUpdateNeeded = true;
-        continue;
-      }
-      
-      dustVelX![i] *= 0.95;
-      dustVelZ![i] *= 0.95;
-      dustPosX![i] += dustVelX![i] * deltaTime;
-      dustPosY![i] += dustVelY![i] * deltaTime;
-      dustPosZ![i] += dustVelZ![i] * deltaTime;
-      
-      _vfxPos.set(dustPosX![i], dustPosY![i], dustPosZ![i]);
-      _vfxQuat.copy(camera.quaternion);
-      const dProgress = 1 - (dustLife![i] / 20);
-      _vfxScale.setScalar(0.1 + dProgress * 0.35);
-      
-      _vfxMatrix.compose(_vfxPos, _vfxQuat, _vfxScale);
-      dustBatch.setMatrixAt(dustInstIds[i], _vfxMatrix);
-      dustUpdateNeeded = true;
-    }
-    if (dustUpdateNeeded && (dustBatch as any).instanceMatrix) {
-      (dustBatch as any).instanceMatrix.needsUpdate = true;
-    }
-  }
-  
-  // --- SMOKE UPDATE ---
+
+  // 4. Update Smoke
   if (smokeBatch && smokeActive && smokeInstIds) {
     let smokeUpdateNeeded = false;
     for (let i = 0; i < barrelSmokeCount; i++) {
@@ -651,11 +423,11 @@ export function updateVFX(deltaTime: number, camera: THREE.PerspectiveCamera): v
         continue;
       }
       
-      smokePosY![i] += 0.015;
+      smokePosY![i] += VFX_CONSTANTS.FIRING.SMOKE_RISE_SPEED;
       _vfxPos.set(smokePosX![i], smokePosY![i], smokePosZ![i]);
       _vfxQuat.copy(camera.quaternion);
-      const sProgress = 1 - (smokeLife![i] / 30);
-      _vfxScale.setScalar(0.1 + sProgress * 0.4);
+      const sProgress = 1 - (smokeLife![i] / VFX_CONSTANTS.FIRING.SMOKE_LIFETIME);
+      _vfxScale.setScalar(0.1 + sProgress * VFX_CONSTANTS.FIRING.SMOKE_GROWTH_SPEED);
       
       _vfxMatrix.compose(_vfxPos, _vfxQuat, _vfxScale);
       smokeBatch.setMatrixAt(smokeInstIds[i], _vfxMatrix);
@@ -665,35 +437,32 @@ export function updateVFX(deltaTime: number, camera: THREE.PerspectiveCamera): v
       (smokeBatch as any).instanceMatrix.needsUpdate = true;
     }
   }
-  
-  if (decalBatch && (decalBatch as any).instanceMatrix) {
-    (decalBatch as any).instanceMatrix.needsUpdate = true;
-  }
 }
 
-export function spawnBarrelSmoke(camera: THREE.PerspectiveCamera, muzzlePos?: THREE.Vector3): void {
-  if (smokeBatch && smokeActive && smokeInstIds && barrelSmokeCount > 0) {
-    if (muzzlePos) {
-      _vfxPos.copy(muzzlePos);
-    } else {
-      camera.getWorldPosition(_vfxPos);
-      camera.getWorldDirection(_vfxDir);
-      _vfxPos.addScaledVector(_vfxDir, 0.5);
-      _vfxPos.y -= 0.15;
-    }
-    
-    for (let i = 0; i < barrelSmokeCount; i++) {
-      if (smokeInstIds[i] !== undefined) {
-        smokeActive[i] = 1;
-        smokeLife![i] = 30;
-        smokePosX![i] = _vfxPos.x + (Math.random() - 0.5) * 0.05;
-        smokePosY![i] = _vfxPos.y;
-        smokePosZ![i] = _vfxPos.z + (Math.random() - 0.5) * 0.05;
-        smokeBatch.setVisibleAt(smokeInstIds[i], true);
-      }
-    }
-    if ((smokeBatch as any).instanceMatrix) {
-      (smokeBatch as any).instanceMatrix.needsUpdate = true;
+export function clearAllVisuals() {
+  vfxInitialized = false;
+
+  // Clear modular systems
+  clearFiringVFX();
+  clearHitsVFX();
+  clearLargeVFX();
+
+  if (tracerBatch && tracerInstIds && tracerActive) {
+    tracerActive.fill(0);
+    for (let i = 0; i < tracerInstIds.length; i++) tracerBatch.setVisibleAt(tracerInstIds[i], false);
+  }
+  if (smokeBatch && smokeInstIds && smokeActive) {
+    smokeActive.fill(0);
+    for (let i = 0; i < smokeInstIds.length; i++) smokeBatch.setVisibleAt(smokeInstIds[i], false);
+  }
+  for (let i = 0; i < flashPool.length; i++) {
+    const inst = flashPool[i];
+    inst.life = 0;
+    inst.mesh.visible = false;
+    if (inst.light) {
+      inst.light.visible = false;
+      inst.light.intensity = 0;
     }
   }
+  flashLife = 0;
 }

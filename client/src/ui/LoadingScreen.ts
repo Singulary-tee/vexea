@@ -28,6 +28,15 @@ export class LoadingScreen {
     this.overlay.style.justifyContent = "center";
     this.overlay.style.alignItems = "center";
     this.overlay.style.fontFamily = "'Barlow Condensed', sans-serif";
+    this.overlay.style.pointerEvents = "auto";
+
+    const blockEvents = ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "mousemove", "click", "touchstart", "touchend", "touchmove"];
+    blockEvents.forEach(evt => {
+      this.overlay.addEventListener(evt, (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      }, { capture: true });
+    });
 
     // Wordmark
     const wordmark = document.createElement("div");
