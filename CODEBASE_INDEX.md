@@ -84,6 +84,8 @@ This file is the authoritative index of all directories and source files within 
     *   *Purpose:* Standard 3D raycaster implementation for targeting and crosshair alignment.
 *   **`hud_template.ts`**
     *   *Purpose:* HTML structures dynamically appended to structure the overlay UI.
+*   **`hud_snippets.ts`**
+    *   *Purpose:* Backup holder for preserved HUD UI snippets (e.g. original top-left squad character avatars).
 *   **`index.css`**
     *   *Purpose:* Central Tailwind loading point and visual font imports.
 *   **`index.html`**
@@ -193,3 +195,63 @@ Every file change in the VEXEA codebase must follow this strict three-step proto
 *   **Verification:** `lint_applet` passed successfully, `compile_applet` completed with zero errors, production build verified.
 
 
+
+### Cycle 2026-07-20-01: Shift FOV sight math to Server and use boolean flag
+*   **Target Files:** `/server/MatchRoom.ts`, `/server/ai/DroneIntelligence.ts`, `/client/MatchController.ts`, `/client/src/systems/NetworkSyncSystem.ts`, `/client/src/systems/DiagnosisSystem.ts`
+*   **Status:** Verified & Finalized
+*   **Modifications:**
+    *   `/server/MatchRoom.ts`: Extended `ServerDrone` with `playerInFOV` boolean. Added bitwise manipulation to serialize this into the highest bit of the 31st drone struct byte (type).
+    *   `/server/ai/DroneIntelligence.ts`: Removed redundant `playerInFOV` reset. Evaluated server authoritative `hasLOS` via `inDistance && inFOV && hasLOS`. Assigned `d.playerInFOV = true` directly to the server state structure on successful player detection.
+    *   `/client/MatchController.ts`: Appended `playerInFOV` property to the `NetworkDroneState` structure. Included parameter in `push()` to zero-alloc `DroneRingBuffer` to correctly parse array buffer offset bits.
+    *   `/client/src/systems/NetworkSyncSystem.ts`: Read the 31st byte from the payload view buffer, decoupled bits using `& 127` mask for DroneType and `& 128` mask for the `playerInFOV` truth. Passed standard into interpolator buffer.
+    *   `/client/src/systems/DiagnosisSystem.ts`: Ripped out the math hack comparing drone pursuing/attacking state values and cleanly integrated `head.playerInFOV` logic to change the FOV visualizer cone from cyan to red precisely aligned with authoritative detection.
+*   **Verification:** `lint_applet` passed successfully, `compile_applet` completed with zero errors, production build verified.
+
+### Cycle 2026-07-21-01: Update rifle and pistol muzzleOffset parameters
+*   **Target Files:** `/shared/weapons.ts`
+*   **Status:** Verified & Finalized
+*   **Modifications:**
+    *   `/shared/weapons.ts`: Update `DETAILED_WEAPONS.rifle.visualConfig.muzzleOffset` to `[0.18, 0.15, -0.47]` and `DETAILED_WEAPONS.pistol.visualConfig.muzzleOffset` to `[0.03, 0.12, -0.25]` as requested by the user.
+*   **Verification:** `lint_applet` passed successfully, `compile_applet` completed with zero errors, production build verified.
+
+### Cycle 2026-07-21-02: User Menu UI Polishing
+*   **Target Files:** `/client/index.css`, `/client/screens/main-menu.ts`
+*   **Status:** Verified & Finalized
+*   **Modifications:**
+*   `/client/index.css`: Injected global scrollbar suppression rules so scrollbars are completely hidden across all views, lists, panels, and frames.
+*   `/client/screens/main-menu.ts`: Added a high-fidelity dynamic fullscreen toggle next to the profile/user icon that changes SVG path states automatically. Toggle is separated by a sleek 1px vertical divider.
+*   `/client/screens/main-menu.ts`: Hidden the bottom featured operation banner during active card modes to resolve overlay conflicts with the back button and the right panel.
+*   **Verification:** `lint_applet` passed successfully, `compile_applet` completed with zero errors, production build verified.
+
+### Cycle 2026-07-21-03: Lobby Screen Class Selection Redesign
+*   **Target Files:** `/client/screens/lobby.ts`
+*   **Status:** Verified & Finalized
+*   **Modifications:**
+    *   `/client/screens/lobby.ts`: Complete redesign of the lobby UI screen layout:
+        *   Ripped out the entire contractors/player list section and associated header elements.
+        *   Positioned the Back button elegantly in the top-left corner as a discrete, tactical translucent button.
+        *   Constructed a high-fidelity Gamemode Details panel in the top-right corner showing current active mode, type, and contractor count.
+        *   Positioned the Class Selection Cards horizontally at the bottom left/middle, separated cleanly with standard gaps (no touching borders) and fully responsive clamping.
+        *   Repositioned the READY action button to the bottom-right corner, fully decoupled from the cards.
+        *   Kept the center of the viewport fully black/unobstructed to comfortably host 3D model visualization.
+        *   Wired selected class detail successfully into the `start-match` event payload.
+*   **Verification:** `lint_applet` passed successfully, `compile_applet` completed with zero errors, production build verified.
+
+### Cycle 2026-07-21-04: Menu Card Overlap & Branding Update
+*   **Target Files:** `/client/screens/main-menu.ts`, `/client/src/ui/LoadingScreen.ts`
+*   **Status:** Verified & Finalized
+*   **Modifications:**
+    *   `/client/screens/main-menu.ts`: Replaced VEXEA wordmark with VEXEΛ in all UI layers.
+    *   `/client/src/ui/LoadingScreen.ts`: Updated loading screen wordmark to match the VEXEΛ branding.
+    *   `/client/screens/main-menu.ts`: Removed "Waiting for contractors..." subtext from the menu right panel as requested.
+    *   `/client/screens/main-menu.ts`: Renamed "FACTION" menu item to "INTEL" to better reflect the knowledge base and lore.
+    *   `/client/screens/main-menu.ts`: Updated `.mm-left-col` flex layout to dynamically center cards vertically by default, and push to `flex-start` when an active card expands.
+    *   `/client/screens/main-menu.ts`: Removed injected `overflow-x: hidden;` and set `overflow: visible !important;` on the left column to prevent the card hover-scale `box-shadow` and `border` from being clipped.
+*   **Verification:** `lint_applet` passed successfully, `compile_applet` completed with zero errors, production build verified.
+
+### Cycle 2026-07-21-05: Update SEO Meta Description
+*   **Target Files:** `/client/index.html`
+*   **Status:** Verified & Finalized
+*   **Modifications:**
+    *   `/client/index.html`: Update the primary `<meta name="description">` tag with the new marketing copy provided by the user to improve SEO and brand messaging. (Completed)
+*   **Verification:** `lint_applet` passed successfully, `compile_applet` completed with zero errors, production build verified.

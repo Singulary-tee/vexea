@@ -484,6 +484,12 @@
       "name": "vibeCo_card.png",
       "category": "Image",
       "source": "Release"
+    },
+    {
+      "name": "faction_card.jpg",
+      "category": "Image",
+      "source": "Filebase",
+      "url": "https://s3.filebase.com/vexea-international/Images/Backgrounds/faction_card.jpg"
     }
   ],
   "sounds": [

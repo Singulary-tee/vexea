@@ -9,7 +9,28 @@ export class HUDSystem {
   }
 
   public init() {
+    this.setupMatchStatusModal();
     this.updateHUD();
+  }
+
+  private setupMatchStatusModal() {
+    const btn = document.getElementById("btn-match-status");
+    const closeBtn = document.getElementById("btn-close-match-status");
+    const modal = document.getElementById("match-status-modal");
+
+    if (btn && modal) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        modal.style.display = modal.style.display === "none" ? "block" : "none";
+      });
+    }
+
+    if (closeBtn && modal) {
+      closeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        modal.style.display = "none";
+      });
+    }
   }
 
   public updateHUD() {
@@ -21,6 +42,24 @@ export class HUDSystem {
     if (hBar) hBar.style.width = `${match.playerHP}%`;
     if (hpVal) hpVal.innerText = `${Math.floor(match.playerHP)}`;
     if (scoreVal) scoreVal.innerText = `${match.playerScore}`;
+
+    this.updateMatchStatusUI();
+  }
+
+  public updateMatchStatusUI() {
+    const match = this.match;
+    const modal = document.getElementById("match-status-modal");
+    if (!modal || modal.style.display === "none") return;
+
+    const nameEl = document.getElementById("status-player-name");
+    const scoreEl = document.getElementById("status-score");
+    const pingEl = document.getElementById("status-ping-val");
+    const pendingInputsEl = document.getElementById("status-pending-inputs");
+
+    if (nameEl) nameEl.innerText = match.localPlayerId || "OPERATIVE-1";
+    if (scoreEl) scoreEl.innerText = `${match.playerScore}`;
+    if (pingEl) pingEl.innerText = `${match.latency} ms`;
+    if (pendingInputsEl) pendingInputsEl.innerText = `${match.moveHistory.length}`;
   }
 
   public updateAmmo(primary?: { currentMag: number, reserve: number, isReloading: boolean }, secondary?: { currentMag: number, reserve: number, isReloading: boolean }) {

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { MatchController, NetworkDroneState, DroneRingBuffer } from "../../MatchController";
+import { DS } from "../../design-system";
 import { 
   DroneState, 
   DroneType, 
@@ -118,7 +119,7 @@ export class NetworkSyncSystem {
   private startPingInterval() {
     this.pingInterval = setInterval(() => {
         this.sendPing();
-    }, 2000);
+    }, 1000);
   }
 
   public setupListeners() {
@@ -197,14 +198,16 @@ export class NetworkSyncSystem {
       const rz = view.getFloat32(byteOffset + 22, true);
       const rw = view.getFloat32(byteOffset + 26, true);
       const state = view.getUint8(byteOffset + 30);
-      const type = view.getUint8(byteOffset + 31);
+      const rawType = view.getUint8(byteOffset + 31);
+      const type = rawType & 127;
+      const playerInFOV = (rawType & 128) !== 0;
 
       if (!this.match.droneJitterMap.has(id)) {
         this.match.droneJitterMap.set(id, new DroneRingBuffer());
       }
       const jitterBuffer = this.match.droneJitterMap.get(id);
       if (jitterBuffer) {
-        jitterBuffer.push(serverTimeReceived, px, py, pz, rx, ry, rz, rw, state, type);
+        jitterBuffer.push(serverTimeReceived, px, py, pz, rx, ry, rz, rw, state, type, playerInFOV);
       }
       byteOffset += DRONE_STRUCT_SIZE;
     }
@@ -312,7 +315,7 @@ export class NetworkSyncSystem {
       const ch = document.getElementById("center-crosshair");
       if (ch) {
         const kills = msg.droneHp <= 0;
-        ch.style.background = kills ? "rgba(255, 180, 0, 0.8)" : "rgba(255, 255, 255, 0.8)";
+        ch.style.background = kills ? DS.colors.accent : DS.colors.text;
         ch.style.width = kills ? "20px" : "15px";
         ch.style.height = kills ? "20px" : "15px";
         ch.style.borderRadius = "50%";
@@ -522,6 +525,9 @@ export class NetworkSyncSystem {
     (window as any).latency = match.latency;
     if (match.transport) {
       match.transport.emit("latency_report", { latency: match.latency });
+    }
+    if (match.hud) {
+      match.hud.updateMatchStatusUI();
     }
   }
 

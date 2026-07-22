@@ -1,28 +1,7 @@
-import { DroneType, DroneState, getDroneMuzzleWorldPosition, DRONE_CONFIGS } from "../../shared/constants";
+import { DroneType, DroneState, getDroneMuzzleWorldPosition, DRONE_CONFIGS, INTEL_CONFIGS, DroneIntelConfig } from "../../shared/constants";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import type { PlayerState, ServerDrone } from "../MatchRoom";
 import { CollisionSystem } from "../../shared/collision";
-
-export interface DroneIntelConfig {
-  sightDistance: number;
-  visionConeAngle: number;
-  hearingRadius: number;
-  memoryDecayRate: number;
-  engagementMin: number;
-  engagementMax: number;
-  fireArcTolerance: number;
-}
-
-export const INTEL_CONFIGS: Record<DroneType, DroneIntelConfig> = {
-  [DroneType.ROTARY_SHOOTER]: { sightDistance: 50, visionConeAngle: Math.PI/2, hearingRadius: 60, memoryDecayRate: 0.05, engagementMin: 15, engagementMax: 30, fireArcTolerance: 0.2 },
-  [DroneType.BOMBER]: { sightDistance: 40, visionConeAngle: Math.PI/1.5, hearingRadius: 50, memoryDecayRate: 0.1, engagementMin: 0, engagementMax: 4, fireArcTolerance: 0 },
-  [DroneType.RECON]: { sightDistance: 80, visionConeAngle: Math.PI, hearingRadius: 80, memoryDecayRate: 0.02, engagementMin: 40, engagementMax: 70, fireArcTolerance: 0 },
-  [DroneType.FIXED_WING]: { sightDistance: 100, visionConeAngle: Math.PI/3, hearingRadius: 100, memoryDecayRate: 0.05, engagementMin: 20, engagementMax: 100, fireArcTolerance: 0 },
-  [DroneType.WHEELED]: { sightDistance: 60, visionConeAngle: Math.PI/2, hearingRadius: 60, memoryDecayRate: 0.05, engagementMin: 10, engagementMax: 40, fireArcTolerance: 0 },
-  [DroneType.ROBOT_DOG]: { sightDistance: 70, visionConeAngle: Math.PI/2.5, hearingRadius: 80, memoryDecayRate: 0.03, engagementMin: 15, engagementMax: 50, fireArcTolerance: 0 },
-  [DroneType.HUMANOID]: { sightDistance: 90, visionConeAngle: Math.PI/3, hearingRadius: 70, memoryDecayRate: 0.02, engagementMin: 20, engagementMax: 60, fireArcTolerance: 0 },
-  [DroneType.TEST_ENTITY]: { sightDistance: 90, visionConeAngle: Math.PI/3, hearingRadius: 70, memoryDecayRate: 0.02, engagementMin: 20, engagementMax: 60, fireArcTolerance: 0 },
-};
 
 export interface MemoryRecord {
   entityId: string;
@@ -59,6 +38,12 @@ export function processDroneIntelligence(
   dt: number = 0.0166,
   collisionMap: CollisionSystem | null = null
 ) {
+  if (!(global as any).configsLogged) {
+    (global as any).configsLogged = true;
+    console.log(`[DIAG_CONFIG] DRONE_CONFIGS: ${JSON.stringify(DRONE_CONFIGS)}`);
+    console.log(`[DIAG_CONFIG] INTEL_CONFIGS: ${JSON.stringify(INTEL_CONFIGS)}`);
+  }
+
   const livingPlayers: PlayerState[] = [];
   for (const player of players.values()) {
     if (player.isAlive && player.body) {
@@ -77,6 +62,7 @@ export function processDroneIntelligence(
     const visionConeAngle = droneConfig?.fovHalfAngle ? (droneConfig.fovHalfAngle * 2) : conf.visionConeAngle;
     
     if (!d.memoryRecords) d.memoryRecords = [];
+    d.playerInFOV = false;
 
     // Reset touched flags for Zero-GC memory tracking
     const records = d.memoryRecords;
@@ -152,14 +138,37 @@ export function processDroneIntelligence(
         // 2. Check against dynamic/other structures in rapierWorld (fallback)
         if (hasLOS && rapierWorld) {
           const rapierRay = new RAPIER_MOD.Ray(sensorPos, rDir);
-          const hit = rapierWorld.castRay(rapierRay, dist, true, RAPIER_MOD.QueryFilterFlags.EXCLUDE_DYNAMIC);
+          const hit = rapierWorld.castRay(
+            rapierRay,
+            dist,
+            true,
+            RAPIER_MOD.QueryFilterFlags.EXCLUDE_DYNAMIC,
+            undefined,
+            d.collider || undefined,
+            player.body || undefined
+          );
+          (d as any).lastHit = hit;
+          const now = Date.now();
+          if (!((d as any).lastDiagLog) || now - (d as any).lastDiagLog > 1000) {
+            (d as any).lastDiagLog = now;
+            console.log(`[DIAG] Drone ${d.id} | Hit: ${hit ? 'yes' : 'no'} | TOI: ${hit ? hit.timeOfImpact.toFixed(3) : 'N/A'} | Handle: ${hit ? hit.collider.handle : 'N/A'} | Dist: ${dist.toFixed(3)}`);
+          }
           if (hit && hit.timeOfImpact < dist - 0.1) {
             hasLOS = false;
           }
         }
       }
 
+      const now = Date.now();
+      if (!((d as any).lastDiagLog2) || now - (d as any).lastDiagLog2 > 1000) {
+        (d as any).lastDiagLog2 = now;
+        console.log(`[DIAG] Drone ${d.id} | inDist: ${inDistance} | inFOV: ${inFOV} | hasLOS: ${hasLOS} | dist: ${dist.toFixed(3)} | angle: ${angle.toFixed(3)} | halfAngle: ${halfAngle.toFixed(3)} | hit: ${(d as any).lastHit ? 'YES' : 'NO'}`);
+      }
+
       let detected = inDistance && inFOV && hasLOS;
+      if (detected) {
+        d.playerInFOV = true;
+      }
 
       // 4. Hearing reaction (Gunshot sound)
       let heard = false;
@@ -194,6 +203,7 @@ export function processDroneIntelligence(
       }
 
       // Tick-gated representative logging for a single drone (e.g., first active drone)
+      /*
       const now = Date.now();
       if (i === 0 && now - lastLogMs > LOG_COOLDOWN_MS) {
         lastLogMs = now;
@@ -209,6 +219,7 @@ export function processDroneIntelligence(
           `Result -> ${detected ? `WRITE confidence=1.0` : `DECAY confidence=${currentConf.toFixed(4)}`} | State: ${threeState} | pos(${player.posX.toFixed(1)}, ${player.posY.toFixed(1)}, ${player.posZ.toFixed(1)})`
         );
       }
+      */
     }
 
     // Decay records that were not updated this tick (using final records length)
@@ -216,7 +227,8 @@ export function processDroneIntelligence(
     for (let r = 0; r < currentRecLen; r++) {
       const record = records[r];
       if (!record.touchedThisTick) {
-        record.confidence = Math.max(0, record.confidence - (DECAY_RATE * dt));
+        const decayRate = droneConfig?.decayRate ?? DECAY_RATE;
+        record.confidence = Math.max(0, record.confidence - (decayRate * dt));
       }
     }
 
@@ -231,12 +243,26 @@ export function processDroneIntelligence(
       }
     }
 
-    if (maxConf > UNKNOWN_THRESHOLD) {
-      d.mode = "COMBAT";
+    const classification = getMemoryThreeState(maxConf);
+
+    if (classification === 'confirmed' || classification === 'last_seen') {
+      if (d.mode === "NORMAL") {
+        console.log(`[MODE_TRANSITION] Drone ID: ${d.id} | Old Mode: NORMAL | New Mode: COMBAT | Reason: ${classification} (conf: ${maxConf.toFixed(4)})`);
+        d.mode = "COMBAT";
+      }
       d.combatTarget = bestRecord;
     } else {
-      d.mode = "NORMAL";
-      d.combatTarget = null;
+      // classification is 'unknown'
+      if (d.mode === "COMBAT") {
+        const isCommittedBomber = d.type === DroneType.BOMBER && d.bomberState === "COMMITTED";
+        if (!isCommittedBomber) {
+          console.log(`[MODE_TRANSITION] Drone ID: ${d.id} | Old Mode: COMBAT | New Mode: NORMAL | Reason: ${classification} (conf: ${maxConf.toFixed(4)})`);
+          d.mode = "NORMAL";
+          d.combatTarget = null;
+        }
+      } else {
+        d.combatTarget = null;
+      }
     }
   }
 }

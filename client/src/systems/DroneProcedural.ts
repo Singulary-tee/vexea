@@ -9,9 +9,12 @@ export interface DroneProceduralState {
   turretYaw: number;
   turretPitch: number;
   recoilAmount: number;
+  recoilPhase?: 'kick' | 'recover' | 'idle';
+  recoilTimer?: number;
   steerAngle: number;
   lastBodyYaw?: number;
   accumulatedTime?: number;
+  verticalBob?: number;
 }
 
 export function createProceduralState(): DroneProceduralState {
@@ -21,7 +24,10 @@ export function createProceduralState(): DroneProceduralState {
     turretYaw: 0,
     turretPitch: 0,
     recoilAmount: 0,
+    recoilPhase: 'idle',
+    recoilTimer: 0,
     steerAngle: 0,
+    verticalBob: 0,
   };
 }
 
@@ -40,11 +46,11 @@ export function updateProceduralState(
   if (config.animations.includes('spin')) {
     state.spinAngle += dt * (config.propellerSpinRate ?? 20.0);
   }
+
+  if (state.accumulatedTime === undefined) state.accumulatedTime = 0;
+  state.accumulatedTime += dt;
   
   if (config.animations.includes('sway')) {
-    if (state.accumulatedTime === undefined) state.accumulatedTime = 0;
-    state.accumulatedTime += dt;
-
     const swayAmount = config.hoverSwayAmount ?? 0.05;
     const swaySpeed = config.hoverSwaySpeed ?? 2.0;
 
@@ -68,17 +74,53 @@ export function updateProceduralState(
 
     tempEuler.set(totalSwayX, 0, totalSwayZ);
     outSwayQuaternion.setFromEuler(tempEuler);
+
+    // Calculate vertical bob
+    const bobAmount = config.verticalBobAmount ?? 0.08;
+    const bobSpeed = config.verticalBobSpeed ?? 1.5;
+    state.verticalBob = Math.sin(state.accumulatedTime * bobSpeed) * bobAmount;
+  } else if (config.animations.includes('banking') || typeId === DroneType.FIXED_WING) {
+    const maxPitch = config.pitchAngle ?? 0.25;
+    const maxBank = config.bankingAngle ?? 0.35;
+    const velocityTiltX = Math.max(-maxPitch, Math.min(maxPitch, smoothedVelocity.z * 0.05));
+    const velocityTiltZ = Math.max(-maxBank, Math.min(maxBank, -smoothedVelocity.x * 0.05));
+    tempEuler.set(velocityTiltX, 0, velocityTiltZ);
+    outSwayQuaternion.setFromEuler(tempEuler);
+    state.verticalBob = 0;
   } else {
     outSwayQuaternion.identity();
+    state.verticalBob = 0;
   }
 
   if (config.animations.includes('wheels')) {
     state.wheelAngle += speed * dt * (config.wheelRollSpeed ?? 2.0);
   }
   
-  if (config.animations.includes('turret') || typeId === DroneType.ROTARY_SHOOTER) {
+  if (config.animations.includes('turret') || typeId === DroneType.ROTARY_SHOOTER || config.recoilDuration !== undefined) {
+    const kickDur = config.recoilDuration ?? 0.05;
     const recoverDur = config.recoilRecoverDuration ?? 0.20;
-    state.recoilAmount = Math.max(0, state.recoilAmount - dt * (1.0 / recoverDur));
+
+    if (state.recoilPhase === 'kick') {
+      state.recoilTimer = (state.recoilTimer ?? 0) + dt;
+      if (state.recoilTimer >= kickDur) {
+        state.recoilAmount = 1.0;
+        state.recoilPhase = 'recover';
+        state.recoilTimer = 0;
+      } else {
+        state.recoilAmount = state.recoilTimer / kickDur;
+      }
+    } else if (state.recoilPhase === 'recover') {
+      state.recoilTimer = (state.recoilTimer ?? 0) + dt;
+      if (state.recoilTimer >= recoverDur) {
+        state.recoilAmount = 0.0;
+        state.recoilPhase = 'idle';
+        state.recoilTimer = 0;
+      } else {
+        state.recoilAmount = 1.0 - (state.recoilTimer / recoverDur);
+      }
+    } else if (state.recoilAmount > 0) {
+      state.recoilAmount = Math.max(0, state.recoilAmount - dt * (1.0 / recoverDur));
+    }
   }
 
   if (config.animations.includes('steer')) {
@@ -160,6 +202,23 @@ export function applyNodeRotation(
       didRotate = true;
     } else if (nodeName === 'gun') {
       rOut.makeRotationZ(state.turretPitch);
+      didRotate = true;
+    }
+  }
+
+  if (config.animations.includes('banking') || typeId === DroneType.FIXED_WING) {
+    const nameLower = nodeName.toLowerCase();
+    if (nameLower.includes('aileron_l') || nameLower.includes('aileronleft')) {
+      rOut.makeRotationX(state.steerAngle * 0.5);
+      didRotate = true;
+    } else if (nameLower.includes('aileron_r') || nameLower.includes('aileronright')) {
+      rOut.makeRotationX(-state.steerAngle * 0.5);
+      didRotate = true;
+    } else if (nameLower.includes('elevator')) {
+      rOut.makeRotationX(state.turretPitch * 0.5);
+      didRotate = true;
+    } else if (nameLower.includes('rudder')) {
+      rOut.makeRotationY(state.steerAngle * 0.5);
       didRotate = true;
     }
   }

@@ -7,6 +7,7 @@ import { camera } from "./main";
 import { ZONE_BOUNDS, WAYPOINTS, ZONES_ARRAY } from "../shared/constants";
 import { GlobalState } from "./state";
 import { getMatch } from "./MatchController";
+import { DS } from "./design-system";
 import { PanZoomSurface } from "./src/ui/PanZoomSurface";
 import { CAMERA_EFFECTS_CONFIG } from "./src/camera/constants";
 
@@ -74,7 +75,7 @@ let devPhysicsPaused = false;
     if (playPauseBtn) {
         playPauseBtn.innerText = p ? "RESUME" : "PAUSE";
         playPauseBtn.style.background = p ? "#047857" : "#1f2937";
-        playPauseBtn.style.borderColor = p ? "#10b981" : "#4b5563";
+        playPauseBtn.style.borderColor = p ? "${DS.colors.success}" : "#4b5563";
     }
     const stepBtn = document.getElementById("dev-physics-step-one") as HTMLButtonElement;
     if (stepBtn) {
@@ -219,8 +220,8 @@ export function updateDevPerf(renderer: any, _time: number, now: number, logicTi
             const subRowsHtml = Object.entries(subs).map(([name, ms]: [string, any]) => {
                 const color = ms < 2 ? '#0f0' : ms < 5 ? '#ff0' : '#f00';
                 return `
-                    <div style="display:flex; justify-content:space-between; font-size:10px; margin-top:2px;">
-                        <span style="color:#aaa;">${name.toUpperCase()}:</span>
+                    <div style="display:flex; justify-content:space-between; font-size:9px; margin-top:2px;">
+                        <span style="color:${DS.colors.textMuted};">${name.toUpperCase()}:</span>
                         <span style="color:${color}; font-weight:bold;">${ms.toFixed(2)} ms</span>
                     </div>
                 `;
@@ -290,70 +291,70 @@ export function updateDevPerf(renderer: any, _time: number, now: number, logicTi
             accumRenderTime = 0;
             
             const spikesHtml = spikeLogs.length > 0 
-                ? spikeLogs.slice(-4).reverse().map(s => `<div style="color:#f33;">${s}</div>`).join("") 
-                : `<div style="color:#888;">No lag spikes detected in last session</div>`;
+                ? spikeLogs.slice(-4).reverse().map(s => `<div style="color:${DS.colors.danger};">${s}</div>`).join("") 
+                : `<div style="color:${DS.colors.textMuted};">No lag spikes detected in last session</div>`;
             
             el.innerHTML = `
-                <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
-                    <div style="font-weight:bold; color:#0ff; margin-bottom:5px;">[HARDWARE PERFORMANCE]</div>
-                    <div>FPS: <span style="color:#0f0; font-weight:bold;">${fps}</span> | CLIENT HEAP: <span style="color:white;">${mem}</span></div>
-                    <div>SERVER HEAP USED: <span style="color:white;">${serverMem?.heapUsedMb ? serverMem.heapUsedMb + ' MB' : 'N/A'}</span></div>
-                    <div>SERVER HEAP TOTAL: <span style="color:white;">${serverMem?.heapTotalMb ? serverMem.heapTotalMb + ' MB' : 'N/A'}</span></div>
-                    <div>MAX FRAME TIME: <span style="color:#ff8800; font-weight:bold;">${maxFrameTime.toFixed(1)} ms</span></div>
+                <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
+                    <div style="font-weight:bold; color:${DS.colors.accent}; margin-bottom:5px;">[HARDWARE PERFORMANCE]</div>
+                    <div>FPS: <span style="color:${DS.colors.success}; font-weight:bold;">${fps}</span> | CLIENT HEAP: <span style="color:${DS.colors.text};">${mem}</span></div>
+                    <div>SERVER HEAP USED: <span style="color:${DS.colors.text};">${serverMem?.heapUsedMb ? serverMem.heapUsedMb + ' MB' : 'N/A'}</span></div>
+                    <div>SERVER HEAP TOTAL: <span style="color:${DS.colors.text};">${serverMem?.heapTotalMb ? serverMem.heapTotalMb + ' MB' : 'N/A'}</span></div>
+                    <div>MAX FRAME TIME: <span style="color:${DS.colors.warning}; font-weight:bold;">${maxFrameTime.toFixed(1)} ms</span></div>
                     <div style="margin-top:5px; border-top:1px solid #222; padding-top:5px;">
-                        <div>AVG FRAME BUDGET: <span style="color:white; font-weight:bold;">${avgTotal.toFixed(1)} ms</span></div>
+                        <div>AVG FRAME BUDGET: <span style="color:${DS.colors.text}; font-weight:bold;">${avgTotal.toFixed(1)} ms</span></div>
                         <div style="display:flex; gap:10px; margin-top:3px;">
                             <div style="flex:1; background:#222; height:12px; border-radius:2px; overflow:hidden; display:flex;">
-                                <div style="background:#0cf; width:${Math.min(100, (avgLogic / 16.6) * 100)}%; height:100%;" title="Logic Time"></div>
-                                <div style="background:#f0c; width:${Math.min(100, (avgRender / 16.6) * 100)}%; height:100%;" title="Render Time"></div>
+                                <div style="background:${DS.colors.accent}; width:${Math.min(100, (avgLogic / 16.6) * 100)}%; height:100%;" title="Logic Time"></div>
+                                <div style="background:${DS.colors.dev}; width:${Math.min(100, (avgRender / 16.6) * 100)}%; height:100%;" title="Render Time"></div>
                             </div>
                         </div>
-                        <div style="display:flex; justify-content:space-between; font-size:10px; margin-top:2px;">
+                        <div style="display:flex; justify-content:space-between; font-size:9px; margin-top:2px;">
                             <span style="color:#0cf;">LOGIC: ${avgLogic.toFixed(1)} ms</span>
                             <span style="color:#f0c;">RENDER: ${avgRender.toFixed(1)} ms</span>
                         </div>
                     </div>
                     <div style="margin-top:10px; border-top:1px solid #222; padding-top:5px;">
-                        <div style="font-weight:bold; color:#0ff; font-size:10px; margin-bottom:5px;">[SUBSYSTEMS]</div>
+                        <div style="font-weight:bold; color:${DS.colors.accent}; font-size:9px; margin-bottom:5px;">[SUBSYSTEMS]</div>
                         ${subRowsHtml}
                     </div>
                 </div>
 
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; font-family:monospace; font-size:11px;">
-                    <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px;">
-                        <div style="font-weight:bold; color:#0f0; margin-bottom:5px;">[RESOURCE USAGE]</div>
-                        <div>GEOMETRIES: <span style="color:white;">${geom}</span></div>
-                        <div>TEXTURES: <span style="color:white;">${tex}</span></div>
-                        <div>DRAW CALLS (FR): <span style="color:white;">${avgCalls}</span></div>
-                        <div>TRIANGLES (FR): <span style="color:white;">${avgTris}</span></div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny};">
+                    <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm};">
+                        <div style="font-weight:bold; color:${DS.colors.success}; margin-bottom:5px;">[RESOURCE USAGE]</div>
+                        <div>GEOMETRIES: <span style="color:${DS.colors.text};">${geom}</span></div>
+                        <div>TEXTURES: <span style="color:${DS.colors.text};">${tex}</span></div>
+                        <div>DRAW CALLS (FR): <span style="color:${DS.colors.text};">${avgCalls}</span></div>
+                        <div>TRIANGLES (FR): <span style="color:${DS.colors.text};">${avgTris}</span></div>
                         <div style="margin-top:5px; font-weight:bold; color:${leakWarningActive ? '#f33' : '#0f0'};">
                             LEAK WATCH: ${leakWarningActive ? 'WARNING - SUSPECTED LEAK' : 'STABLE (PASS)'}
                         </div>
                     </div>
-                    <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px;">
-                        <div style="font-weight:bold; color:#f33; margin-bottom:5px;">[BOTTLENECK DIAGNOSIS]</div>
-                        <div>TOTAL LAG SPIKES: <span style="color:white;">${spikeLogs.length}</span></div>
+                    <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm};">
+                        <div style="font-weight:bold; color:${DS.colors.danger}; margin-bottom:5px;">[BOTTLENECK DIAGNOSIS]</div>
+                        <div>TOTAL LAG SPIKES: <span style="color:${DS.colors.text};">${spikeLogs.length}</span></div>
                         <div>LOGIC FAULTS: <span style="color:#0cf;">${logicTimeSpikes}</span></div>
                         <div>RENDER FAULTS: <span style="color:#f0c;">${renderTimeSpikes}</span></div>
-                        <div style="margin-top:5px; font-size:10px; color:#888;">
+                        <div style="margin-top:5px; font-size:9px; color:${DS.colors.textMuted};">
                             SPIKE RATE: ${spikeRatioDisplay}/sec
                         </div>
                     </div>
                 </div>
 
-                <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px;">
-                    <div style="font-weight:bold; color:#ff8800; margin-bottom:5px;">[LAG SPIKE LOG (LAST 4 EVENTS)]</div>
-                    <div style="line-height:1.4; font-size:10px;">${spikesHtml}</div>
+                <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny};">
+                    <div style="font-weight:bold; color:${DS.colors.warning}; margin-bottom:5px;">[LAG SPIKE LOG (LAST 4 EVENTS)]</div>
+                    <div style="line-height:1.4; font-size:9px;">${spikesHtml}</div>
                 </div>
 
-                <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-top:15px;">
-                    <div style="font-weight:bold; color:#0ff; margin-bottom:5px;">[FRAME BUDGET HISTORY — 60s]</div>
-                    <div style="position:relative; width:100%; height:80px; background:#000;">
+                <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-top:15px;">
+                    <div style="font-weight:bold; color:${DS.colors.accent}; margin-bottom:5px;">[FRAME BUDGET HISTORY — 60s]</div>
+                    <div style="position:relative; width:100%; height:80px; background:${DS.colors.background};">
                         <img src="${graphCanvas.toDataURL()}" style="width:100%; height:100%; image-rendering:pixelated;" />
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px;">
-                        <span style="color:#0ff;">CLIENT FRAME: ${avgTotal.toFixed(1)}ms</span>
-                        <span style="color:#f0f;">SERVER TICK: ${((window as any).devServerTickMs || 0).toFixed(1)}ms</span>
+                    <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:9px;">
+                        <span style="color:${DS.colors.accent};">CLIENT FRAME: ${avgTotal.toFixed(1)}ms</span>
+                        <span style="color:${DS.colors.dev};">SERVER TICK: ${((window as any).devServerTickMs || 0).toFixed(1)}ms</span>
                     </div>
                 </div>
             `.replace(/  +/g, '');
@@ -428,37 +429,37 @@ export function updateNetworkHUD() {
     let inStr = "";
     for (let i = 0; i < 10; i++) {
         const p = inboundPackets[(inboundIdx - 1 - i + 10) % 10];
-        if (p && p.time) inStr += `[${p.time}] <span style="color:#0f0;">${p.decoded}</span> (${p.raw} B)<br>`;
+        if (p && p.time) inStr += `[${p.time}] <span style="color:${DS.colors.success};">${p.decoded}</span> (${p.raw} B)<br>`;
     }
     let outStr = "";
     for (let i = 0; i < 10; i++) {
         const p = outboundPackets[(outboundIdx - 1 - i + 10) % 10];
-        if (p && p.time) outStr += `[${p.time}] <span style="color:#0ff;">${p.decoded}</span> (${p.raw} B)<br>`;
+        if (p && p.time) outStr += `[${p.time}] <span style="color:${DS.colors.accent};">${p.decoded}</span> (${p.raw} B)<br>`;
     }
 
     el.innerHTML = `
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px; background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny};">
             <div>
-                <div style="font-weight:bold; color:#0ff; margin-bottom:5px;">[CONNECTION TELEMETRY]</div>
-                <div>PING / RTT: <span style="color:#0f0; font-weight:bold;">${currentRTT} ms</span></div>
+                <div style="font-weight:bold; color:${DS.colors.accent}; margin-bottom:5px;">[CONNECTION TELEMETRY]</div>
+                <div>PING / RTT: <span style="color:${DS.colors.success}; font-weight:bold;">${currentRTT} ms</span></div>
                 <div>HEALTH: <span style="color:${currentRTT < 80 ? '#0f0' : '#f00'};">${currentRTT < 80 ? 'EXCELLENT' : currentRTT < 150 ? 'GOOD' : 'POOR'}</span></div>
-                <div>TOTAL RECV: <span style="color:white;">${(bytesReceivedTotal / 1024).toFixed(1)} KB</span> (${pktsReceivedTotal} pkts)</div>
+                <div>TOTAL RECV: <span style="color:${DS.colors.text};">${(bytesReceivedTotal / 1024).toFixed(1)} KB</span> (${pktsReceivedTotal} pkts)</div>
             </div>
             <div>
-                <div style="font-weight:bold; color:#f0f; margin-bottom:5px;">[BANDWIDTH DATA]</div>
-                <div>DOWNSTREAM: <span style="color:white; font-weight:bold;">${bandwidthInKB.toFixed(2)} KB/s</span> (${ppsIn} PPS)</div>
-                <div>UPSTREAM: <span style="color:white; font-weight:bold;">${bandwidthOutKB.toFixed(2)} KB/s</span> (${ppsOut} PPS)</div>
-                <div>TOTAL SENT: <span style="color:white;">${(bytesSentTotal / 1024).toFixed(1)} KB</span> (${pktsSentTotal} pkts)</div>
+                <div style="font-weight:bold; color:${DS.colors.dev}; margin-bottom:5px;">[BANDWIDTH DATA]</div>
+                <div>DOWNSTREAM: <span style="color:${DS.colors.text}; font-weight:bold;">${bandwidthInKB.toFixed(2)} KB/s</span> (${ppsIn} PPS)</div>
+                <div>UPSTREAM: <span style="color:${DS.colors.text}; font-weight:bold;">${bandwidthOutKB.toFixed(2)} KB/s</span> (${ppsOut} PPS)</div>
+                <div>TOTAL SENT: <span style="color:${DS.colors.text};">${(bytesSentTotal / 1024).toFixed(1)} KB</span> (${pktsSentTotal} pkts)</div>
             </div>
         </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
             <div>
-                <b style="color:#0f0; font-family:monospace;">RECENT INBOUND:</b>
-                <div style="background:#0a0a0a; border:1px solid #222; padding:8px; border-radius:4px; font-family:monospace; font-size:10px; line-height:1.4; height:180px; overflow-y:auto; margin-top:5px;">${inStr || "No packets logged"}</div>
+                <b style="color:${DS.colors.success}; font-family:${DS.typography.fontFamilyMono};">RECENT INBOUND:</b>
+                <div style="background:${DS.colors.background}; border:${DS.borders.thin} ${DS.colors.border}; padding:${DS.spacing.md}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:9px; line-height:1.4; height:180px; overflow-y:auto; margin-top:5px;">${inStr || "No packets logged"}</div>
             </div>
             <div>
-                <b style="color:#0ff; font-family:monospace;">RECENT OUTBOUND:</b>
-                <div style="background:#0a0a0a; border:1px solid #222; padding:8px; border-radius:4px; font-family:monospace; font-size:10px; line-height:1.4; height:180px; overflow-y:auto; margin-top:5px;">${outStr || "No packets logged"}</div>
+                <b style="color:${DS.colors.accent}; font-family:${DS.typography.fontFamilyMono};">RECENT OUTBOUND:</b>
+                <div style="background:${DS.colors.background}; border:${DS.borders.thin} ${DS.colors.border}; padding:${DS.spacing.md}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:9px; line-height:1.4; height:180px; overflow-y:auto; margin-top:5px;">${outStr || "No packets logged"}</div>
             </div>
         </div>
     `;
@@ -492,44 +493,44 @@ export function receivedLLMFeed(data: any) {
             
             let actionSummary = "";
             if (hasError) {
-                actionSummary = `<span style="color:#f33; font-weight:bold;">ERROR ENCOUNTERED</span>`;
+                actionSummary = `<span style="color:${DS.colors.danger}; font-weight:bold;">ERROR ENCOUNTERED</span>`;
             } else if (parsedCalls.length > 0) {
                 actionSummary = parsedCalls.map(c => {
                     if (!c) return "";
                     const name = c.name || "Unknown Tool";
                     const args = c.args ? JSON.stringify(c.args) : "";
-                    return `<div style="color:#0f0; margin-bottom:3px;">-> CALL: <b>${name}</b> ${args}</div>`;
+                    return `<div style="color:${DS.colors.success}; margin-bottom:3px;">-> CALL: <b>${name}</b> ${args}</div>`;
                 }).join("");
             } else {
-                actionSummary = `<span style="color:#888;">No active actions in last execution window</span>`;
+                actionSummary = `<span style="color:${DS.colors.textMuted};">No active actions in last execution window</span>`;
             }
 
             const failedList = data.failedOps && data.failedOps.length > 0
                 ? data.failedOps.map((op: any) => `<div style="color:#ff3333;">REJECTED: ${JSON.stringify(op)}</div>`).join("")
-                : `<span style="color:#888;">Zero command failures in last cycle</span>`;
+                : `<span style="color:${DS.colors.textMuted};">Zero command failures in last cycle</span>`;
 
             el.innerHTML = `
-                <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
-                    <div style="font-weight:bold; color:#0ff; margin-bottom:5px;">[LLM COMMANDER OVERVIEW]</div>
-                    <div>ACTIVE MODEL: <span style="color:white; font-weight:bold;">gemini-3.5-flash (Server-Authoritative)</span></div>
+                <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
+                    <div style="font-weight:bold; color:${DS.colors.accent}; margin-bottom:5px;">[LLM COMMANDER OVERVIEW]</div>
+                    <div>ACTIVE MODEL: <span style="color:${DS.colors.text}; font-weight:bold;">gemini-3.5-flash (Server-Authoritative)</span></div>
                     <div>RESPONSE STATUS: <span style="color:${hasError ? '#f33' : 'lime'}; font-weight:bold;">${hasError ? 'FAILED' : 'RESPONDED SUCCESSFULLY'}</span></div>
-                    <div>LATENCY: <span style="color:white;">${lastLatency} ms</span> | TOTAL CALLS: <span style="color:white;">${totalCallsCount}</span></div>
+                    <div>LATENCY: <span style="color:${DS.colors.text};">${lastLatency} ms</span> | TOTAL CALLS: <span style="color:${DS.colors.text};">${totalCallsCount}</span></div>
                 </div>
 
-                <div style="display:grid; grid-template-columns: 1fr; gap:15px; margin-bottom:15px; font-family:monospace; font-size:11px;">
-                    <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px;">
-                        <div style="font-weight:bold; color:#0f0; margin-bottom:5px;">[LATEST COMMANDER ACTIONS]</div>
-                        <div style="font-size:10px; line-height:1.4;">${actionSummary}</div>
+                <div style="display:grid; grid-template-columns: 1fr; gap:15px; margin-bottom:15px; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny};">
+                    <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm};">
+                        <div style="font-weight:bold; color:${DS.colors.success}; margin-bottom:5px;">[LATEST COMMANDER ACTIONS]</div>
+                        <div style="font-size:9px; line-height:1.4;">${actionSummary}</div>
                     </div>
-                    <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px;">
-                        <div style="font-weight:bold; color:#f33; margin-bottom:5px;">[FAILED OPERATIONS & REJECTIONS]</div>
-                        <div style="font-size:10px; line-height:1.4;">${failedList}</div>
+                    <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm};">
+                        <div style="font-weight:bold; color:${DS.colors.danger}; margin-bottom:5px;">[FAILED OPERATIONS & REJECTIONS]</div>
+                        <div style="font-size:9px; line-height:1.4;">${failedList}</div>
                     </div>
                 </div>
 
-                <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px;">
-                    <div style="font-weight:bold; color:#ff8800; margin-bottom:5px;">[RAW SEMANTIC ZONE STATE SENT TO AI]</div>
-                    <pre style="font-size:9px; max-height:150px; overflow-y:auto; background:#050505; padding:6px; border:1px solid #222; border-radius:3px; margin:0; color:#ccc;">${formattedPayload}</pre>
+                <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny};">
+                    <div style="font-weight:bold; color:${DS.colors.warning}; margin-bottom:5px;">[RAW SEMANTIC ZONE STATE SENT TO AI]</div>
+                    <pre style="font-size:9px; max-height:150px; overflow-y:auto; background:${DS.colors.background}; padding:6px; border:${DS.borders.thin} ${DS.colors.border}; border-radius:3px; margin:0; color:${DS.colors.textMuted};">${formattedPayload}</pre>
                 </div>
             `;
         }
@@ -562,12 +563,12 @@ function updateCheatsHUD() {
     }
 
     el.innerHTML = `
-        <div style="background:#111; padding:10px; border:1px solid #0f0; margin-bottom:15px; border-radius:4px; font-family:monospace; line-height: 1.5;">
-            <div style="font-weight:bold; color:#0ff; margin-bottom:5px;">[SPATIAL TELEMETRY]</div>
-            <div>POSITION: X: <span style="color:white;">${pPos ? pPos.x.toFixed(3) : "0.000"}</span> | Y: <span style="color:white;">${pPos ? pPos.y.toFixed(3) : "0.000"}</span> | Z: <span style="color:white;">${pPos ? pPos.z.toFixed(3) : "0.000"}</span></div>
-            <div>ROTATION: YAW: <span style="color:white;">${yawDeg}°</span> | PITCH: <span style="color:white;">${pitchDeg}°</span></div>
-            <div>VELOCITY: X: <span style="color:white;">${vel ? vel.x.toFixed(2) : "0.00"}</span> | Y: <span style="color:white;">${vel ? vel.y.toFixed(2) : "0.00"}</span> | Z: <span style="color:white;">${vel ? vel.z.toFixed(2) : "0.00"}</span> | SPEED: <span style="color:white;">${vel ? vel.length().toFixed(2) : "0.00"} m/s</span></div>
-            <div>CURRENT ZONE: <span style="color:#f0f; font-weight:bold;">${zoneName}</span></div>
+        <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} #0f0; margin-bottom:15px; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; line-height: 1.5;">
+            <div style="font-weight:bold; color:${DS.colors.accent}; margin-bottom:5px;">[SPATIAL TELEMETRY]</div>
+            <div>POSITION: X: <span style="color:${DS.colors.text};">${pPos ? pPos.x.toFixed(3) : "0.000"}</span> | Y: <span style="color:${DS.colors.text};">${pPos ? pPos.y.toFixed(3) : "0.000"}</span> | Z: <span style="color:${DS.colors.text};">${pPos ? pPos.z.toFixed(3) : "0.000"}</span></div>
+            <div>ROTATION: YAW: <span style="color:${DS.colors.text};">${yawDeg}°</span> | PITCH: <span style="color:${DS.colors.text};">${pitchDeg}°</span></div>
+            <div>VELOCITY: X: <span style="color:${DS.colors.text};">${vel ? vel.x.toFixed(2) : "0.00"}</span> | Y: <span style="color:${DS.colors.text};">${vel ? vel.y.toFixed(2) : "0.00"}</span> | Z: <span style="color:${DS.colors.text};">${vel ? vel.z.toFixed(2) : "0.00"}</span> | SPEED: <span style="color:${DS.colors.text};">${vel ? vel.length().toFixed(2) : "0.00"} m/s</span></div>
+            <div>CURRENT ZONE: <span style="color:${DS.colors.dev}; font-weight:bold;">${zoneName}</span></div>
         </div>
     `;
 }
@@ -603,10 +604,10 @@ function updateEntitiesHUD() {
                 let evHtml = "";
                 for (const t of telemetry) {
                     if (t.collisions && t.collisions.length > 0) {
-                        evHtml += `<div style="color:#f00;">Entity ${t.id} CONTACT WITH: ${t.collisions.join(", ")}</div>`;
+                        evHtml += `<div style="color:${DS.colors.danger};">Entity ${t.id} CONTACT WITH: ${t.collisions.join(", ")}</div>`;
                     }
                 }
-                evBoard.innerHTML = evHtml || `<div style="color:#888;">No recent player contact events.</div>`;
+                evBoard.innerHTML = evHtml || `<div style="color:${DS.colors.textMuted};">No recent player contact events.</div>`;
             }
         }
     } else {
@@ -614,7 +615,7 @@ function updateEntitiesHUD() {
         if (collMask) {
            collMask.innerText = "UNKNOWN";
            const evBoard = document.getElementById("dev-test-collision-events");
-           if (evBoard) evBoard.innerHTML = `<div style="color:#888;">No recent player contact events.</div>`;
+           if (evBoard) evBoard.innerHTML = `<div style="color:${DS.colors.textMuted};">No recent player contact events.</div>`;
         }
     }
 }
@@ -676,13 +677,13 @@ export function initDevMenu(channel: any, jitterMap: any) {
     // Construct DOM
     const btn = document.createElement("button");
     btn.innerText = "DEV";
-    btn.style.cssText = "position:absolute;top:10px;left:10px;z-index:999999;background:#f0f;color:white;font-weight:bold;padding:5px 10px;border:none;cursor:pointer;pointer-events:auto;";
+    btn.style.cssText = "position:absolute;top:10px;left:10px;z-index:999999;background:#f0f;color:${DS.colors.text};font-weight:bold;padding:${DS.spacing.sm} 10px;border:none;cursor:pointer;pointer-events:auto;";
     btn.onclick = () => toggleDevMenu();
     document.body.appendChild(btn);
 
     const overlay = document.createElement("div");
     overlay.id = "dev-overlay";
-    overlay.style.cssText = "display:none;position:absolute;inset:0;background:rgba(0,0,0,0.85);z-index:999998;pointer-events:auto;color:#0f0;font-family:monospace;padding:10px;flex-direction:column;";
+    overlay.style.cssText = "display:none;position:absolute;inset:0;background:${DS.shadows.overlay};z-index:999998;pointer-events:auto;color:${DS.colors.success};font-family:${DS.typography.fontFamilyMono};padding:${DS.spacing.md};flex-direction:column;";
     
     const tabs = ["VIS DIAG", "GAME CONTROL", "PHYSICS", "CHEATS", "WEPS", "CAM_FX", "CONSOLE", "LLM FEED", "AI NAV", "PERF", "NETWORK", "ZONES", "ENTITIES", "COLLISIONS"];
     const header = document.createElement("div");
@@ -690,7 +691,7 @@ export function initDevMenu(channel: any, jitterMap: any) {
     tabs.forEach(t => {
         const tb = document.createElement("button");
         tb.innerText = t;
-        tb.style.cssText = "background:#333;color:white;border:none;padding:5px 10px;cursor:pointer;";
+        tb.style.cssText = "background:${DS.colors.surface};color:${DS.colors.text};border:none;padding:${DS.spacing.sm} 10px;cursor:pointer;";
         tb.onclick = (e) => {
             e.stopPropagation();
             activePanel = t;
@@ -745,14 +746,14 @@ function renderPanel() {
         c.innerHTML = `
             <h3>Player Class</h3>
             <div id="dev-loadout-buttons" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 20px;">
-                <button data-class="assault" style="padding:5px;">Assault</button>
-                <button data-class="medic" style="padding:5px;">Medic</button>
-                <button data-class="recon" style="padding:5px;">Recon</button>
-                <button data-class="demolitions" style="padding:5px;">Demolitions</button>
+                <button data-class="assault" style="padding:${DS.spacing.sm};">Assault</button>
+                <button data-class="medic" style="padding:${DS.spacing.sm};">Medic</button>
+                <button data-class="recon" style="padding:${DS.spacing.sm};">Recon</button>
+                <button data-class="demolitions" style="padding:${DS.spacing.sm};">Demolitions</button>
             </div>
             <h3>LLM Commander</h3>
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button id="dev-toggle-llm" style="padding:5px;">${devLlmDisabled ? "ENABLE LLM COMMANDER" : "DISABLE LLM COMMANDER"}</button>
+                <button id="dev-toggle-llm" style="padding:${DS.spacing.sm};">${devLlmDisabled ? "ENABLE LLM COMMANDER" : "DISABLE LLM COMMANDER"}</button>
             </div>
         `;
         
@@ -778,68 +779,68 @@ function renderPanel() {
     }
     else if (activePanel === "ENTITIES") {
         c.innerHTML = `
-            <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
-                <div style="font-weight:bold; color:#0ff; margin-bottom:5px;">[ROW 1: VEXEA DRONE SPAWNING] <span style="cursor:help; color:#0cf; border:1px solid #0cf; border-radius:50%; padding:0 4px;" title="Spawns fully functional gameplay drones connected to the LLM Commander, full physics, and perception systems.">?</span></div>
+            <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
+                <div style="font-weight:bold; color:${DS.colors.accent}; margin-bottom:5px;">[ROW 1: VEXEA DRONE SPAWNING] <span style="cursor:help; color:#0cf; border:${DS.borders.thin} #0cf; border-radius:50%; padding:0 4px;" title="Spawns fully functional gameplay drones connected to the LLM Commander, full physics, and perception systems.">?</span></div>
                 <div id="dev-spawn-buttons" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 10px;">
-                    <button data-type="0" style="padding:5px;">Rotary Shooter</button>
-                    <button data-type="1" style="padding:5px;">Bomber</button>
-                    <button data-type="2" style="padding:5px;">Recon</button>
-                    <button data-type="3" style="padding:5px;">Fixed Wing</button>
-                    <button data-type="4" style="padding:5px;">Wheeled Drone</button>
-                    <button data-type="5" style="padding:5px;">Robot Dog</button>
-                    <button data-type="6" style="padding:5px;">Humanoid</button>
+                    <button data-type="0" style="padding:${DS.spacing.sm};">Rotary Shooter</button>
+                    <button data-type="1" style="padding:${DS.spacing.sm};">Bomber</button>
+                    <button data-type="2" style="padding:${DS.spacing.sm};">Recon</button>
+                    <button data-type="3" style="padding:${DS.spacing.sm};">Fixed Wing</button>
+                    <button data-type="4" style="padding:${DS.spacing.sm};">Wheeled Drone</button>
+                    <button data-type="5" style="padding:${DS.spacing.sm};">Robot Dog</button>
+                    <button data-type="6" style="padding:${DS.spacing.sm};">Humanoid</button>
                 </div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <button id="dev-clear-drones" style="padding:5px;">Clear All Drones</button>
-                    <button id="dev-spawn-bots" style="padding:5px;">Spawn 3 Test Bots</button>
+                    <button id="dev-clear-drones" style="padding:${DS.spacing.sm};">Clear All Drones</button>
+                    <button id="dev-spawn-bots" style="padding:${DS.spacing.sm};">Spawn 3 Test Bots</button>
                 </div>
             </div>
-            <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
-                <div style="font-weight:bold; color:#f0f; margin-bottom:5px;">[ROW 2: ISOLATED VEHICLE SPAWNING] <span style="cursor:help; color:#0cf; border:1px solid #0cf; border-radius:50%; padding:0 4px;" title="Spawns a dummy test entity (Type 99) with an isolated Yuka vehicle. Useful for testing raw steering behaviors and physics filters without LLM or gameplay interference.">?</span></div>
+            <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
+                <div style="font-weight:bold; color:${DS.colors.dev}; margin-bottom:5px;">[ROW 2: ISOLATED VEHICLE SPAWNING] <span style="cursor:help; color:#0cf; border:${DS.borders.thin} #0cf; border-radius:50%; padding:0 4px;" title="Spawns a dummy test entity (Type 99) with an isolated Yuka vehicle. Useful for testing raw steering behaviors and physics filters without LLM or gameplay interference.">?</span></div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <button id="dev-spawn-test-entity" style="padding:5px; background:#1e3a8a; border:1px solid #3b82f6; color:white;">Spawn Test Entity (Bare Yuka)</button>
-                    <button id="dev-clear-test-entities" style="padding:5px; background:#5c1d1d; border:1px solid #ef4444; color:white;">Clear All Test Entities</button>
+                    <button id="dev-spawn-test-entity" style="padding:${DS.spacing.sm}; background:${DS.colors.dev}; border:${DS.borders.thin} #3b82f6; color:${DS.colors.text};">Spawn Test Entity (Bare Yuka)</button>
+                    <button id="dev-clear-test-entities" style="padding:${DS.spacing.sm}; background:${DS.colors.danger}; border:${DS.borders.thin} ${DS.colors.danger}; color:${DS.colors.text};">Clear All Test Entities</button>
                 </div>
             </div>
-            <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
-                <div style="font-weight:bold; color:#ff8800; margin-bottom:5px;">[ROW 3: FSM/TASK-MODE CONTROLS] <span style="cursor:help; color:#0cf; border:1px solid #0cf; border-radius:50%; padding:0 4px;" title="Forces the test entity to switch states manually (e.g. NORMAL idling vs COMBAT mode), or sets a specific world-space target for steering.">?</span></div>
+            <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
+                <div style="font-weight:bold; color:${DS.colors.warning}; margin-bottom:5px;">[ROW 3: FSM/TASK-MODE CONTROLS] <span style="cursor:help; color:#0cf; border:${DS.borders.thin} #0cf; border-radius:50%; padding:0 4px;" title="Forces the test entity to switch states manually (e.g. NORMAL idling vs COMBAT mode), or sets a specific world-space target for steering.">?</span></div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-                    <button id="dev-test-mode-normal" style="padding:5px;">Force Mode: NORMAL</button>
-                    <button id="dev-test-mode-combat" style="padding:5px;">Force Mode: COMBAT</button>
+                    <button id="dev-test-mode-normal" style="padding:${DS.spacing.sm};">Force Mode: NORMAL</button>
+                    <button id="dev-test-mode-combat" style="padding:${DS.spacing.sm};">Force Mode: COMBAT</button>
                 </div>
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <input type="number" id="dev-target-x" value="0" style="width:50px; background:#222; color:white; border:1px solid #444;" />
-                    <input type="number" id="dev-target-y" value="0" style="width:50px; background:#222; color:white; border:1px solid #444;" />
-                    <input type="number" id="dev-target-z" value="0" style="width:50px; background:#222; color:white; border:1px solid #444;" />
-                    <button id="dev-test-assign-target" style="padding:5px;">Assign Target Position</button>
+                    <input type="number" id="dev-target-x" value="0" style="width:50px; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} #444;" />
+                    <input type="number" id="dev-target-y" value="0" style="width:50px; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} #444;" />
+                    <input type="number" id="dev-target-z" value="0" style="width:50px; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} #444;" />
+                    <button id="dev-test-assign-target" style="padding:${DS.spacing.sm};">Assign Target Position</button>
                 </div>
             </div>
 
-            <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
-                <div style="font-weight:bold; color:#0f0; margin-bottom:5px;">[ROW 4: PERCEPTION CONTROLS]</div>
+            <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
+                <div style="font-weight:bold; color:${DS.colors.success}; margin-bottom:5px;">[ROW 4: PERCEPTION CONTROLS]</div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <button id="dev-test-sight" style="padding:5px;">Trigger Simulated Sight</button>
-                    <button id="dev-test-sound" style="padding:5px;">Trigger Simulated Sound</button>
+                    <button id="dev-test-sight" style="padding:${DS.spacing.sm};">Trigger Simulated Sight</button>
+                    <button id="dev-test-sound" style="padding:${DS.spacing.sm};">Trigger Simulated Sound</button>
                 </div>
             </div>
 
-            <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
-                <div style="font-weight:bold; color:#ff0; margin-bottom:5px;">[ROW 5: LIVE DECISION DATA BOARD]</div>
-                <div id="dev-test-data-board" style="background:#000; padding:10px; height:150px; overflow-y:auto; border:1px solid #222;">
+            <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
+                <div style="font-weight:bold; color:${DS.colors.warning}; margin-bottom:5px;">[ROW 5: LIVE DECISION DATA BOARD]</div>
+                <div id="dev-test-data-board" style="background:${DS.colors.background}; padding:${DS.spacing.md}; height:150px; overflow-y:auto; border:${DS.borders.thin} ${DS.colors.border};">
                     Waiting for telemetry...
                 </div>
             </div>
 
-            <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
+            <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
                 <div style="font-weight:bold; color:#0cf; margin-bottom:5px;">[ROW 6: COLLISION TESTING CONTROLS]</div>
-                <div style="margin-bottom:10px; color:#ccc;">Hypothesis Toggles (Overrides Rapier Bitmask):</div>
+                <div style="margin-bottom:10px; color:${DS.colors.textMuted};">Hypothesis Toggles (Overrides Rapier Bitmask):</div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-                    <button id="dev-test-coll-player" style="padding:5px;">Group: Player-Only</button>
-                    <button id="dev-test-coll-world" style="padding:5px;">Group: World-Only</button>
-                    <button id="dev-test-coll-all" style="padding:5px;">Group: All</button>
+                    <button id="dev-test-coll-player" style="padding:${DS.spacing.sm};">Group: Player-Only</button>
+                    <button id="dev-test-coll-world" style="padding:${DS.spacing.sm};">Group: World-Only</button>
+                    <button id="dev-test-coll-all" style="padding:${DS.spacing.sm};">Group: All</button>
                 </div>
-                <div style="color:#ccc;">Current collision bitmask: <span id="dev-test-curr-coll" style="color:#fff; font-weight:bold;">UNKNOWN</span></div>
-                <div id="dev-test-collision-events" style="margin-top:10px; background:#000; padding:10px; height:60px; overflow-y:auto; border:1px solid #222;">
+                <div style="color:${DS.colors.textMuted};">Current collision bitmask: <span id="dev-test-curr-coll" style="color:#fff; font-weight:bold;">UNKNOWN</span></div>
+                <div id="dev-test-collision-events" style="margin-top:10px; background:${DS.colors.background}; padding:${DS.spacing.md}; height:60px; overflow-y:auto; border:${DS.borders.thin} ${DS.colors.border};">
                     No recent player contact events.
                 </div>
             </div>
@@ -933,60 +934,60 @@ function renderPanel() {
     }
     else if (activePanel === "PHYSICS") {
         c.innerHTML = `
-            <h2 style="color:#0f0; margin-top:0;">PHYSICS ENGINE CONTROL</h2>
+            <h2 style="color:${DS.colors.success}; margin-top:0;">PHYSICS ENGINE CONTROL</h2>
             
-            <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
-                <div style="font-weight:bold; color:#0ff; margin-bottom:10px;">[PACING & ENGINE PARAMETERS]</div>
+            <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
+                <div style="font-weight:bold; color:${DS.colors.accent}; margin-bottom:10px;">[PACING & ENGINE PARAMETERS]</div>
                 
                 <div style="margin-bottom:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <span style="color:#aaa;">SIMULATION STATE:</span>
-                    <button id="dev-physics-play-pause" style="padding:6px 12px; background:#1f2937; border:1px solid #4b5563; color:white; font-weight:bold; cursor:pointer; border-radius:4px; min-width:90px;">PAUSE</button>
-                    <button id="dev-physics-step-one" style="padding:6px 12px; background:#111827; border:1px solid #374151; color:#9ca3af; font-weight:bold; cursor:pointer; border-radius:4px;" disabled>STEP 1 FRAME</button>
+                    <span style="color:${DS.colors.textMuted};">SIMULATION STATE:</span>
+                    <button id="dev-physics-play-pause" style="padding:6px 12px; background:#1f2937; border:${DS.borders.thin} #4b5563; color:${DS.colors.text}; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm}; min-width:90px;">PAUSE</button>
+                    <button id="dev-physics-step-one" style="padding:6px 12px; background:${DS.colors.surface}827; border:${DS.borders.thin} #374151; color:#9ca3af; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm};" disabled>STEP 1 FRAME</button>
                 </div>
 
                 <div style="margin-bottom:12px;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <span style="color:#aaa;">SPEED MULTIPLIER (TIME DILATION):</span>
-                        <span id="dev-physics-speed-val" style="color:#0f0; font-weight:bold;">1.00x (Normal)</span>
+                        <span style="color:${DS.colors.textMuted};">SPEED MULTIPLIER (TIME DILATION):</span>
+                        <span id="dev-physics-speed-val" style="color:${DS.colors.success}; font-weight:bold;">1.00x (Normal)</span>
                     </div>
                     <div style="display:flex; gap:8px;">
-                        <button class="dev-physics-speed-preset" data-speed="0.1" style="padding:5px 8px; background:#1f2937; border:1px solid #4b5563; color:white; cursor:pointer; border-radius:3px; font-size:10px;">0.10x (Slowmo)</button>
-                        <button class="dev-physics-speed-preset" data-speed="0.25" style="padding:5px 8px; background:#1f2937; border:1px solid #4b5563; color:white; cursor:pointer; border-radius:3px; font-size:10px;">0.25x</button>
-                        <button class="dev-physics-speed-preset" data-speed="0.5" style="padding:5px 8px; background:#1f2937; border:1px solid #4b5563; color:white; cursor:pointer; border-radius:3px; font-size:10px;">0.50x</button>
-                        <button class="dev-physics-speed-preset" data-speed="1.0" style="padding:5px 8px; background:#111827; border:1px solid #3b82f6; color:#3b82f6; cursor:pointer; border-radius:3px; font-size:10px; font-weight:bold;">1.00x (Normal)</button>
-                        <button class="dev-physics-speed-preset" data-speed="2.0" style="padding:5px 8px; background:#1f2937; border:1px solid #4b5563; color:white; cursor:pointer; border-radius:3px; font-size:10px;">2.00x (Fast)</button>
+                        <button class="dev-physics-speed-preset" data-speed="0.1" style="padding:${DS.spacing.sm} 8px; background:#1f2937; border:${DS.borders.thin} #4b5563; color:${DS.colors.text}; cursor:pointer; border-radius:3px; font-size:9px;">0.10x (Slowmo)</button>
+                        <button class="dev-physics-speed-preset" data-speed="0.25" style="padding:${DS.spacing.sm} 8px; background:#1f2937; border:${DS.borders.thin} #4b5563; color:${DS.colors.text}; cursor:pointer; border-radius:3px; font-size:9px;">0.25x</button>
+                        <button class="dev-physics-speed-preset" data-speed="0.5" style="padding:${DS.spacing.sm} 8px; background:#1f2937; border:${DS.borders.thin} #4b5563; color:${DS.colors.text}; cursor:pointer; border-radius:3px; font-size:9px;">0.50x</button>
+                        <button class="dev-physics-speed-preset" data-speed="1.0" style="padding:${DS.spacing.sm} 8px; background:${DS.colors.surface}827; border:${DS.borders.thin} #3b82f6; color:#3b82f6; cursor:pointer; border-radius:3px; font-size:9px; font-weight:bold;">1.00x (Normal)</button>
+                        <button class="dev-physics-speed-preset" data-speed="2.0" style="padding:${DS.spacing.sm} 8px; background:#1f2937; border:${DS.borders.thin} #4b5563; color:${DS.colors.text}; cursor:pointer; border-radius:3px; font-size:9px;">2.00x (Fast)</button>
                     </div>
                 </div>
 
                 <div>
                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <span style="color:#aaa;">GRAVITY Y ACCELERATION:</span>
-                        <span id="dev-physics-gravity-val" style="color:#0f0; font-weight:bold;">-9.81 m/s²</span>
+                        <span style="color:${DS.colors.textMuted};">GRAVITY Y ACCELERATION:</span>
+                        <span id="dev-physics-gravity-val" style="color:${DS.colors.success}; font-weight:bold;">-9.81 m/s²</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <input type="range" id="dev-physics-gravity-slider" min="-25.0" max="5.0" step="0.5" value="-9.81" style="flex:1; cursor:pointer; background:#222; border:1px solid #444; border-radius:3px; height:6px;">
-                        <button id="dev-physics-gravity-reset" style="padding:5px 8px; background:#374151; border:1px solid #4b5563; color:white; cursor:pointer; border-radius:3px; font-size:10px; font-weight:bold;">RESET</button>
+                        <input type="range" id="dev-physics-gravity-slider" min="-25.0" max="5.0" step="0.5" value="-9.81" style="flex:1; cursor:pointer; background:#222; border:${DS.borders.thin} #444; border-radius:3px; height:6px;">
+                        <button id="dev-physics-gravity-reset" style="padding:${DS.spacing.sm} 8px; background:#374151; border:${DS.borders.thin} #4b5563; color:${DS.colors.text}; cursor:pointer; border-radius:3px; font-size:9px; font-weight:bold;">RESET</button>
                     </div>
                 </div>
             </div>
 
-            <div style="background:#111; padding:10px; border:1px solid #333; border-radius:4px; font-family:monospace; font-size:11px; margin-bottom:15px; line-height:1.4;">
-                <div style="font-weight:bold; color:#0ff; margin-bottom:5px;">[DEBUG OPERATIONS]</div>
+            <div style="background:${DS.colors.surface}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; margin-bottom:15px; line-height:1.4;">
+                <div style="font-weight:bold; color:${DS.colors.accent}; margin-bottom:5px;">[DEBUG OPERATIONS]</div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-                    <button id="dev-spawn-client-cube" style="padding:8px 12px; background:#1e3a8a; border:1px solid #3b82f6; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SPAWN CLIENT CUBE (Prediction)</button>
-                    <button id="dev-spawn-server-cube" style="padding:8px 12px; background:#5c1d1d; border:1px solid #ef4444; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SPAWN SERVER CUBE (Authoritative)</button>
-                    <button id="dev-spawn-both-cubes" style="padding:8px 12px; background:#b45309; border:1px solid #f59e0b; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SPAWN BOTH (Side-by-Side)</button>
-                    <button id="dev-clear-physics-cubes" style="padding:8px 12px; background:#374151; border:1px solid #4b5563; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">CLEAR ALL CUBES</button>
+                    <button id="dev-spawn-client-cube" style="padding:${DS.spacing.md} 12px; background:${DS.colors.dev}; border:${DS.borders.thin} #3b82f6; color:${DS.colors.text}; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm};">SPAWN CLIENT CUBE (Prediction)</button>
+                    <button id="dev-spawn-server-cube" style="padding:${DS.spacing.md} 12px; background:${DS.colors.danger}; border:${DS.borders.thin} ${DS.colors.danger}; color:${DS.colors.text}; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm};">SPAWN SERVER CUBE (Authoritative)</button>
+                    <button id="dev-spawn-both-cubes" style="padding:${DS.spacing.md} 12px; background:#b45309; border:${DS.borders.thin} #f59e0b; color:${DS.colors.text}; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm};">SPAWN BOTH (Side-by-Side)</button>
+                    <button id="dev-clear-physics-cubes" style="padding:${DS.spacing.md} 12px; background:#374151; border:${DS.borders.thin} #4b5563; color:${DS.colors.text}; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm};">CLEAR ALL CUBES</button>
                 </div>
                 <div style="font-weight:bold; color:#a855f7; margin-bottom:5px;">[COLLISION DIAGNOSTICS & TEST ENTITIES]</div>
                 <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-                    <button id="dev-spawn-frozen-drone" style="padding:8px 12px; background:#6b21a8; border:1px solid #a855f7; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SPAWN FROZEN DRONE (At Player)</button>
-                    <button id="dev-clear-frozen-drones" style="padding:8px 12px; background:#374151; border:1px solid #4b5563; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">CLEAR FROZEN DRONES</button>
+                    <button id="dev-spawn-frozen-drone" style="padding:${DS.spacing.md} 12px; background:#6b21a8; border:${DS.borders.thin} #a855f7; color:${DS.colors.text}; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm};">SPAWN FROZEN DRONE (At Player)</button>
+                    <button id="dev-clear-frozen-drones" style="padding:${DS.spacing.md} 12px; background:#374151; border:${DS.borders.thin} #4b5563; color:${DS.colors.text}; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm};">CLEAR FROZEN DRONES</button>
                 </div>
-                <div style="font-weight:bold; color:#ef4444; margin-bottom:5px;">[DISCONNECT / RECONNECT TEST (DISLOCATOR)]</div>
+                <div style="font-weight:bold; color:${DS.colors.danger}; margin-bottom:5px;">[DISCONNECT / RECONNECT TEST (DISLOCATOR)]</div>
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <button id="dev-simulate-disconnect" style="padding:8px 12px; background:#b91c1c; border:1px solid #ef4444; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">SIMULATE DISCONNECT (3s)</button>
-                    <span id="dev-disconnect-status" style="color:#10b981; font-weight:bold;">Status: Connected</span>
+                    <button id="dev-simulate-disconnect" style="padding:${DS.spacing.md} 12px; background:${DS.colors.danger}; border:${DS.borders.thin} ${DS.colors.danger}; color:${DS.colors.text}; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm};">SIMULATE DISCONNECT (3s)</button>
+                    <span id="dev-disconnect-status" style="color:${DS.colors.success}; font-weight:bold;">Status: Connected</span>
                 </div>
             </div>
 
@@ -1236,7 +1237,7 @@ function renderPanel() {
             <h2>Weapon Offsets</h2>
             ${renderSliders('rifle', offsets.rifle)}
             ${renderSliders('pistol', offsets.pistol)}
-            <button id="dev-export-weps" style="margin-top:20px; padding:10px; background:#0f0; color:black; font-weight:bold; border:none; cursor:pointer;">EXPORT JSON</button>
+            <button id="dev-export-weps" style="margin-top:20px; padding:${DS.spacing.md}; background:#0f0; color:black; font-weight:bold; border:none; cursor:pointer;">EXPORT JSON</button>
         `;
 
         const bindSliders = (type: string, data: any) => {
@@ -1284,13 +1285,13 @@ function renderPanel() {
     }
     else if (activePanel === "CAM_FX") {
         c.innerHTML = `
-            <div style="padding: 10px; font-family: monospace; color: #0f0;">
+            <div style="padding: ${DS.spacing.md}; font-family: ${DS.typography.fontFamilyMono}; color: #0f0;">
                 <h2 style="color: #0f0; margin-top: 0;">Camera & Viewmodel Effects Constants</h2>
                 <p style="color: #888; font-size: 11px; margin-bottom: 15px;">Tweak these settings to instantly adjust camera movement, bobbing, tilt, pulling back, and landing effects.</p>
                 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 20px;">
                     <!-- Movement Category -->
-                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                    <div style="background: #111; padding: ${DS.spacing.md}; border: ${DS.borders.thin} #333; border-radius: ${DS.borders.radius.sm};">
                         <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">MOVEMENT</h3>
                         <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
                             <span style="display: flex; justify-content: space-between;">
@@ -1309,7 +1310,7 @@ function renderPanel() {
                     </div>
 
                     <!-- Weapon Follow Category -->
-                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                    <div style="background: #111; padding: ${DS.spacing.md}; border: ${DS.borders.thin} #333; border-radius: ${DS.borders.radius.sm};">
                         <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">WEAPON FOLLOW</h3>
                         <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
                             <span style="display: flex; justify-content: space-between;">
@@ -1335,7 +1336,7 @@ function renderPanel() {
                     </div>
 
                     <!-- Head Bob Walk Category -->
-                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                    <div style="background: #111; padding: ${DS.spacing.md}; border: ${DS.borders.thin} #333; border-radius: ${DS.borders.radius.sm};">
                         <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">HEAD BOB (WALK)</h3>
                         <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
                             <span style="display: flex; justify-content: space-between;">
@@ -1368,7 +1369,7 @@ function renderPanel() {
                     </div>
 
                     <!-- Head Bob Sprint Category -->
-                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                    <div style="background: #111; padding: ${DS.spacing.md}; border: ${DS.borders.thin} #333; border-radius: ${DS.borders.radius.sm};">
                         <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">HEAD BOB (SPRINT)</h3>
                         <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
                             <span style="display: flex; justify-content: space-between;">
@@ -1401,7 +1402,7 @@ function renderPanel() {
                     </div>
 
                     <!-- General Bob Tuning -->
-                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                    <div style="background: #111; padding: ${DS.spacing.md}; border: ${DS.borders.thin} #333; border-radius: ${DS.borders.radius.sm};">
                         <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">GENERAL BOB / TILT</h3>
                         <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
                             <span style="display: flex; justify-content: space-between;">
@@ -1441,7 +1442,7 @@ function renderPanel() {
                     </div>
 
                     <!-- Pull Back & FOV Stretch & Landing -->
-                    <div style="background: #111; padding: 10px; border: 1px solid #333; border-radius: 4px;">
+                    <div style="background: #111; padding: ${DS.spacing.md}; border: ${DS.borders.thin} #333; border-radius: ${DS.borders.radius.sm};">
                         <h3 style="color: #0ff; margin-top: 0; border-bottom: 1px solid #222; padding-bottom: 5px;">PULLBACK / FOV / IMPACT</h3>
                         <label style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
                             <span style="display: flex; justify-content: space-between;">
@@ -1502,7 +1503,7 @@ function renderPanel() {
                     </div>
                 </div>
 
-                <button id="dev-export-camfx" style="padding: 10px 20px; background: #0f0; color: black; font-weight: bold; border: none; cursor: pointer; border-radius: 4px; font-family: monospace;">EXPORT CONFIG (JSON)</button>
+                <button id="dev-export-camfx" style="padding: ${DS.spacing.md} 20px; background: #0f0; color: black; font-weight: bold; border: none; cursor: pointer; border-radius: ${DS.borders.radius.sm}; font-family: ${DS.typography.fontFamilyMono};">EXPORT CONFIG (JSON)</button>
             </div>
         `;
 
@@ -1568,74 +1569,74 @@ function renderPanel() {
     }
     else if (activePanel === "CHEATS") {
         c.innerHTML = `
-            <h2 style="color:#0f0; margin-top:0;">DEVELOPER CHEAT SUITE</h2>
+            <h2 style="color:${DS.colors.success}; margin-top:0;">DEVELOPER CHEAT SUITE</h2>
             
             <!-- Real-Time Telemetry HUD -->
             <div id="dev-cheats-hud"></div>
 
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; margin-bottom:20px;">
                 <!-- Column 1: Cheats & Modifiers -->
-                <div style="background:#1a1a1a; padding:15px; border-radius:5px; border:1px solid #333; display:flex; flex-direction:column; gap:10px;">
-                    <h3 style="margin:0; color:#0ff; border-bottom:1px solid #333; padding-bottom:5px;">State Overrides</h3>
+                <div style="background:#1a1a1a; padding:15px; border-radius:5px; border:${DS.borders.thin} ${DS.colors.border}; display:flex; flex-direction:column; gap:10px;">
+                    <h3 style="margin:0; color:${DS.colors.accent}; border-bottom:1px solid #333; padding-bottom:5px;">State Overrides</h3>
                     
-                    <button id="cheat-toggle-fly" style="padding:10px; font-weight:bold; cursor:pointer; text-align:left; border:1px solid #333; border-radius:4px; font-family:monospace; background:${GlobalState.isFlying ? '#0f0; color:black;' : '#222; color:white;'}">
+                    <button id="cheat-toggle-fly" style="padding:${DS.spacing.md}; font-weight:bold; cursor:pointer; text-align:left; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; background:${GlobalState.isFlying ? '#0f0; color:black;' : '#222; color:${DS.colors.text};'}">
                         FLY MODE (NOCLIP): <span style="float:right;">${GlobalState.isFlying ? 'ON' : 'OFF'}</span>
                     </button>
                     
-                    <button id="cheat-toggle-god" style="padding:10px; font-weight:bold; cursor:pointer; text-align:left; border:1px solid #333; border-radius:4px; font-family:monospace; background:${GlobalState.godMode ? '#0f0; color:black;' : '#222; color:white;'}">
+                    <button id="cheat-toggle-god" style="padding:${DS.spacing.md}; font-weight:bold; cursor:pointer; text-align:left; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; background:${GlobalState.godMode ? '#0f0; color:black;' : '#222; color:${DS.colors.text};'}">
                         GOD MODE (INVINCIBLE): <span style="float:right;">${GlobalState.godMode ? 'ON' : 'OFF'}</span>
                     </button>
 
-                    <button id="cheat-toggle-ammo" style="padding:10px; font-weight:bold; cursor:pointer; text-align:left; border:1px solid #333; border-radius:4px; font-family:monospace; background:${GlobalState.infiniteAmmo ? '#0f0; color:black;' : '#222; color:white;'}">
+                    <button id="cheat-toggle-ammo" style="padding:${DS.spacing.md}; font-weight:bold; cursor:pointer; text-align:left; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; background:${GlobalState.infiniteAmmo ? '#0f0; color:black;' : '#222; color:${DS.colors.text};'}">
                         INFINITE AMMO: <span style="float:right;">${GlobalState.infiniteAmmo ? 'ON' : 'OFF'}</span>
                     </button>
 
-                    <h3 style="margin:10px 0 0 0; color:#0ff; border-bottom:1px solid #333; padding-bottom:5px;">Speed Manipulation</h3>
+                    <h3 style="margin:10px 0 0 0; color:${DS.colors.accent}; border-bottom:1px solid #333; padding-bottom:5px;">Speed Manipulation</h3>
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <label style="flex:1; font-family:monospace;">
-                            Multiplier: <span id="cheat-speed-val" style="color:white; font-weight:bold;">${GlobalState.speedMultiplier.toFixed(1)}x</span>
+                        <label style="flex:1; font-family:${DS.typography.fontFamilyMono};">
+                            Multiplier: <span id="cheat-speed-val" style="color:${DS.colors.text}; font-weight:bold;">${GlobalState.speedMultiplier.toFixed(1)}x</span>
                             <input type="range" id="cheat-speed-slider" min="0.5" max="10" step="0.5" value="${GlobalState.speedMultiplier}" style="width:100%; margin-top:5px; cursor:pointer;">
                         </label>
-                        <button id="cheat-speed-reset" style="padding:5px 10px; background:#444; color:white; border:none; cursor:pointer; border-radius:4px; margin-top:15px; font-family:monospace;">Reset</button>
+                        <button id="cheat-speed-reset" style="padding:${DS.spacing.sm} 10px; background:#444; color:${DS.colors.text}; border:none; cursor:pointer; border-radius:${DS.borders.radius.sm}; margin-top:15px; font-family:${DS.typography.fontFamilyMono};">Reset</button>
                     </div>
 
-                    <h3 style="margin:10px 0 0 0; color:#0ff; border-bottom:1px solid #333; padding-bottom:5px;">Health Overrides</h3>
-                    <div style="display:flex; gap:10px; align-items:center; font-family:monospace;">
-                        <input type="number" id="cheat-hp-input" value="100" style="width:70px; padding:6px; background:#222; color:white; border:1px solid #444; border-radius:4px;">
-                        <button id="cheat-hp-set" style="flex:1; padding:6px; background:#0ff; color:black; font-weight:bold; border:none; cursor:pointer; border-radius:4px;">SET HP</button>
-                        <button id="cheat-hp-max" style="padding:6px; background:#333; color:white; border:1px solid #444; cursor:pointer; border-radius:4px;">Max HP</button>
+                    <h3 style="margin:10px 0 0 0; color:${DS.colors.accent}; border-bottom:1px solid #333; padding-bottom:5px;">Health Overrides</h3>
+                    <div style="display:flex; gap:10px; align-items:center; font-family:${DS.typography.fontFamilyMono};">
+                        <input type="number" id="cheat-hp-input" value="100" style="width:70px; padding:6px; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} #444; border-radius:${DS.borders.radius.sm};">
+                        <button id="cheat-hp-set" style="flex:1; padding:6px; background:#0ff; color:black; font-weight:bold; border:none; cursor:pointer; border-radius:${DS.borders.radius.sm};">SET HP</button>
+                        <button id="cheat-hp-max" style="padding:6px; background:${DS.colors.surface}; color:${DS.colors.text}; border:${DS.borders.thin} #444; cursor:pointer; border-radius:${DS.borders.radius.sm};">Max HP</button>
                     </div>
                 </div>
 
                 <!-- Column 2: Teleport Waypoints -->
-                <div style="background:#1a1a1a; padding:15px; border-radius:5px; border:1px solid #333; display:flex; flex-direction:column; gap:10px;">
-                    <h3 style="margin:0; color:#0ff; border-bottom:1px solid #333; padding-bottom:5px;">Landmark Presets</h3>
+                <div style="background:#1a1a1a; padding:15px; border-radius:5px; border:${DS.borders.thin} ${DS.colors.border}; display:flex; flex-direction:column; gap:10px;">
+                    <h3 style="margin:0; color:${DS.colors.accent}; border-bottom:1px solid #333; padding-bottom:5px;">Landmark Presets</h3>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                        <button class="cheat-tp-preset" data-x="0" data-y="1.2" data-z="0" style="padding:8px; background:#222; color:white; border:1px solid #333; cursor:pointer; border-radius:4px; text-align:center; font-size:11px; font-family:monospace;">Bridge Core</button>
-                        <button class="cheat-tp-preset" data-x="35" data-y="1.2" data-z="50" style="padding:8px; background:#222; color:white; border:1px solid #333; cursor:pointer; border-radius:4px; text-align:center; font-size:11px; font-family:monospace;">Warehouse</button>
-                        <button class="cheat-tp-preset" data-x="-40" data-y="1.2" data-z="-100" style="padding:8px; background:#222; color:white; border:1px solid #333; cursor:pointer; border-radius:4px; text-align:center; font-size:11px; font-family:monospace;">Facility Gate</button>
-                        <button class="cheat-tp-preset" data-x="15" data-y="5" data-z="45" style="padding:8px; background:#222; color:white; border:1px solid #333; cursor:pointer; border-radius:4px; text-align:center; font-size:11px; font-family:monospace;">Elevated Bridge</button>
-                        <button class="cheat-tp-preset" data-x="-80" data-y="1.2" data-z="80" style="padding:8px; background:#222; color:white; border:1px solid #333; cursor:pointer; border-radius:4px; text-align:center; font-size:11px; font-family:monospace;">Storage Vault</button>
-                        <button class="cheat-tp-preset" data-x="110" data-y="1.2" data-z="-120" style="padding:8px; background:#222; color:white; border:1px solid #333; cursor:pointer; border-radius:4px; text-align:center; font-size:11px; font-family:monospace;">Loading Dock B</button>
+                        <button class="cheat-tp-preset" data-x="0" data-y="1.2" data-z="0" style="padding:${DS.spacing.md}; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} ${DS.colors.border}; cursor:pointer; border-radius:${DS.borders.radius.sm}; text-align:center; font-size:${DS.typography.tiny}; font-family:${DS.typography.fontFamilyMono};">Bridge Core</button>
+                        <button class="cheat-tp-preset" data-x="35" data-y="1.2" data-z="50" style="padding:${DS.spacing.md}; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} ${DS.colors.border}; cursor:pointer; border-radius:${DS.borders.radius.sm}; text-align:center; font-size:${DS.typography.tiny}; font-family:${DS.typography.fontFamilyMono};">Warehouse</button>
+                        <button class="cheat-tp-preset" data-x="-40" data-y="1.2" data-z="-100" style="padding:${DS.spacing.md}; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} ${DS.colors.border}; cursor:pointer; border-radius:${DS.borders.radius.sm}; text-align:center; font-size:${DS.typography.tiny}; font-family:${DS.typography.fontFamilyMono};">Facility Gate</button>
+                        <button class="cheat-tp-preset" data-x="15" data-y="5" data-z="45" style="padding:${DS.spacing.md}; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} ${DS.colors.border}; cursor:pointer; border-radius:${DS.borders.radius.sm}; text-align:center; font-size:${DS.typography.tiny}; font-family:${DS.typography.fontFamilyMono};">Elevated Bridge</button>
+                        <button class="cheat-tp-preset" data-x="-80" data-y="1.2" data-z="80" style="padding:${DS.spacing.md}; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} ${DS.colors.border}; cursor:pointer; border-radius:${DS.borders.radius.sm}; text-align:center; font-size:${DS.typography.tiny}; font-family:${DS.typography.fontFamilyMono};">Storage Vault</button>
+                        <button class="cheat-tp-preset" data-x="110" data-y="1.2" data-z="-120" style="padding:${DS.spacing.md}; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} ${DS.colors.border}; cursor:pointer; border-radius:${DS.borders.radius.sm}; text-align:center; font-size:${DS.typography.tiny}; font-family:${DS.typography.fontFamilyMono};">Loading Dock B</button>
                     </div>
 
-                    <h3 style="margin:10px 0 0 0; color:#0ff; border-bottom:1px solid #333; padding-bottom:5px;">Custom Coordinates</h3>
-                    <div style="display:flex; flex-direction:column; gap:8px; font-family:monospace;">
+                    <h3 style="margin:10px 0 0 0; color:${DS.colors.accent}; border-bottom:1px solid #333; padding-bottom:5px;">Custom Coordinates</h3>
+                    <div style="display:flex; flex-direction:column; gap:8px; font-family:${DS.typography.fontFamilyMono};">
                         <div style="display:flex; gap:5px;">
-                            <label style="flex:1;">X: <input type="number" id="cheat-tp-x" value="0" step="1" style="width:100%; padding:5px; background:#222; color:white; border:1px solid #444; border-radius:4px; font-family:monospace;"></label>
-                            <label style="flex:1;">Y: <input type="number" id="cheat-tp-y" value="1.2" step="1" style="width:100%; padding:5px; background:#222; color:white; border:1px solid #444; border-radius:4px; font-family:monospace;"></label>
-                            <label style="flex:1;">Z: <input type="number" id="cheat-tp-z" value="0" step="1" style="width:100%; padding:5px; background:#222; color:white; border:1px solid #444; border-radius:4px; font-family:monospace;"></label>
+                            <label style="flex:1;">X: <input type="number" id="cheat-tp-x" value="0" step="1" style="width:100%; padding:${DS.spacing.sm}; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} #444; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono};"></label>
+                            <label style="flex:1;">Y: <input type="number" id="cheat-tp-y" value="1.2" step="1" style="width:100%; padding:${DS.spacing.sm}; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} #444; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono};"></label>
+                            <label style="flex:1;">Z: <input type="number" id="cheat-tp-z" value="0" step="1" style="width:100%; padding:${DS.spacing.sm}; background:#222; color:${DS.colors.text}; border:${DS.borders.thin} #444; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono};"></label>
                         </div>
-                        <button id="cheat-tp-custom" style="padding:8px; background:#f0f; color:white; font-weight:bold; border:none; cursor:pointer; border-radius:4px; width:100%;">TELEPORT</button>
+                        <button id="cheat-tp-custom" style="padding:${DS.spacing.md}; background:#f0f; color:${DS.colors.text}; font-weight:bold; border:none; cursor:pointer; border-radius:${DS.borders.radius.sm}; width:100%;">TELEPORT</button>
                     </div>
 
-                    <h3 style="margin:10px 0 0 0; color:#f33; border-bottom:1px solid #522; padding-bottom:5px;">Tactical Operations</h3>
+                    <h3 style="margin:10px 0 0 0; color:${DS.colors.danger}; border-bottom:1px solid #522; padding-bottom:5px;">Tactical Operations</h3>
                     <div style="display:flex; flex-direction:column; gap:8px;">
-                        <button id="cheat-nuke-drones" style="padding:8px; background:#a00; color:white; font-weight:bold; border:none; cursor:pointer; border-radius:4px; width:100%; font-family:monospace;">NUKE ALL DRONES</button>
-                        <button id="cheat-kill-self" style="padding:8px; background:#c50; color:white; font-weight:bold; border:none; cursor:pointer; border-radius:4px; width:100%; font-family:monospace;">KILL SELF (TEST RESPAWN)</button>
+                        <button id="cheat-nuke-drones" style="padding:${DS.spacing.md}; background:#a00; color:${DS.colors.text}; font-weight:bold; border:none; cursor:pointer; border-radius:${DS.borders.radius.sm}; width:100%; font-family:${DS.typography.fontFamilyMono};">NUKE ALL DRONES</button>
+                        <button id="cheat-kill-self" style="padding:${DS.spacing.md}; background:#c50; color:${DS.colors.text}; font-weight:bold; border:none; cursor:pointer; border-radius:${DS.borders.radius.sm}; width:100%; font-family:${DS.typography.fontFamilyMono};">KILL SELF (TEST RESPAWN)</button>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:5px;">
-                            <button id="cheat-force-win" style="padding:8px; background:#0a0; color:white; font-weight:bold; border:none; cursor:pointer; border-radius:4px; font-size:10px; font-family:monospace;">FORCE PLAYER WIN</button>
-                            <button id="cheat-force-loss" style="padding:8px; background:#a0a; color:white; font-weight:bold; border:none; cursor:pointer; border-radius:4px; font-size:10px; font-family:monospace;">FORCE LLM WIN</button>
+                            <button id="cheat-force-win" style="padding:${DS.spacing.md}; background:#0a0; color:${DS.colors.text}; font-weight:bold; border:none; cursor:pointer; border-radius:${DS.borders.radius.sm}; font-size:9px; font-family:${DS.typography.fontFamilyMono};">FORCE PLAYER WIN</button>
+                            <button id="cheat-force-loss" style="padding:${DS.spacing.md}; background:#a0a; color:${DS.colors.text}; font-weight:bold; border:none; cursor:pointer; border-radius:${DS.borders.radius.sm}; font-size:9px; font-family:${DS.typography.fontFamilyMono};">FORCE LLM WIN</button>
                         </div>
                     </div>
                 </div>
@@ -1820,14 +1821,14 @@ function renderPanel() {
     else if (activePanel === "AI NAV") {
         c.innerHTML = `
             <div style="display:flex; flex-direction:column; height:100%; position:relative;">
-                <div id="ai-nav-controls" style="padding: 5px; background: #222; display: flex; gap: 10px;">
-                    <button id="dev-nav-reset" style="padding: 5px; cursor: pointer; font-family:monospace;">Reset View</button>
-                    <span style="color:#0f0; padding-top:5px;">Legend: <span style="color:#00AAFF">AIR</span> | <span style="color:#FF8800">GROUND</span> | <span style="color:#FFFF00">RECON</span></span>
+                <div id="ai-nav-controls" style="padding: ${DS.spacing.sm}; background: #222; display: flex; gap: 10px;">
+                    <button id="dev-nav-reset" style="padding: ${DS.spacing.sm}; cursor: pointer; font-family:${DS.typography.fontFamilyMono};">Reset View</button>
+                    <span style="color:${DS.colors.success}; padding-top:5px;">Legend: <span style="color:#00AAFF">AIR</span> | <span style="color:#FF8800">GROUND</span> | <span style="color:#FFFF00">RECON</span></span>
                 </div>
                 <div style="flex:1; position: relative; overflow:hidden;">
-                    <canvas id='dev-canvas' width='600' height='600' style='border:1px solid #0f0;width:100%;height:100%;object-fit:contain;touch-action:none;'></canvas>
-                    <div id="dev-nav-inspector" style="display:none; position:absolute; top:10px; right:10px; width:220px; background:rgba(0,0,0,0.9); border:1px solid #0ff; color:white; padding:10px; font-family:monospace; font-size:10px; pointer-events:auto;"></div>
-                    <div id="dev-nav-outlier" style="position:absolute; bottom:10px; left:10px; width:250px; background:rgba(0,0,0,0.8); border:1px solid #ff8800; color:white; padding:10px; font-family:monospace; font-size:10px; pointer-events:none;"></div>
+                    <canvas id='dev-canvas' width='600' height='600' style='border:${DS.borders.thin} #0f0;width:100%;height:100%;object-fit:contain;touch-action:none;'></canvas>
+                    <div id="dev-nav-inspector" style="display:none; position:absolute; top:10px; right:10px; width:220px; background:${DS.utils.rgba('#000000', 0.9)}; border:${DS.borders.thin} #0ff; color:${DS.colors.text}; padding:${DS.spacing.md}; font-family:${DS.typography.fontFamilyMono}; font-size:9px; pointer-events:auto;"></div>
+                    <div id="dev-nav-outlier" style="position:absolute; bottom:10px; left:10px; width:250px; background:${DS.utils.rgba('#000000', 0.8)}; border:${DS.borders.thin} #ff8800; color:${DS.colors.text}; padding:${DS.spacing.md}; font-family:${DS.typography.fontFamilyMono}; font-size:9px; pointer-events:none;"></div>
                 </div>
             </div>
         `;
@@ -1837,21 +1838,21 @@ function renderPanel() {
         c.innerHTML = (window as any).getVisualDiagnosisHTML ? (window as any).getVisualDiagnosisHTML() : "Loading...";
     }
     else if (activePanel === "ZONES") {
-        c.innerHTML = "<div id='dev-zones' style='white-space:pre-wrap;overflow-y:auto;height:100%; padding:10px;'></div>";
+        c.innerHTML = "<div id='dev-zones' style='white-space:pre-wrap;overflow-y:auto;height:100%; padding:${DS.spacing.md};'></div>";
     }
     else if (activePanel === "COLLISIONS") {
         c.innerHTML = `
             <div style="display:flex; flex-direction:column; height:100%;">
-                <div style="padding:10px; background:#111; border-bottom:1px solid #333;">
-                    <div id="dev-collision-telemetry" style="font-family:monospace; font-size:12px; line-height:1.4; color:#34d399; background:#000; padding:8px; border:1px solid #222; border-radius:4px;">
+                <div style="padding:${DS.spacing.md}; background:${DS.colors.surface}; border-bottom:1px solid #333;">
+                    <div id="dev-collision-telemetry" style="font-family:${DS.typography.fontFamilyMono}; font-size:12px; line-height:1.4; color:${DS.colors.success}; background:${DS.colors.background}; padding:${DS.spacing.md}; border:${DS.borders.thin} ${DS.colors.border}; border-radius:${DS.borders.radius.sm};">
                         Awaiting telemetry from server...
                     </div>
                 </div>
-                <div style="padding:10px; background:#222; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:bold; color:#f87171;">[OVERLAP LOG]</span>
-                    <button id="dev-clear-collisions" style="padding:4px 8px; background:#b91c1c; border:1px solid #ef4444; color:white; font-weight:bold; cursor:pointer; border-radius:4px;">CLEAR LOG</button>
+                <div style="padding:${DS.spacing.md}; background:#222; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:bold; color:${DS.colors.danger};">[OVERLAP LOG]</span>
+                    <button id="dev-clear-collisions" style="padding:4px 8px; background:${DS.colors.danger}; border:${DS.borders.thin} ${DS.colors.danger}; color:${DS.colors.text}; font-weight:bold; cursor:pointer; border-radius:${DS.borders.radius.sm};">CLEAR LOG</button>
                 </div>
-                <div id="dev-collisions" style="white-space:pre-wrap; overflow-y:auto; flex:1; padding:10px; font-family:monospace; font-size:11px; line-height:1.5; background:#000; color:#34d399;">No overlap detected yet. Active server-side geometric scans are running...</div>
+                <div id="dev-collisions" style="white-space:pre-wrap; overflow-y:auto; flex:1; padding:${DS.spacing.md}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny}; line-height:1.5; background:${DS.colors.background}; color:${DS.colors.success};">No overlap detected yet. Active server-side geometric scans are running...</div>
             </div>
         `;
         const clearBtn = document.getElementById("dev-clear-collisions");
@@ -2082,7 +2083,7 @@ function drawAINav() {
     if (!ctx) return;
     
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle = "rgba(0,50,0,1)";
+    ctx.fillStyle = "${DS.utils.rgba('#003200', 1)}";
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
     ctx.save();
@@ -2100,10 +2101,10 @@ function drawAINav() {
         const width = (bound.halfSize.x * 2) * scale;
         const height = (bound.halfSize.z * 2) * scale;
         
-        ctx.strokeStyle = (zoneName === lastInspectedZoneId) ? "rgba(255, 255, 0, 0.8)" : "rgba(0, 255, 0, 0.3)";
+        ctx.strokeStyle = (zoneName === lastInspectedZoneId) ? "${DS.utils.rgba('#FFFF00', 0.8)}" : "${DS.utils.rgba('#00FF00', 0.3)}";
         ctx.strokeRect(cx - width/2, cz - height/2, width, height);
         
-        ctx.fillStyle = (zoneName === lastInspectedZoneId) ? "rgba(255, 255, 0, 0.8)" : "rgba(0, 255, 0, 0.5)";
+        ctx.fillStyle = (zoneName === lastInspectedZoneId) ? "${DS.utils.rgba('#FFFF00', 0.8)}" : "${DS.utils.rgba('#00FF00', 0.5)}";
         ctx.fillText(zoneName, cx - width/2 + 5, cz - height/2 + 15);
     }
 
@@ -2172,7 +2173,7 @@ function drawAINav() {
                         if (i === 0) ctx.moveTo(tx, tz);
                         else ctx.lineTo(tx, tz);
                     }
-                    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+                    ctx.strokeStyle = "${DS.utils.rgba(DS.colors.text, 0.3)}";
                     ctx.stroke();
                 }
 
@@ -2193,7 +2194,7 @@ function drawAINav() {
                 if (lastInspectedZoneId && ZONE_BOUNDS[lastInspectedZoneId as any]) {
                     const b = ZONE_BOUNDS[lastInspectedZoneId as any];
                     if (Math.abs(head.posX - b.center.x) <= b.halfSize.x && Math.abs(head.posZ - b.center.z) <= b.halfSize.z) {
-                        ctx.strokeStyle = "rgba(255, 255, 0, 0.8)";
+                        ctx.strokeStyle = "${DS.utils.rgba('#FFFF00', 0.8)}";
                         ctx.beginPath();
                         ctx.arc(cx, cz, 6, 0, Math.PI*2);
                         ctx.stroke();
@@ -2226,10 +2227,10 @@ function drawAINav() {
                             DIVERGENCE: ${distDiff}<br/>
                             GROUP ID: ${(head as any).groupId || 'None'}<br/>
                             TARGET POS (Server): <br/> X: ${((head as any).targetX ?? 0).toFixed(2)}, Z: ${((head as any).targetZ ?? 0).toFixed(2)}<br/>
-                            <hr style="border:1px solid #444"/>
+                            <hr style="border:${DS.borders.thin} #444"/>
                             <b>YUKA MEMORY</b><br/>
                             ${memoryList}<br/>
-                            <hr style="border:1px solid #444"/>
+                            <hr style="border:${DS.borders.thin} #444"/>
                             <b>TRAIL BUFFER (Last 5)</b><br/>
                             ${trail.slice(-5).reverse().map(t => `[X: ${t.x.toFixed(1)}, Z: ${t.z.toFixed(1)}]`).join("<br/>")}
                         `;
@@ -2247,7 +2248,7 @@ function drawAINav() {
                         const tcz = (tz + offZ) * scale;
                         ctx.lineTo(tcx, tcz);
                         ctx.setLineDash([5, 5]);
-                        ctx.strokeStyle = "rgba(255, 0, 255, 0.8)";
+                        ctx.strokeStyle = "${DS.utils.rgba('#FF00FF', 0.8)}";
                         ctx.stroke();
                         ctx.setLineDash([]); // reset dash
                     }
@@ -2337,28 +2338,28 @@ function drawZones() {
 
             const livePresence = liveData.playerPresence || 'unknown';
             const snapPresence = snapData.playerPresence || 'unknown';
-            const presenceColor = livePresence !== snapPresence ? '#ff5555' : '#aaaaaa';
+            const presenceColor = livePresence !== snapPresence ? '${DS.colors.danger}' : '${DS.colors.textMuted}';
 
             html += `
-            <div style="border:1px solid #444; padding:10px; cursor:pointer; background:#222;" onclick="window.inspectZone('${zoneName}')">
-                <b style="color:#0f0">${zoneName}</b><br/>
+            <div style="border:${DS.borders.thin} #444; padding:${DS.spacing.md}; cursor:pointer; background:#222;" onclick="window.inspectZone('${zoneName}')">
+                <b style="color:${DS.colors.success}">${zoneName}</b><br/>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:5px;">
                     <div>
-                        <b style="color:#aaa">LIVE (Server Tick)</b><br/>
+                        <b style="color:${DS.colors.textMuted}">LIVE (Server Tick)</b><br/>
                         Presence: ${livePresence}<br/>
                         Combat: ${liveData.combatEffectiveness || 'N/A'}<br/>
                         Groups: ${groupsDisplay}<br/>
                         Updated: ${liveData.lastSeenTimestamp ? new Date(liveData.lastSeenTimestamp).toLocaleTimeString() : 'N/A'}
                     </div>
                     <div>
-                        <b style="color:#aaa">LLM BELIEF (Snapshot)</b><br/>
+                        <b style="color:${DS.colors.textMuted}">LLM BELIEF (Snapshot)</b><br/>
                         Presence: <span style="color:${presenceColor}">${snapPresence}</span><br/>
                         Combat: ${snapData.combatEffectiveness || 'N/A'}<br/>
                         Groups: ${(snapData.droneGroups && snapData.droneGroups.length > 0) ? snapData.droneGroups.join(", ") : 'None'}<br/>
                         Updated: ${snapData.lastSeenTimestamp ? new Date(snapData.lastSeenTimestamp).toLocaleTimeString() : 'N/A'}
                     </div>
                 </div>
-                <div style="margin-top:5px;"><i style="color:#888">(Click to view in AI NAV)</i></div>
+                <div style="margin-top:5px;"><i style="color:${DS.colors.textMuted}">(Click to view in AI NAV)</i></div>
             </div>
             `;
         }
@@ -2379,12 +2380,12 @@ function updatePhysicsPanelHUD() {
     const clientCube = (window as any).clientCubeTelemetry;
     const serverCube = (window as any).serverCubeTelemetry;
 
-    let clientEventsHtml = "<div style='color:#888;'>No events logged</div>";
+    let clientEventsHtml = "<div style='color:${DS.colors.textMuted};'>No events logged</div>";
     if (clientCube && clientCube.events && clientCube.events.length > 0) {
         clientEventsHtml = clientCube.events.slice().reverse().map((ev: string) => `<div>${ev}</div>`).join("");
     }
 
-    let serverEventsHtml = "<div style='color:#888;'>No events logged</div>";
+    let serverEventsHtml = "<div style='color:${DS.colors.textMuted};'>No events logged</div>";
     if (serverCube && serverCube.events && serverCube.events.length > 0) {
         serverEventsHtml = serverCube.events.slice().reverse().map((ev: string) => `<div>${ev}</div>`).join("");
     }
@@ -2397,72 +2398,72 @@ function updatePhysicsPanelHUD() {
         const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
         
         comparisonHtml = `
-            <div style="background:#151515; padding:10px; border:1px dashed #ffa500; border-radius:4px; font-family:monospace; margin-bottom:15px; font-size:11px;">
-                <div style="font-weight:bold; color:#ffa500; margin-bottom:3px;">[PHYSICS DRIFT DIAGNOSTIC]</div>
+            <div style="background:#151515; padding:${DS.spacing.md}; border:1px dashed ${DS.colors.accent}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; margin-bottom:15px; font-size:${DS.typography.tiny};">
+                <div style="font-weight:bold; color:${DS.colors.accent}; margin-bottom:3px;">[PHYSICS DRIFT DIAGNOSTIC]</div>
                 <div>Position Gap (Offset Distance): <span style="color:${dist < 0.1 ? 'lime' : dist < 1.0 ? 'yellow' : 'red'}; font-weight:bold;">${dist.toFixed(4)} meters</span></div>
-                <div style="color:#888; font-size:10px; margin-top:2px;">Compare client (pure-prediction local Rapier simulation) vs server (authoritative synced simulation). Any large gap indicates packet delay or world representation discrepancy.</div>
+                <div style="color:${DS.colors.textMuted}; font-size:9px; margin-top:2px;">Compare client (pure-prediction local Rapier simulation) vs server (authoritative synced simulation). Any large gap indicates packet delay or world representation discrepancy.</div>
             </div>
         `;
     }
 
     // New Collision Resolution State Diagnostic calculation
     const clientCols = (window as any).clientPlayerCollisions || [];
-    let clientCollisionsListHtml = "<div style='color:#64748b; font-style:italic;'>No active collision contacts</div>";
+    let clientCollisionsListHtml = "<div style='color:${DS.colors.textMuted}; font-style:italic;'>No active collision contacts</div>";
     if (clientCols.length > 0) {
         clientCollisionsListHtml = clientCols.map((c: string) => `<div style="color:#22d3ee; font-weight:bold;">💥 COLLIDING WITH: ${c}</div>`).join("");
     }
 
     const serverCols = (window as any).serverPlayerCollisions || [];
-    let serverCollisionsListHtml = "<div style='color:#94a3b8; font-style:italic;'>No active collision contacts</div>";
+    let serverCollisionsListHtml = "<div style='color:${DS.colors.textMuted}; font-style:italic;'>No active collision contacts</div>";
     if (serverCols.length > 0) {
-        serverCollisionsListHtml = serverCols.map((c: string) => `<div style="color:#ef4444; font-weight:bold;">💥 COLLIDING WITH: ${c}</div>`).join("");
+        serverCollisionsListHtml = serverCols.map((c: string) => `<div style="color:${DS.colors.danger}; font-weight:bold;">💥 COLLIDING WITH: ${c}</div>`).join("");
     }
 
     const collisionDiagnosticHtml = `
-        <div style="background:#0f172a; padding:12px; border:1px solid #334155; border-radius:6px; font-family:monospace; margin-bottom:15px; font-size:11px; line-height:1.4;">
-            <div style="font-weight:bold; color:#38bdf8; font-size:12px; margin-bottom:8px; border-bottom:1px solid #334155; padding-bottom:5px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="background:#0f172a; padding:12px; border:${DS.borders.thin} ${DS.colors.border}; border-radius:6px; font-family:${DS.typography.fontFamilyMono}; margin-bottom:15px; font-size:${DS.typography.tiny}; line-height:1.4;">
+            <div style="font-weight:bold; color:${DS.colors.dev}; font-size:12px; margin-bottom:8px; border-bottom:1px solid ${DS.colors.border}; padding-bottom:5px; display:flex; justify-content:space-between; align-items:center;">
                 <span>🛡️ PLAYER COLLISION RESOLUTION STATE DIAGNOSTIC</span>
-                <span style="font-size:10px; color:#94a3b8; font-weight:normal;">Genuinely Independent Dual Code-Paths</span>
+                <span style="font-size:9px; color:${DS.colors.textMuted}; font-weight:normal;">Genuinely Independent Dual Code-Paths</span>
             </div>
             
             <div style="display:flex; flex-wrap:wrap; gap:15px;">
                 <!-- Client-Side Collision Column -->
-                <div style="flex:1 1 280px; background:#020617; padding:10px; border:1px solid #1e293b; border-radius:4px;">
-                    <div style="font-weight:bold; color:#06b6d4; margin-bottom:6px; display:flex; justify-content:space-between;">
+                <div style="flex:1 1 280px; background:#020617; padding:${DS.spacing.md}; border:${DS.borders.thin} #1e293b; border-radius:${DS.borders.radius.sm};">
+                    <div style="font-weight:bold; color:${DS.colors.dev}; margin-bottom:6px; display:flex; justify-content:space-between;">
                         <span>[CLIENT RESOLUTION (PREDICTION)]</span>
-                        <span style="color:#10b981;">ACTIVE</span>
+                        <span style="color:${DS.colors.success};">ACTIVE</span>
                     </div>
-                    <div style="margin-bottom:8px; color:#94a3b8;">Source: <span style="color:#f472b6;">client/physics.worker.ts</span> (KCC query collisions log)</div>
+                    <div style="margin-bottom:8px; color:${DS.colors.textMuted};">Source: <span style="color:#f472b6;">client/physics.worker.ts</span> (KCC query collisions log)</div>
                     
-                    <div style="background:#090d16; border:1px solid #1e293b; padding:8px; border-radius:3px;">
-                        <div style="font-weight:bold; color:#94a3b8; margin-bottom:4px; font-size:10px;">CLIENT-SIDE CONTACTS:</div>
+                    <div style="background:#090d16; border:${DS.borders.thin} #1e293b; padding:${DS.spacing.md}; border-radius:3px;">
+                        <div style="font-weight:bold; color:${DS.colors.textMuted}; margin-bottom:4px; font-size:9px;">CLIENT-SIDE CONTACTS:</div>
                         ${clientCollisionsListHtml}
                     </div>
                     
-                    <div style="margin-top:10px; color:#94a3b8; font-size:10px; border-top:1px dashed #1e293b; padding-top:6px; display:grid; gap:3px;">
-                        <div>• Player vs Drone: <span style="color:#ef4444; font-weight:bold;">ABSENT</span> (Drones are NOT simulated in client local world)</div>
-                        <div>• Player vs Player: <span style="color:#ef4444; font-weight:bold;">ABSENT</span> (Other players NOT in client world)</div>
-                        <div>• Player vs Pred Cube: <span style="color:#10b981; font-weight:bold;">SUPPORTED</span> (Simulated in local Rapier)</div>
+                    <div style="margin-top:10px; color:${DS.colors.textMuted}; font-size:9px; border-top:1px dashed #1e293b; padding-top:6px; display:grid; gap:3px;">
+                        <div>• Player vs Drone: <span style="color:${DS.colors.danger}; font-weight:bold;">ABSENT</span> (Drones are NOT simulated in client local world)</div>
+                        <div>• Player vs Player: <span style="color:${DS.colors.danger}; font-weight:bold;">ABSENT</span> (Other players NOT in client world)</div>
+                        <div>• Player vs Pred Cube: <span style="color:${DS.colors.success}; font-weight:bold;">SUPPORTED</span> (Simulated in local Rapier)</div>
                     </div>
                 </div>
                 
                 <!-- Server-Side Collision Column -->
-                <div style="flex:1 1 280px; background:#090505; padding:10px; border:1px solid #3b0712; border-radius:4px;">
-                    <div style="font-weight:bold; color:#ef4444; margin-bottom:6px; display:flex; justify-content:space-between;">
+                <div style="flex:1 1 280px; background:#090505; padding:${DS.spacing.md}; border:${DS.borders.thin} #3b0712; border-radius:${DS.borders.radius.sm};">
+                    <div style="font-weight:bold; color:${DS.colors.danger}; margin-bottom:6px; display:flex; justify-content:space-between;">
                         <span>[SERVER RESOLUTION (AUTHORITATIVE)]</span>
-                        <span style="color:#10b981;">ACTIVE</span>
+                        <span style="color:${DS.colors.success};">ACTIVE</span>
                     </div>
                     <div style="margin-bottom:8px; color:#fca5a5;">Source: <span style="color:#f472b6;">server/MatchRoom.ts</span> (KCC player activeCollisions via state_sync)</div>
                     
-                    <div style="background:#1a080c; border:1px solid #3b0712; padding:8px; border-radius:3px;">
-                        <div style="font-weight:bold; color:#f87171; margin-bottom:4px; font-size:10px;">SERVER-SIDE CONTACTS:</div>
+                    <div style="background:#1a080c; border:${DS.borders.thin} #3b0712; padding:${DS.spacing.md}; border-radius:3px;">
+                        <div style="font-weight:bold; color:${DS.colors.danger}; margin-bottom:4px; font-size:9px;">SERVER-SIDE CONTACTS:</div>
                         ${serverCollisionsListHtml}
                     </div>
                     
-                    <div style="margin-top:10px; color:#f87171; font-size:10px; border-top:1px dashed #3b0712; padding-top:6px; display:grid; gap:3px;">
-                        <div>• Player vs Drone: <span style="color:#10b981; font-weight:bold;">FULLY SUPPORTED</span> (Authoritative)</div>
-                        <div>• Player vs Player: <span style="color:#10b981; font-weight:bold;">FULLY SUPPORTED</span> (Authoritative)</div>
-                        <div>• Player vs Auth Cube: <span style="color:#10b981; font-weight:bold;">FULLY SUPPORTED</span> (Authoritative)</div>
+                    <div style="margin-top:10px; color:${DS.colors.danger}; font-size:9px; border-top:1px dashed #3b0712; padding-top:6px; display:grid; gap:3px;">
+                        <div>• Player vs Drone: <span style="color:${DS.colors.success}; font-weight:bold;">FULLY SUPPORTED</span> (Authoritative)</div>
+                        <div>• Player vs Player: <span style="color:${DS.colors.success}; font-weight:bold;">FULLY SUPPORTED</span> (Authoritative)</div>
+                        <div>• Player vs Auth Cube: <span style="color:${DS.colors.success}; font-weight:bold;">FULLY SUPPORTED</span> (Authoritative)</div>
                     </div>
                 </div>
             </div>
@@ -2474,33 +2475,33 @@ function updatePhysicsPanelHUD() {
         ${comparisonHtml}
         <div style="display:flex; flex-wrap:wrap; gap:15px;">
             <!-- Client Cube column -->
-            <div style="flex: 1 1 280px; background:#0b111e; padding:12px; border:1px solid #1e3a8a; border-radius:4px; font-family:monospace; font-size:11px;">
-                <div style="font-weight:bold; color:#38bdf8; border-bottom:1px solid #1e3a8a; padding-bottom:5px; margin-bottom:8px; display:flex; justify-content:space-between;">
+            <div style="flex: 1 1 280px; background:#0b111e; padding:12px; border:${DS.borders.thin} ${DS.colors.dev}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny};">
+                <div style="font-weight:bold; color:${DS.colors.dev}; border-bottom:1px solid ${DS.colors.dev}; padding-bottom:5px; margin-bottom:8px; display:flex; justify-content:space-between;">
                     <span>[CLIENT LOCAL RAPIER]</span>
-                    <span style="color:${clientCube ? '#34d399' : '#f87171'}">${clientCube ? 'SPAWNED' : 'INACTIVE'}</span>
+                    <span style="color:${clientCube ? '${DS.colors.success}' : '${DS.colors.danger}'}">${clientCube ? 'SPAWNED' : 'INACTIVE'}</span>
                 </div>
-                <div>Position: X: <span style="color:white;">${clientCube ? clientCube.pos.x.toFixed(3) : '0.000'}</span> | Y: <span style="color:white;">${clientCube ? clientCube.pos.y.toFixed(3) : '0.000'}</span> | Z: <span style="color:white;">${clientCube ? clientCube.pos.z.toFixed(3) : '0.000'}</span></div>
-                <div>Velocity: X: <span style="color:white;">${clientCube ? clientCube.vel.x.toFixed(2) : '0.00'}</span> | Y: <span style="color:white;">${clientCube ? clientCube.vel.y.toFixed(2) : '0.00'}</span> | Z: <span style="color:white;">${clientCube ? clientCube.vel.z.toFixed(2) : '0.00'}</span></div>
-                <div>Speed: <span style="color:white;">${clientCube ? Math.sqrt(clientCube.vel.x*clientCube.vel.x + clientCube.vel.y*clientCube.vel.y + clientCube.vel.z*clientCube.vel.z).toFixed(2) : '0.00'} m/s</span></div>
+                <div>Position: X: <span style="color:${DS.colors.text};">${clientCube ? clientCube.pos.x.toFixed(3) : '0.000'}</span> | Y: <span style="color:${DS.colors.text};">${clientCube ? clientCube.pos.y.toFixed(3) : '0.000'}</span> | Z: <span style="color:${DS.colors.text};">${clientCube ? clientCube.pos.z.toFixed(3) : '0.000'}</span></div>
+                <div>Velocity: X: <span style="color:${DS.colors.text};">${clientCube ? clientCube.vel.x.toFixed(2) : '0.00'}</span> | Y: <span style="color:${DS.colors.text};">${clientCube ? clientCube.vel.y.toFixed(2) : '0.00'}</span> | Z: <span style="color:${DS.colors.text};">${clientCube ? clientCube.vel.z.toFixed(2) : '0.00'}</span></div>
+                <div>Speed: <span style="color:${DS.colors.text};">${clientCube ? Math.sqrt(clientCube.vel.x*clientCube.vel.x + clientCube.vel.y*clientCube.vel.y + clientCube.vel.z*clientCube.vel.z).toFixed(2) : '0.00'} m/s</span></div>
                 
-                <div style="font-weight:bold; color:#38bdf8; margin-top:12px; margin-bottom:5px;">[LOCAL EVENT CHRONOLOGY]</div>
-                <div style="background:#030712; border:1px solid #1e3a8a; padding:6px; border-radius:3px; max-height:140px; overflow-y:auto; line-height:1.4; font-size:10px; word-break:break-all;">
+                <div style="font-weight:bold; color:${DS.colors.dev}; margin-top:12px; margin-bottom:5px;">[LOCAL EVENT CHRONOLOGY]</div>
+                <div style="background:#030712; border:${DS.borders.thin} ${DS.colors.dev}; padding:6px; border-radius:3px; max-height:140px; overflow-y:auto; line-height:1.4; font-size:9px; word-break:break-all;">
                     ${clientEventsHtml}
                 </div>
             </div>
 
             <!-- Server Cube column -->
-            <div style="flex: 1 1 280px; background:#1e0f0f; padding:12px; border:1px solid #5c1d1d; border-radius:4px; font-family:monospace; font-size:11px;">
-                <div style="font-weight:bold; color:#f87171; border-bottom:1px solid #5c1d1d; padding-bottom:5px; margin-bottom:8px; display:flex; justify-content:space-between;">
+            <div style="flex: 1 1 280px; background:#1e0f0f; padding:12px; border:${DS.borders.thin} ${DS.colors.danger}; border-radius:${DS.borders.radius.sm}; font-family:${DS.typography.fontFamilyMono}; font-size:${DS.typography.tiny};">
+                <div style="font-weight:bold; color:${DS.colors.danger}; border-bottom:1px solid ${DS.colors.danger}; padding-bottom:5px; margin-bottom:8px; display:flex; justify-content:space-between;">
                     <span>[SERVER AUTHORITATIVE]</span>
-                    <span style="color:${serverCube ? '#34d399' : '#f87171'}">${serverCube ? 'SPAWNED' : 'INACTIVE'}</span>
+                    <span style="color:${serverCube ? '${DS.colors.success}' : '${DS.colors.danger}'}">${serverCube ? 'SPAWNED' : 'INACTIVE'}</span>
                 </div>
-                <div>Position: X: <span style="color:white;">${serverCube ? serverCube.x.toFixed(3) : '0.000'}</span> | Y: <span style="color:white;">${serverCube ? serverCube.y.toFixed(3) : '0.000'}</span> | Z: <span style="color:white;">${serverCube ? serverCube.z.toFixed(3) : '0.000'}</span></div>
-                <div>Velocity: X: <span style="color:white;">${serverCube ? serverCube.vx.toFixed(2) : '0.00'}</span> | Y: <span style="color:white;">${serverCube ? serverCube.vy.toFixed(2) : '0.00'}</span> | Z: <span style="color:white;">${serverCube ? serverCube.vz.toFixed(2) : '0.00'}</span></div>
-                <div>Speed: <span style="color:white;">${serverCube ? Math.sqrt(serverCube.vx*serverCube.vx + serverCube.vy*serverCube.vy + serverCube.vz*serverCube.vz).toFixed(2) : '0.00'} m/s</span></div>
+                <div>Position: X: <span style="color:${DS.colors.text};">${serverCube ? serverCube.x.toFixed(3) : '0.000'}</span> | Y: <span style="color:${DS.colors.text};">${serverCube ? serverCube.y.toFixed(3) : '0.000'}</span> | Z: <span style="color:${DS.colors.text};">${serverCube ? serverCube.z.toFixed(3) : '0.000'}</span></div>
+                <div>Velocity: X: <span style="color:${DS.colors.text};">${serverCube ? serverCube.vx.toFixed(2) : '0.00'}</span> | Y: <span style="color:${DS.colors.text};">${serverCube ? serverCube.vy.toFixed(2) : '0.00'}</span> | Z: <span style="color:${DS.colors.text};">${serverCube ? serverCube.vz.toFixed(2) : '0.00'}</span></div>
+                <div>Speed: <span style="color:${DS.colors.text};">${serverCube ? Math.sqrt(serverCube.vx*serverCube.vx + serverCube.vy*serverCube.vy + serverCube.vz*serverCube.vz).toFixed(2) : '0.00'} m/s</span></div>
                 
-                <div style="font-weight:bold; color:#f87171; margin-top:12px; margin-bottom:5px;">[SERVER EVENT CHRONOLOGY]</div>
-                <div style="background:#0a0505; border:1px solid #5c1d1d; padding:6px; border-radius:3px; max-height:140px; overflow-y:auto; line-height:1.4; font-size:10px; word-break:break-all;">
+                <div style="font-weight:bold; color:${DS.colors.danger}; margin-top:12px; margin-bottom:5px;">[SERVER EVENT CHRONOLOGY]</div>
+                <div style="background:#0a0505; border:${DS.borders.thin} ${DS.colors.danger}; padding:6px; border-radius:3px; max-height:140px; overflow-y:auto; line-height:1.4; font-size:9px; word-break:break-all;">
                     ${serverEventsHtml}
                 </div>
             </div>

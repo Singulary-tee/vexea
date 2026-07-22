@@ -68,7 +68,7 @@ export function initHitsVFX(scene: THREE.Scene, config: any) {
   const sparkUV = uv().sub(vec2(0.5, 0.5));
   const sparkDist = tslLength(sparkUV).mul(float(2.0));
   const sparkCore = smoothstep(float(1.0), float(0.0), sparkDist);
-  const sparkAmber = vec4(1.0, 0.533, 0.165, 0.0);
+  const sparkAmber = vec4(1.0, 0.27, 0.0, 0.0); // DS.colors.accent normalized
   const sparkWhite = vec4(1.0, 1.0, 1.0, 0.0);
   const sparkColor = mix(sparkAmber, sparkWhite, smoothstep(float(0.3), float(0.0), sparkDist));
   sparkMat.colorNode = vec4(sparkColor.x, sparkColor.y, sparkColor.z, sparkCore);
@@ -163,37 +163,12 @@ export function initHitsVFX(scene: THREE.Scene, config: any) {
     _scene.add(decalBatch);
   }
 
-  // Setup Impact PointLights Pool
+  // Setup Impact PointLights Pool (Removed per user request)
   impactLightsPool.length = 0;
-  for (let i = 0; i < IMPACT_LIGHT_COUNT; i++) {
-    const light = new THREE.PointLight(0xFFB040, 0, 5); // gold-yellow warm light, range 5m
-    light.visible = false;
-    _scene.add(light);
-    impactLightsPool.push({
-      light,
-      life: 0,
-      maxLife: 0.15, // decay over 0.15 seconds
-    });
-  }
 }
 
 export function triggerImpactPointLight(x: number, y: number, z: number, intensity: number = 8.0) {
-  let inst: ImpactLight | null = null;
-  for (let i = 0; i < IMPACT_LIGHT_COUNT; i++) {
-    if (impactLightsPool[i].life <= 0) {
-      inst = impactLightsPool[i];
-      break;
-    }
-  }
-  if (!inst && impactLightsPool.length > 0) {
-    inst = impactLightsPool[0]; // fallback
-  }
-  if (inst) {
-    inst.light.position.set(x, y, z);
-    inst.light.intensity = intensity;
-    inst.light.visible = true;
-    inst.life = inst.maxLife;
-  }
+  // Removed per user request
 }
 
 export function spawnImpactSparks(x: number, y: number, z: number, count: number, nx: number = 0, ny: number = 1, nz: number = 0) {
@@ -296,8 +271,7 @@ export function spawnEnvironmentDecalAndDust(ix: number, iy: number, iz: number,
     }
   }
 
-  // Trigger brief point light on impact for mandatory real-time lighting feedback
-  triggerImpactPointLight(ix + _hitNormal.x * 0.1, iy + _hitNormal.y * 0.1, iz + _hitNormal.z * 0.1, 8.0);
+  // Removed impact point light trigger per user request
 }
 
 export function updateHitsVFX(deltaTime: number, camera: THREE.PerspectiveCamera) {
@@ -374,21 +348,6 @@ export function updateHitsVFX(deltaTime: number, camera: THREE.PerspectiveCamera
     }
   }
 
-  // Update Impact PointLights Pool
-  for (let i = 0; i < impactLightsPool.length; i++) {
-    const inst = impactLightsPool[i];
-    if (inst.life > 0) {
-      inst.life -= deltaTime;
-      if (inst.life <= 0) {
-        inst.light.visible = false;
-        inst.light.intensity = 0;
-      } else {
-        const progress = inst.life / inst.maxLife; // 1.0 -> 0.0
-        inst.light.intensity = 8.0 * progress;
-      }
-    }
-  }
-
   // Mark Decal update needed
   if (decalBatch && (decalBatch as any).instanceMatrix) {
     (decalBatch as any).instanceMatrix.needsUpdate = true;
@@ -408,9 +367,5 @@ export function clearHitsVFX() {
     for (let i = 0; i < decalSlotsCount; i++) decalBatch.setVisibleAt(decalInstIds[i], false);
     decalIndex = 0;
   }
-  for (let i = 0; i < impactLightsPool.length; i++) {
-    impactLightsPool[i].life = 0;
-    impactLightsPool[i].light.visible = false;
-    impactLightsPool[i].light.intensity = 0;
-  }
+  // Impact light clearing removed per user request
 }

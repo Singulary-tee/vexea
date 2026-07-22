@@ -1,5 +1,6 @@
 import * as THREE from "three/webgpu";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DS } from "./design-system";
 import { getCachedOrFetchUrl } from "./asset-cache";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { DRONE_CONFIGS, DroneType } from "../shared/constants";
@@ -24,6 +25,7 @@ export interface DroneNode {
   modelPivot?: THREE.Vector3;
   localPivot?: THREE.Vector3;
   baseInvWorldMatrix?: THREE.Matrix4;
+  baseWorldMatrix?: THREE.Matrix4;
 }
 
 export async function initDroneModels(scene: THREE.Scene): Promise<void> {
@@ -71,6 +73,28 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
         });
         gltf.scene.updateMatrixWorld(true);
 
+        const targetRadius = config ? config.visualRadius : undefined;
+        let scaleFactor = 1.0;
+        if (targetRadius) {
+            let bodyMesh: any = null;
+            gltf.scene.traverse((child: any) => {
+                if (child.isMesh && (!bodyMesh || child.name.toLowerCase().includes('body'))) {
+                    bodyMesh = child;
+                }
+            });
+            if (bodyMesh && bodyMesh.geometry) {
+                bodyMesh.geometry.computeBoundingBox();
+                const sphere = new THREE.Sphere();
+                if (bodyMesh.geometry.boundingBox) bodyMesh.geometry.boundingBox.getBoundingSphere(sphere);
+                const currentRadius = sphere.radius || 1.0;
+                scaleFactor = targetRadius / currentRadius;
+            }
+            if (scaleFactor !== 1.0) {
+                gltf.scene.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                gltf.scene.updateMatrixWorld(true);
+            }
+        }
+
         let meshCounter = 0;
         
         gltf.scene.traverse((child: any) => {
@@ -91,9 +115,16 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
 
           const parentNameLower = child.parent && child.parent !== gltf.scene ? child.parent.name.toLowerCase() : '';
           const isPropellerMesh = child.isMesh && (parentNameLower.includes('prop') && parentNameLower !== 'prop');
-          if (isPropellerMesh && config && config.propellerOffset) {
-              const mirrorX = config.propellerOffset[0];
-              const mirrorZ = config.propellerOffset[1];
+          if (isPropellerMesh && config) {
+              let mirrorX = 0.5;
+              let mirrorZ = 0.5;
+              if (config.propellerOffset) {
+                  mirrorX = config.propellerOffset[0];
+                  mirrorZ = config.propellerOffset[1];
+              } else if (config.propPivotX !== undefined && config.propPivotZ !== undefined) {
+                  mirrorX = config.propPivotX;
+                  mirrorZ = config.propPivotZ;
+              }
               let px = 0;
               let pz = 0;
               if (pivot.x < 0 && pivot.z > 0) {
@@ -134,7 +165,8 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
             pivot,
             modelPivot: pivot.clone(),
             localPivot,
-            baseInvWorldMatrix
+            baseInvWorldMatrix,
+            baseWorldMatrix: child.matrixWorld ? child.matrixWorld.clone() : new THREE.Matrix4()
           });
         });
       }
@@ -264,15 +296,17 @@ export async function initDroneModels(scene: THREE.Scene): Promise<void> {
          baseLocalMatrix: n.localMatrix.clone(),
          meshIndex: n.meshIndex,
          pivot: n.pivot ? n.pivot.clone() : new THREE.Vector3(),
+         modelPivot: (n as any).modelPivot ? (n as any).modelPivot.clone() : (n.pivot ? n.pivot.clone() : new THREE.Vector3()),
          localPivot: (n as any).localPivot ? (n as any).localPivot.clone() : new THREE.Vector3(),
-         baseInvWorldMatrix: (n as any).baseInvWorldMatrix ? (n as any).baseInvWorldMatrix.clone() : new THREE.Matrix4()
+         baseInvWorldMatrix: (n as any).baseInvWorldMatrix ? (n as any).baseInvWorldMatrix.clone() : new THREE.Matrix4(),
+         baseWorldMatrix: (n as any).baseWorldMatrix ? (n as any).baseWorldMatrix.clone() : new THREE.Matrix4()
        }))
      };
   };
 
-  const tMatGround = new THREE.MeshStandardMaterial({ color: 0xff8800, roughness: 0.8 });
-  const tMatAir = new THREE.MeshStandardMaterial({ color: 0x00aaff, roughness: 0.5 });
-  const tMatBomber = new THREE.MeshStandardMaterial({ color: 0xff4400, roughness: 0.5 });
+  const tMatGround = new THREE.MeshStandardMaterial({ color: new THREE.Color(DS.colors.drones.ground).getHex(), roughness: 0.8 });
+  const tMatAir = new THREE.MeshStandardMaterial({ color: new THREE.Color(DS.colors.drones.recon).getHex(), roughness: 0.5 });
+  const tMatBomber = new THREE.MeshStandardMaterial({ color: new THREE.Color(DS.colors.drones.bomber).getHex(), roughness: 0.5 });
   
   const gBase = new THREE.SphereGeometry(0.8, 8, 8);
   const gBox = new THREE.BoxGeometry(2, 0.5, 3);

@@ -255,10 +255,8 @@ export class DroneSystem {
                  if (typeId === DroneType.WHEELED) {
                      // Handled by body-only translation below
                  } else if (typeId === DroneType.ROTARY_SHOOTER || typeId === DroneType.BOMBER || typeId === DroneType.RECON) {
-                     const bobAmp = config?.verticalBobAmount ?? 0.08;
-                     const bobSpeed = config?.verticalBobSpeed ?? 1.5;
-                     if (bobAmp > 0) {
-                         this.diagTempPosition.y += Math.sin(performance.now() * 0.001 * bobSpeed) * bobAmp;
+                     if (state.verticalBob !== undefined) {
+                         this.diagTempPosition.y += state.verticalBob;
                      }
                  }
                  
@@ -312,12 +310,49 @@ export class DroneSystem {
                              if (typeId === DroneType.WHEELED && (info as any).baseInvWorldMatrix) {
                                  if (info.name === 'rotate' && config.turretYawPivot) {
                                      this.tempTurretPivot.set(config.turretYawPivot[0], config.turretYawPivot[1], config.turretYawPivot[2]);
+                                     if ((info as any).baseWorldMatrix) {
+                                         this.tempTurretPivot.applyMatrix4((info as any).baseWorldMatrix);
+                                     }
                                      this.tempTurretPivot.applyMatrix4((info as any).baseInvWorldMatrix);
                                      lp = this.tempTurretPivot;
                                  } else if (info.name === 'gun' && config.gunPitchPivot) {
                                      this.tempGunPivot.set(config.gunPitchPivot[0], config.gunPitchPivot[1], config.gunPitchPivot[2]);
+                                     if ((info as any).baseWorldMatrix) {
+                                         this.tempGunPivot.applyMatrix4((info as any).baseWorldMatrix);
+                                     }
                                      this.tempGunPivot.applyMatrix4((info as any).baseInvWorldMatrix);
                                      lp = this.tempGunPivot;
+                                 }
+                             }
+
+                             const isQuad = typeId === DroneType.ROTARY_SHOOTER || typeId === DroneType.BOMBER || typeId === DroneType.RECON;
+                             if (isQuad && (info as any).baseInvWorldMatrix) {
+                                 const parentNameLower = info.parentName?.toLowerCase() || '';
+                                 const isPropMesh = !!info.isMesh && (parentNameLower.includes('prop') && parentNameLower !== 'prop');
+                                 if (isPropMesh) {
+                                     let offset_x = 0.5;
+                                     let offset_z = 0.5;
+                                     if (config) {
+                                         if (config.propellerOffset) {
+                                             offset_x = config.propellerOffset[0];
+                                             offset_z = config.propellerOffset[1];
+                                         } else if (config.propPivotX !== undefined && config.propPivotZ !== undefined) {
+                                             offset_x = config.propPivotX;
+                                             offset_z = config.propPivotZ;
+                                         }
+                                     }
+                                     let px = 0;
+                                     let pz = 0;
+                                     const mp = (info as any).modelPivot || info.pivot || this.zeroVector;
+                                     if (mp.x < 0 && mp.z > 0) { px = -offset_x; pz = offset_z; }
+                                     else if (mp.x > 0 && mp.z > 0) { px = offset_x; pz = offset_z; }
+                                     else if (mp.x < 0 && mp.z < 0) { px = -offset_x; pz = -offset_z; }
+                                     else if (mp.x > 0 && mp.z < 0) { px = offset_x; pz = -offset_z; }
+                                     else { px = mp.x; pz = mp.z; }
+
+                                     this.tempPropellerPivot.set(px, 0.05, pz);
+                                     this.tempPropellerPivot.applyMatrix4((info as any).baseInvWorldMatrix);
+                                     lp = this.tempPropellerPivot;
                                  }
                              }
                              // Geometric Rule: M_local = T_position * T(P_local) * R * T(-P_local)

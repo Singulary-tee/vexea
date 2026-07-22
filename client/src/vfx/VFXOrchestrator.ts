@@ -89,8 +89,12 @@ export function initMatchVisuals(scene: THREE.Scene) {
   if (vfxInitialized) return;
   _scene = scene;
   
-  const preset = getSettings().graphicsPreset || 'Medium';
-  const cfg = VISUAL_CONFIG[preset] || VISUAL_CONFIG['Medium'];
+  const settings = getSettings();
+  const preset = settings.graphicsPreset || 'Medium';
+  const cfg = { ...(VISUAL_CONFIG[preset] || VISUAL_CONFIG['Medium']) };
+  if (typeof settings.flashLight === 'boolean') {
+    cfg.flashLight = settings.flashLight;
+  }
   currentVisualConfig = cfg;
 
   // Initialize Modular Sub-systems
@@ -116,7 +120,7 @@ export function initMatchVisuals(scene: THREE.Scene) {
   const tracerAlphaU = smoothstep(float(0.0), float(0.18), tracerU).mul(smoothstep(float(1.0), float(0.82), tracerU));
   const tracerAlphaV = smoothstep(float(0.0), float(0.18), tracerV).mul(smoothstep(float(1.0), float(0.82), tracerV));
   const tracerAlpha = tracerAlphaU.mul(tracerAlphaV);
-  const tracerAmber = vec4(1.0, 0.784, 0.165, 0.0);
+  const tracerAmber = vec4(1.0, 0.27, 0.0, 0.0); // DS.colors.accent normalized
   const tracerWhite = vec4(1.0, 1.0, 1.0, 0.0);
   const tracerColor = mix(tracerAmber, tracerWhite, smoothstep(float(0.3), float(0.7), tracerU));
   tracerMat.colorNode = vec4(tracerColor.x, tracerColor.y, tracerColor.z, tracerAlpha);

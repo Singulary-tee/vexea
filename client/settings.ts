@@ -46,6 +46,8 @@ export interface VexeaSettingsData {
     parallaxOcclusion: boolean;
     pbrMaterials: boolean;
     instancedProps: boolean;
+    pixelRatioMode: '0.75' | '1.0' | '1.5' | 'native';
+    flashLight: boolean;
 }
 
 const DEFAULT_SETTINGS: VexeaSettingsData = {
@@ -89,7 +91,9 @@ const DEFAULT_SETTINGS: VexeaSettingsData = {
     exposure: 1.0,
     parallaxOcclusion: !IS_MOBILE,
     pbrMaterials: !IS_MOBILE,
-    instancedProps: !IS_MOBILE
+    instancedProps: !IS_MOBILE,
+    pixelRatioMode: IS_MOBILE ? '0.75' : '1.5',
+    flashLight: !IS_MOBILE
 };
 
 export const getSettings = (): VexeaSettingsData => {
@@ -116,13 +120,19 @@ export function applySettings(s: VexeaSettingsData) {
     }
     
     if (W.renderer) {
-        if (s.graphicsPreset === 'Low') {
-            W.renderer.setPixelRatio(1.0);
-        } else if (s.graphicsPreset === 'Medium') {
-            W.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        let targetRatio = 1.0;
+        if (s.pixelRatioMode === '0.75') {
+            targetRatio = 0.75;
+        } else if (s.pixelRatioMode === '1.0') {
+            targetRatio = 1.0;
+        } else if (s.pixelRatioMode === '1.5') {
+            targetRatio = Math.min(window.devicePixelRatio, 1.5);
+        } else if (s.pixelRatioMode === 'native') {
+            targetRatio = window.devicePixelRatio;
         } else {
-            W.renderer.setPixelRatio(window.devicePixelRatio);
+            targetRatio = s.graphicsPreset === 'Low' ? 0.75 : Math.min(window.devicePixelRatio, 1.5);
         }
+        W.renderer.setPixelRatio(targetRatio);
 
         // Apply Tone Mapping & Exposure
         let tm = 0; // THREE.NoToneMapping
@@ -237,7 +247,7 @@ function bind(el: HTMLElement, type: string, fn: any) {
 
 function createOverlayHTML() {
     return `
-    <div id="vexea-settings-overlay" style="position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.85); backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; display:flex; flex-direction:row; font-family:${DS.typography.fontFamily}; color:white; pointer-events:auto;" class="flex-col md:flex-row">
+    <div id="vexea-settings-overlay" style="position:fixed; inset:0; z-index:2000; background:${DS.utils.rgba('#000000', 0.85)}; backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; display:flex; flex-direction:row; font-family:${DS.typography.fontFamily}; color:white; pointer-events:auto;" class="flex-col md:flex-row">
         <!-- Sidebar -->
         <div id="settings-sidebar" style="background:${DS.glass.background}; backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; border-right:${DS.glass.border}; overflow-x:auto; display:flex;" class="w-full md:w-64 flex-row md:flex-col shrink-0 p-4 gap-2">
             <h2 class="text-2xl font-bold mb-4 hidden md:block" style="color:${DS.colors.accent}; letter-spacing: 2px; font-size:clamp(1.2rem, 3vw, 1.5rem);">SETTINGS</h2>
@@ -255,7 +265,7 @@ function createOverlayHTML() {
         </div>
         
         <!-- Content -->
-        <div id="settings-content" style="flex:1; overflow-y:auto; padding:clamp(16px, 4vw, 30px); font-size:clamp(14px, 1.5vw, 16px); background:rgba(10,10,10,0.4); backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; border-left:${DS.glass.border};">
+        <div id="settings-content" style="flex:1; overflow-y:auto; padding:clamp(16px, 4vw, 30px); font-size:clamp(14px, 1.5vw, 16px); background:${DS.utils.rgba('#0A0A0A', 0.4)}; backdrop-filter:${DS.glass.blur}; -webkit-backdrop-filter:${DS.glass.blur}; border-left:${DS.glass.border};">
             
             <div id="tab-CONTROLS" class="settings-page active">
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">CONTROLS</h3>
@@ -291,7 +301,7 @@ function createOverlayHTML() {
                 </div>
 
                 <!-- Custom options panel -->
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; border-top:1px solid rgba(255,255,255,0.1); pt-4;">
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; border-top:1px solid ${DS.utils.rgba(DS.colors.text, 0.1)}; pt-4;">
                     <!-- Column 1: Engine & Materials -->
                     <div class="flex flex-col gap-4">
                         <h4 class="font-bold text-sm text-blue-400 uppercase tracking-widest border-b border-gray-800 pb-1">Engine & Geometry</h4>
@@ -302,11 +312,28 @@ function createOverlayHTML() {
                         </div>
                         <div>
                             <label class="block text-sm mb-1 text-gray-300">Renderer Engine (Requires Reload)</label>
-                            <select id="inp-rendererType" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15); padding:8px; border-radius:4px; color:white; font-family:inherit; outline:none;">
+                            <select id="inp-rendererType" style="width:100%; background:${DS.utils.rgba('#000000', 0.5)}; border:1px solid ${DS.utils.rgba(DS.colors.text, 0.15)}; padding:8px; border-radius:4px; color:white; font-family:inherit; outline:none;">
                                 <option value="auto">Auto-Detect (Preferred)</option>
                                 <option value="webgpu" id="opt-webgpu">WebGPU Only</option>
                                 <option value="webgl">WebGL Only</option>
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1 text-gray-300">Pixel Ratio Scale (Resolution)</label>
+                            <div class="flex gap-1" id="group-pixelRatio">
+                                <label class="pixel-ratio-label flex-1 text-center py-1.5 text-xs border rounded cursor-pointer font-bold" style="border-color:${DS.utils.rgba(DS.colors.text, 0.15)}">
+                                    <input type="radio" name="pixelRatioMode" value="0.75" class="hidden"> 0.75x
+                                </label>
+                                <label class="pixel-ratio-label flex-1 text-center py-1.5 text-xs border rounded cursor-pointer font-bold" style="border-color:${DS.utils.rgba(DS.colors.text, 0.15)}">
+                                    <input type="radio" name="pixelRatioMode" value="1.0" class="hidden"> 1.0x
+                                </label>
+                                <label class="pixel-ratio-label flex-1 text-center py-1.5 text-xs border rounded cursor-pointer font-bold" style="border-color:${DS.utils.rgba(DS.colors.text, 0.15)}">
+                                    <input type="radio" name="pixelRatioMode" value="1.5" class="hidden"> 1.5x
+                                </label>
+                                <label class="pixel-ratio-label flex-1 text-center py-1.5 text-xs border rounded cursor-pointer font-bold" style="border-color:${DS.utils.rgba(DS.colors.text, 0.15)}">
+                                    <input type="radio" name="pixelRatioMode" value="native" class="hidden"> Native
+                                </label>
+                            </div>
                         </div>
                         <div class="flex items-center justify-between" style="padding:4px 0;">
                             <label for="inp-shadows" class="text-sm text-gray-300">Real-Time Shadows</label>
@@ -330,12 +357,16 @@ function createOverlayHTML() {
                     <div class="flex flex-col gap-4">
                         <h4 class="font-bold text-sm text-blue-400 uppercase tracking-widest border-b border-gray-800 pb-1">Lighting & Effects</h4>
                         <div class="flex items-center justify-between" style="padding:4px 0;">
+                            <label for="inp-flashLight" class="text-sm text-gray-300">Dynamic Lights (Muzzle/Explosions)</label>
+                            <input type="checkbox" id="inp-flashLight" style="width:20px;height:20px;cursor:pointer;">
+                        </div>
+                        <div class="flex items-center justify-between" style="padding:4px 0;">
                             <label for="inp-ssao" class="text-sm text-gray-300">Screen Space AO (GTAO)</label>
                             <input type="checkbox" id="inp-ssao" style="width:20px;height:20px;cursor:pointer;">
                         </div>
                         
                         <!-- Bloom block -->
-                        <div class="border border-gray-800 p-2 rounded" style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.05);">
+                        <div class="border border-gray-800 p-2 rounded" style="background:${DS.utils.rgba('#000000', 0.35)}; border:1px solid ${DS.utils.rgba(DS.colors.text, 0.05)};">
                             <div class="flex items-center justify-between mb-2">
                                 <label for="inp-bloom" class="font-bold text-sm text-gray-300">Bloom Post-Processing</label>
                                 <input type="checkbox" id="inp-bloom" style="width:20px;height:20px;cursor:pointer;">
@@ -350,7 +381,7 @@ function createOverlayHTML() {
                         </div>
 
                         <!-- Vignette block -->
-                        <div class="border border-gray-800 p-2 rounded" style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.05);">
+                        <div class="border border-gray-800 p-2 rounded" style="background:${DS.utils.rgba('#000000', 0.35)}; border:1px solid ${DS.utils.rgba(DS.colors.text, 0.05)};">
                             <div class="flex items-center justify-between mb-2">
                                 <label for="inp-vignette" class="font-bold text-sm text-gray-300">Vignette Shading</label>
                                 <input type="checkbox" id="inp-vignette" style="width:20px;height:20px;cursor:pointer;">
@@ -365,7 +396,7 @@ function createOverlayHTML() {
                         </div>
 
                         <!-- Chromatic Aberration block -->
-                        <div class="border border-gray-800 p-2 rounded" style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.05);">
+                        <div class="border border-gray-800 p-2 rounded" style="background:${DS.utils.rgba('#000000', 0.35)}; border:1px solid ${DS.utils.rgba(DS.colors.text, 0.05)};">
                             <div class="flex items-center justify-between mb-2">
                                 <label for="inp-chromaticAberration" class="font-bold text-sm text-gray-300">Chromatic Aberration</label>
                                 <input type="checkbox" id="inp-chromaticAberration" style="width:20px;height:20px;cursor:pointer;">
@@ -382,7 +413,7 @@ function createOverlayHTML() {
                         <!-- Tone Mapping -->
                         <div>
                             <label class="block text-sm mb-1 text-gray-300">Tone Mapping</label>
-                            <select id="inp-toneMapping" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15); padding:8px; border-radius:4px; color:white; font-family:inherit; outline:none;">
+                            <select id="inp-toneMapping" style="width:100%; background:${DS.utils.rgba('#000000', 0.5)}; border:1px solid ${DS.utils.rgba(DS.colors.text, 0.15)}; padding:8px; border-radius:4px; color:white; font-family:inherit; outline:none;">
                                 <option value="none">None</option>
                                 <option value="linear">Linear</option>
                                 <option value="reinhard">Reinhard</option>
@@ -492,7 +523,7 @@ function createOverlayHTML() {
                 <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">SERVER CONNECTION</h3>
                 <div class="mb-4">
                     <label class="block mb-1">Authoritative Server Address</label>
-                    <input type="text" id="inp-serverUrl" placeholder="e.g. http://159.203.111.222:3000" style="width:100%; max-width:400px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.15); padding:10px; border-radius:4px; color:white; font-family:inherit; font-size:15px; outline:none; transition: border-color 0.15s ease;">
+                    <input type="text" id="inp-serverUrl" placeholder="e.g. http://159.203.111.222:3000" style="width:100%; max-width:400px; background:${DS.utils.rgba('#000000', 0.3)}; border:1px solid ${DS.utils.rgba(DS.colors.text, 0.15)}; padding:10px; border-radius:4px; color:white; font-family:inherit; font-size:15px; outline:none; transition: border-color 0.15s ease;">
                     <p class="mt-2 text-xs text-gray-400">Specify your DigitalOcean droplet IP and port (e.g. http://YOUR_DROPLET_IP:3000). Leave blank to leverage the standard client hosting origin.</p>
                 </div>
                 <div class="mb-6 flex flex-col gap-2">
@@ -553,14 +584,14 @@ function createOverlayHTML() {
             }
             .settings-tab.active {
                 opacity: 1;
-                background: rgba(200, 136, 42, 0.1) !important;
+                background: ${DS.utils.rgba(DS.colors.accent, 0.1)} !important;
                 border-left: 3px solid ${DS.colors.accent} !important;
-                border-color: rgba(255,255,255,0.02);
+                border-color: ${DS.utils.rgba(DS.colors.text, 0.02)};
                 font-weight: bold;
                 color: #FFFFFF;
             }
             .settings-tab:hover {
-                background: rgba(255,255,255,0.03);
+                background: ${DS.utils.rgba(DS.colors.text, 0.03)};
                 opacity: 1;
             }
             #btn-close-settings-overlay:hover {
@@ -612,7 +643,7 @@ function createOverlayHTML() {
             }
             .preset-btn, #btn-fullscreen, #btn-edit-hud {
                 border: ${DS.glass.border} !important;
-                background: rgba(255,255,255,0.03) !important;
+                background: ${DS.utils.rgba(DS.colors.text, 0.03)} !important;
                 color: #FFF !important;
                 font-family: ${DS.typography.fontFamily};
                 letter-spacing: 1px;
@@ -622,16 +653,16 @@ function createOverlayHTML() {
             }
             .preset-btn:hover, #btn-fullscreen:hover, #btn-edit-hud:hover {
                 border-color: ${DS.colors.accent} !important;
-                background: rgba(200, 136, 42, 0.1) !important;
+                background: ${DS.utils.rgba(DS.colors.accent, 0.1)} !important;
             }
             .bg-blue-600 {
-                background-color: rgba(200, 136, 42, 0.2) !important;
+                background-color: ${DS.utils.rgba(DS.colors.accent, 0.2)} !important;
                 border-color: ${DS.colors.accent} !important;
-                box-shadow: 0 0 8px rgba(200, 136, 42, 0.25) !important;
+                box-shadow: 0 0 8px ${DS.utils.rgba(DS.colors.accent, 0.25)} !important;
             }
             .bg-gray-800 {
-                background-color: rgba(255, 255, 255, 0.03) !important;
-                border-color: rgba(255, 255, 255, 0.08) !important;
+                background-color: ${DS.utils.rgba(DS.colors.text, 0.03)} !important;
+                border-color: ${DS.utils.rgba(DS.colors.text, 0.08)} !important;
             }
             @media(max-width:768px) {
                 .settings-tab { text-align: center; width: auto; }
@@ -751,6 +782,7 @@ export function openSettings() {
     const pbrMaterials = document.getElementById('inp-pbrMaterials') as HTMLInputElement;
     const parallaxOcclusion = document.getElementById('inp-parallaxOcclusion') as HTMLInputElement;
     const instancedProps = document.getElementById('inp-instancedProps') as HTMLInputElement;
+    const flashLight = document.getElementById('inp-flashLight') as HTMLInputElement;
     const ssao = document.getElementById('inp-ssao') as HTMLInputElement;
     const bloom = document.getElementById('inp-bloom') as HTMLInputElement;
     const bloomStrength = document.getElementById('inp-bloomStrength') as HTMLInputElement;
@@ -766,6 +798,7 @@ export function openSettings() {
         if (pbrMaterials) pbrMaterials.checked = s.pbrMaterials;
         if (parallaxOcclusion) parallaxOcclusion.checked = s.parallaxOcclusion;
         if (instancedProps) instancedProps.checked = s.instancedProps;
+        if (flashLight) flashLight.checked = s.flashLight;
         if (ssao) ssao.checked = s.ssao;
         if (bloom) bloom.checked = s.bloom;
         if (bloomStrength) bloomStrength.value = s.bloomStrength.toString();
@@ -775,6 +808,23 @@ export function openSettings() {
         if (chromaticAberrationIntensity) chromaticAberrationIntensity.value = s.chromaticAberrationIntensity.toString();
         if (toneMapping) toneMapping.value = s.toneMapping;
         if (exposure) exposure.value = s.exposure.toString();
+
+        const pixelRatioRadios = document.querySelectorAll('input[name="pixelRatioMode"]') as NodeListOf<HTMLInputElement>;
+        pixelRatioRadios.forEach(r => {
+            r.checked = (r.value === s.pixelRatioMode);
+            const parent = r.parentElement;
+            if (parent) {
+                if (r.checked) {
+                    parent.style.background = DS.colors.accent;
+                    parent.style.borderColor = DS.colors.accent;
+                    parent.style.color = '#ffffff';
+                } else {
+                    parent.style.background = DS.utils.rgba('#000000', 0.4);
+                    parent.style.borderColor = DS.utils.rgba(DS.colors.text, 0.15);
+                    parent.style.color = DS.colors.textSecondary;
+                }
+            }
+        });
 
         if (document.getElementById('val-bloomStrength')) {
             document.getElementById('val-bloomStrength')!.innerText = s.bloomStrength.toFixed(1);
@@ -817,6 +867,7 @@ export function openSettings() {
         if (pbrMaterials) s.pbrMaterials = pbrMaterials.checked;
         if (parallaxOcclusion) s.parallaxOcclusion = parallaxOcclusion.checked;
         if (instancedProps) s.instancedProps = instancedProps.checked;
+        if (flashLight) s.flashLight = flashLight.checked;
         if (ssao) s.ssao = ssao.checked;
         if (bloom) s.bloom = bloom.checked;
         if (bloomStrength) s.bloomStrength = parseFloat(bloomStrength.value);
@@ -826,6 +877,9 @@ export function openSettings() {
         if (chromaticAberrationIntensity) s.chromaticAberrationIntensity = parseFloat(chromaticAberrationIntensity.value);
         if (toneMapping) s.toneMapping = toneMapping.value as any;
         if (exposure) s.exposure = parseFloat(exposure.value);
+
+        const checkedPixelRatio = document.querySelector('input[name="pixelRatioMode"]:checked') as HTMLInputElement;
+        if (checkedPixelRatio) s.pixelRatioMode = checkedPixelRatio.value as any;
 
         // Update labels
         if (document.getElementById('val-joySens')) document.getElementById('val-joySens')!.innerText = s.joySens.toFixed(1);
@@ -864,7 +918,7 @@ export function openSettings() {
 
     // Bind custom graphics controls. Changing any shifts preset to 'Custom'
     const customGraphicsControls = [
-        shadows, pbrMaterials, parallaxOcclusion, instancedProps, ssao, bloom, bloomStrength,
+        shadows, pbrMaterials, parallaxOcclusion, instancedProps, flashLight, ssao, bloom, bloomStrength,
         vignette, vignetteIntensity, chromaticAberration, chromaticAberrationIntensity, toneMapping, exposure
     ];
     customGraphicsControls.forEach(el => {
@@ -875,6 +929,15 @@ export function openSettings() {
             triggerApply();
         });
         bind(el as HTMLElement, 'input', () => {
+            s.graphicsPreset = 'Custom';
+            syncPresets();
+            triggerApply();
+        });
+    });
+
+    const prRadios = document.querySelectorAll('input[name="pixelRatioMode"]');
+    prRadios.forEach(r => {
+        bind(r as HTMLElement, 'change', () => {
             s.graphicsPreset = 'Custom';
             syncPresets();
             triggerApply();
@@ -931,6 +994,8 @@ export function openSettings() {
                 s.parallaxOcclusion = false;
                 s.pbrMaterials = false;
                 s.instancedProps = false;
+                s.flashLight = false;
+                s.pixelRatioMode = '0.75';
                 s.fxaa = false;
             } else if (val === 'Medium') {
                 s.shadows = true;
@@ -946,6 +1011,8 @@ export function openSettings() {
                 s.parallaxOcclusion = true;
                 s.pbrMaterials = true;
                 s.instancedProps = true;
+                s.flashLight = true;
+                s.pixelRatioMode = '1.5';
                 s.fxaa = false;
             } else if (val === 'High') {
                 s.shadows = true;
@@ -961,6 +1028,8 @@ export function openSettings() {
                 s.parallaxOcclusion = true;
                 s.pbrMaterials = true;
                 s.instancedProps = true;
+                s.flashLight = true;
+                s.pixelRatioMode = 'native';
                 s.fxaa = true;
             }
 
@@ -1056,8 +1125,8 @@ export function openSettings() {
                     const row = document.createElement("div");
                     Object.assign(row.style, {
                         display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "8px 12px", background: "rgba(255,255,255,0.03)",
-                        border: "1px solid rgba(255,255,255,0.05)", borderRadius: "4px"
+                        padding: "8px 12px", background: "${DS.utils.rgba(DS.colors.text, 0.03)}",
+                        border: "1px solid ${DS.utils.rgba(DS.colors.text, 0.05)}", borderRadius: "4px"
                     });
 
                     const info = document.createElement("div");
@@ -1148,7 +1217,7 @@ function _injectMatchTabDOM() {
     page.className = 'settings-page hidden';
     page.innerHTML = `
         <h3 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">MATCH</h3>
-        <button id="btn-quit-match" style="height: 48px; background: transparent; border: 1px solid #CC3333; color: #CC3333; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: bold; text-transform: uppercase; border-radius: 0; width: 100%; cursor: pointer;">QUIT MATCH</button>
+        <button id="btn-quit-match" style="height: 48px; background: transparent; border: 1px solid ${DS.colors.danger}; color: ${DS.colors.danger}; font-family: ${DS.typography.fontFamily}; font-size: 24px; font-weight: bold; text-transform: uppercase; border-radius: 0; width: 100%; cursor: pointer;">QUIT MATCH</button>
     `;
     // Insert at beginning of content
     content.insertBefore(page, content.firstChild);
@@ -1169,28 +1238,28 @@ function _injectMatchTabDOM() {
             const modal = document.createElement('div');
             Object.assign(modal.style, {
                 position: 'fixed', inset: '0', zIndex: '2001',
-                background: 'rgba(0,0,0,0.9)', display: 'flex',
+                background: DS.utils.rgba('#000000', 0.9), display: 'flex',
                 alignItems: 'center', justifyContent: 'center'
             });
             
             const card = document.createElement('div');
             Object.assign(card.style, {
-                width: '400px', background: '#111111', border: '1px solid #CC3333',
+                width: '400px', background: DS.colors.surface, border: `1px solid ${DS.colors.danger}`,
                 padding: '32px', borderRadius: '0'
             });
             
             const title = document.createElement('div');
             title.innerText = 'ABANDON MISSION';
             Object.assign(title.style, {
-                fontFamily: "'Barlow Condensed', sans-serif", fontSize: '24px',
-                color: '#E8E8E8', textTransform: 'uppercase', marginBottom: '8px'
+                fontFamily: DS.typography.fontFamily, fontSize: '24px',
+                color: DS.colors.textPrimary, textTransform: 'uppercase', marginBottom: '8px'
             });
             
             const body = document.createElement('div');
             body.innerText = 'You will be removed from the match. The mission continues without you.';
             Object.assign(body.style, {
-                fontFamily: "'Barlow Condensed', sans-serif", fontSize: '14px',
-                color: '#888888', marginBottom: '24px'
+                fontFamily: DS.typography.fontFamily, fontSize: '14px',
+                color: DS.colors.textSecondary, marginBottom: '24px'
             });
             
             const btnWrap = document.createElement('div');
@@ -1199,8 +1268,8 @@ function _injectMatchTabDOM() {
             const confBtn = document.createElement('button');
             confBtn.innerText = 'CONFIRM';
             Object.assign(confBtn.style, {
-                background: '#CC3333', color: '#0A0A0A',
-                fontFamily: "'Barlow Condensed', sans-serif", fontSize: '18px',
+                background: DS.colors.danger, color: DS.colors.background,
+                fontFamily: DS.typography.fontFamily, fontSize: '18px',
                 fontWeight: 'bold', textTransform: 'uppercase', borderRadius: '0',
                 padding: '8px 16px', border: 'none', cursor: 'pointer'
             });
@@ -1208,8 +1277,8 @@ function _injectMatchTabDOM() {
             const cancBtn = document.createElement('button');
             cancBtn.innerText = 'CANCEL';
             Object.assign(cancBtn.style, {
-                background: 'transparent', border: '1px solid #2A2A2A',
-                color: '#888888', padding: '8px 16px', cursor: 'pointer'
+                background: 'transparent', border: `1px solid ${DS.colors.border}`,
+                color: DS.colors.textSecondary, padding: '8px 16px', cursor: 'pointer'
             });
             
             confBtn.onclick = () => {

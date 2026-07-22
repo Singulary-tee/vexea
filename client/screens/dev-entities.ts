@@ -5,8 +5,21 @@ import * as screenManager from "./screen-manager";
 import { DS } from "../design-system";
 import { audioManager } from "../audio";
 import { PLAYER_TOTAL_HEIGHT, PLAYER_RADIUS, DRONE_CONFIGS, DroneType } from "../../shared/constants";
+import { DETAILED_WEAPONS } from "../../shared/weapons";
 import { triggerFlash, spawnTracer, updateVFX, initMatchVisuals } from "../src/vfx/VFXOrchestrator";
 import { updateProceduralState } from "../src/systems/DroneProcedural";
+import {
+    initPlayerWeapons,
+    weaponsContainer,
+    rifleGroup,
+    pistolGroup,
+    updateWeaponsContainer,
+    weaponVisualState,
+    transitionToState,
+    WeaponAnimState,
+    applyWeaponRecoil,
+    getMuzzleWorldPosition
+} from "../weapons_model";
 
 // -------------------------------------------------------------
 // Drone Calibration & Visual Simulation Schema Definitions
@@ -89,6 +102,7 @@ function verifyPivotRotationMath() {
     if (!rotateNode || !gunNode || !modelGroup) return;
 
     const params = currentParams[currentTab];
+    if (!params) return;
     const baseWorldMat = modelGroup.userData.baseWorldMatrix;
     if (!baseWorldMat) return;
 
@@ -175,62 +189,62 @@ function verifyPivotRotationMath() {
     const statusEl = document.getElementById("de-pivot-validation-status");
     if (statusEl) {
         const c1_turret = turretPivotInside 
-            ? `<span style="color: #00ff00; font-weight: bold;">[PASS]</span>` 
-            : `<span style="color: #ff3333; font-weight: bold;">[FAIL]</span>`;
+            ? `<span style="color: ${DS.colors.success}; font-weight: bold;">[PASS]</span>` 
+            : `<span style="color: ${DS.colors.danger}; font-weight: bold;">[FAIL]</span>`;
         const c1_gun = gunPivotInside 
-            ? `<span style="color: #00ff00; font-weight: bold;">[PASS]</span>` 
-            : `<span style="color: #ff3333; font-weight: bold;">[FAIL]</span>`;
+            ? `<span style="color: ${DS.colors.success}; font-weight: bold;">[PASS]</span>` 
+            : `<span style="color: ${DS.colors.danger}; font-weight: bold;">[FAIL]</span>`;
 
         const c2_turret = turretPivotDriftDuringYaw < 0.001
-            ? `<span style="color: #00ff00; font-weight: bold;">[PASS]</span>`
-            : `<span style="color: #ff3333; font-weight: bold;">[FAIL] (Drift: ${turretPivotDriftDuringYaw.toFixed(5)})</span>`;
+            ? `<span style="color: ${DS.colors.success}; font-weight: bold;">[PASS]</span>`
+            : `<span style="color: ${DS.colors.danger}; font-weight: bold;">[FAIL] (Drift: ${turretPivotDriftDuringYaw.toFixed(5)})</span>`;
 
         const c2_gun = gunPivotDriftDuringPitch < 0.001
-            ? `<span style="color: #00ff00; font-weight: bold;">[PASS]</span>`
-            : `<span style="color: #ff3333; font-weight: bold;">[FAIL] (Drift: ${gunPivotDriftDuringPitch.toFixed(5)})</span>`;
+            ? `<span style="color: ${DS.colors.success}; font-weight: bold;">[PASS]</span>`
+            : `<span style="color: ${DS.colors.danger}; font-weight: bold;">[FAIL] (Drift: ${gunPivotDriftDuringPitch.toFixed(5)})</span>`;
 
         const c3_turret = turretPivotInside
-            ? `<span style="color: #00ff00; font-weight: bold;">[PASS]</span>`
-            : `<span style="color: #ff3333; font-weight: bold;">[FAIL]</span>`;
+            ? `<span style="color: ${DS.colors.success}; font-weight: bold;">[PASS]</span>`
+            : `<span style="color: ${DS.colors.danger}; font-weight: bold;">[FAIL]</span>`;
         const c3_gun = gunPivotInside
-            ? `<span style="color: #00ff00; font-weight: bold;">[PASS]</span>`
-            : `<span style="color: #ff3333; font-weight: bold;">[FAIL]</span>`;
+            ? `<span style="color: ${DS.colors.success}; font-weight: bold;">[PASS]</span>`
+            : `<span style="color: ${DS.colors.danger}; font-weight: bold;">[FAIL]</span>`;
 
         const c4_gun = (state.turretYaw === 0 || gunPivotMovesWithTurretYaw)
-            ? `<span style="color: #00ff00; font-weight: bold;">[PASS]</span>`
-            : `<span style="color: #aaa; font-style: italic;">[WAITING FOR YAW]</span>`;
+            ? `<span style="color: ${DS.colors.success}; font-weight: bold;">[PASS]</span>`
+            : `<span style="color: ${DS.colors.textMuted}; font-style: italic;">[WAITING FOR YAW]</span>`;
 
         let html = "";
         html += `<div style="display: flex; flex-direction: column; gap: 8px;">`;
         
         html += `<div>`;
-        html += `<div style="font-weight: bold; color: #fff;">1. Points inside mesh bounds:</div>`;
+        html += `<div style="font-weight: bold; color: ${DS.colors.text};">1. Points inside mesh bounds:</div>`;
         html += `<div style="display: flex; justify-content: space-between; padding-left: 8px;"><span>- Turret Pivot inside Turret Mesh:</span><span>${c1_turret}</span></div>`;
         html += `<div style="display: flex; justify-content: space-between; padding-left: 8px;"><span>- Gun Pivot inside Gun Mesh:</span><span>${c1_gun}</span></div>`;
         html += `</div>`;
 
         html += `<div>`;
-        html += `<div style="font-weight: bold; color: #fff;">2. Points are stationary:</div>`;
+        html += `<div style="font-weight: bold; color: ${DS.colors.text};">2. Points are stationary:</div>`;
         html += `<div style="display: flex; justify-content: space-between; padding-left: 8px;"><span>- Turret Pivot stationary during yaw:</span><span>${c2_turret}</span></div>`;
         html += `<div style="display: flex; justify-content: space-between; padding-left: 8px;"><span>- Gun Pivot stationary during pitch:</span><span>${c2_gun}</span></div>`;
         html += `</div>`;
 
         html += `<div>`;
-        html += `<div style="font-weight: bold; color: #fff;">3. Point stays inside during rotation:</div>`;
+        html += `<div style="font-weight: bold; color: ${DS.colors.text};">3. Point stays inside during rotation:</div>`;
         html += `<div style="display: flex; justify-content: space-between; padding-left: 8px;"><span>- Turret Pivot never leaves mesh:</span><span>${c3_turret}</span></div>`;
         html += `<div style="display: flex; justify-content: space-between; padding-left: 8px;"><span>- Gun Pivot never leaves mesh:</span><span>${c3_gun}</span></div>`;
         html += `</div>`;
 
         html += `<div>`;
-        html += `<div style="font-weight: bold; color: #fff;">4. Hierarchical dependencies:</div>`;
+        html += `<div style="font-weight: bold; color: ${DS.colors.text};">4. Hierarchical dependencies:</div>`;
         html += `<div style="display: flex; justify-content: space-between; padding-left: 8px;"><span>- Gun Pivot moves with turret yaw:</span><span>${c4_gun}</span></div>`;
         html += `</div>`;
 
         const allOk = turretPivotInside && gunPivotInside && (turretPivotDriftDuringYaw < 0.001) && (gunPivotDriftDuringPitch < 0.001);
         if (allOk) {
-            html += `<div style="color: #00ff00; font-weight: bold; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; text-align: center; margin-top: 4px;">🎉 ALL PIVOT RULES SATISFIED!</div>`;
+            html += `<div style="color: ${DS.colors.success}; font-weight: bold; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; text-align: center; margin-top: 4px;">🎉 ALL PIVOT RULES SATISFIED!</div>`;
         } else {
-            html += `<div style="color: #ff3333; font-weight: bold; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; text-align: center; margin-top: 4px;">⚠️ ALIGN SLIDERS TO PASS TESTS</div>`;
+            html += `<div style="color: ${DS.colors.danger}; font-weight: bold; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; text-align: center; margin-top: 4px;">⚠️ ALIGN SLIDERS TO PASS TESTS</div>`;
         }
 
         html += `</div>`;
@@ -499,6 +513,7 @@ const buildSchema = (type: DroneType, name: string, glbUrl: string, baseDefaults
         detectionRadius: config.detectionRadius ?? 30.0,
         fovHalfAngle: config.fovHalfAngle ?? (Math.PI / 4),
         decelerationRadius: config.decelerationRadius ?? 5.0,
+        decayRate: config.decayRate ?? (1.0 / 15.0),
         damage: config.damage
     };
 
@@ -633,6 +648,7 @@ const buildSchema = (type: DroneType, name: string, glbUrl: string, baseDefaults
     category4.detectionRadius = { label: "Detection Radius (m)", min: 5.0, max: 100.0, step: 1.0 };
     category4.fovHalfAngle = { label: "FOV Half-Angle (rad)", min: 0.1, max: Math.PI, step: 0.05 };
     category4.decelerationRadius = { label: "Deceleration Radius (m)", min: 0.0, max: 30.0, step: 0.5 };
+    category4.decayRate = { label: "Memory Decay Rate (1/s)", min: 0.0, max: 1.0, step: 0.01 };
     if (type !== DroneType.FIXED_WING) { 
         category4.maxTurnRate = { label: "Max Turn Rate (rad/s)", min: 0.1, max: 10.0, step: 0.1 };
     }
@@ -743,6 +759,28 @@ let isDevEntitiesActive = false;
 let isInitialized = false;
 
 let currentTab: string = "ROTARY_SHOOTER";
+
+// Player Tab calibration variables
+let activePlayerWeaponKey = "rifle";
+let isFirstPersonPerspective = true;
+let playerLoopMode: "IDLE" | "WALK" | "ADS" | "RELOAD" | "DRAW" = "IDLE";
+let playerLoopTimer = 0.0;
+let playerAdsLerp = 0.0; // dynamic ADS transition state
+let playerSwayCycle = 0.0;
+
+// Mutable player physics tunables object for the Calibration UI
+const PLAYER_CALIBRATION_PARAMS = {
+    radius: PLAYER_RADIUS,
+    totalHeight: PLAYER_TOTAL_HEIGHT,
+    baseSpeed: 5.5,
+    crouchSpeed: 2.5,
+    sprintMultiplier: 1.6,
+    dashMultiplier: 2.5,
+    jumpVelocity: 7.0,
+    gravity: 18.0,
+    hp: 100,
+};
+
 let activeGLBModel: THREE.Group | null = null;
 let activeMuzzleVisual: THREE.Mesh | null = null;
 let activeLightLeftVisual: THREE.Mesh | null = null;
@@ -806,8 +844,8 @@ export async function initDevEntities() {
         inset: "0",
         zIndex: "1400",
         display: "none",
-        backgroundColor: "#1a2b4c",
-        color: "#ffffff",
+        backgroundColor: "${DS.colors.background}",
+        color: "${DS.colors.text}",
         fontFamily: DS.typography.fontFamily,
         overflow: "hidden",
         touchAction: "none"
@@ -848,7 +886,7 @@ function buildDOM() {
         #de-canvas-container {
             flex: 1 1 auto;
             position: relative;
-            background: #1a2b4c;
+            background: ${DS.colors.background};
             min-height: 50%;
         }
         #de-controls-drawer {
@@ -889,7 +927,7 @@ function buildDOM() {
             text-align: center;
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
-            color: #888;
+            color: ${DS.colors.textMuted};
             cursor: pointer;
             font-weight: bold;
             text-transform: uppercase;
@@ -903,7 +941,7 @@ function buildDOM() {
         .de-category-select {
             width: 100%;
             background: #000;
-            color: #fff;
+            color: ${DS.colors.text};
             border: 1px solid ${DS.colors.border};
             padding: 10px;
             font-size: 12px;
@@ -920,7 +958,7 @@ function buildDOM() {
             background: rgba(10, 15, 25, 0.85);
             backdrop-filter: blur(8px);
             border: 1px solid ${DS.colors.border};
-            color: #fff;
+            color: ${DS.colors.text};
             padding: 8px 12px;
             font-size: 11px;
             border-radius: 4px;
@@ -962,10 +1000,10 @@ function buildDOM() {
     drawer.className = "collapsed";
     layout.appendChild(drawer);
 
-    // Build tabs for exactly 7 drone types
+    // Build tabs for exactly 7 drone types + Player
     const tabsHtml = DRONE_SCHEMAS.map((s, idx) => {
         return `<div class="de-tab ${idx === 0 ? 'active' : ''}" data-tab="${s.id}">${s.name.split(" ")[0]}</div>`;
-    }).join("");
+    }).join("") + `<div class="de-tab" data-tab="PLAYER">Player</div>`;
 
     drawer.innerHTML = `
         <div id="de-drawer-content">
@@ -1087,7 +1125,11 @@ function buildDOM() {
     drawer.querySelector("#de-category-picker")!.addEventListener("change", (e: any) => {
         stopSliderAnimation();
         currentCategory = e.target.value;
-        buildSliders(currentTab);
+        if (currentTab === "PLAYER") {
+            buildPlayerSliders();
+        } else {
+            buildSliders(currentTab);
+        }
         
         // Fulfill Section 4: Selecting a category must make the motion play continuously immediately
         if (currentCategory.includes("Category 3") || currentCategory.includes("Category 4")) {
@@ -1205,7 +1247,7 @@ async function setup3D() {
     canvasEl.style.height = "100%";
     canvasEl.style.display = "block";
     canvasEl.style.outline = "none";
-    canvasEl.style.backgroundColor = "#1a2b4c";
+    canvasEl.style.backgroundColor = "${DS.colors.background}";
     canvasCont.appendChild(canvasEl);
 
     // Supercharged Ultra Bright Direct Illumination flashlight & Environment
@@ -1379,6 +1421,11 @@ function switchTab(tabId: string) {
         validationSection.style.display = tabId === "WHEELED" ? "block" : "none";
     }
 
+    if (tabId === "PLAYER") {
+        initPlayerTab();
+        return;
+    }
+
     const schema = DRONE_SCHEMAS.find(s => s.id === tabId);
     if (!schema) return;
 
@@ -1519,7 +1566,7 @@ function buildSliders(tabId: string) {
         const block = document.createElement("div");
         block.className = "de-slider-block";
         block.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #aaa; margin-bottom: 2px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: ${DS.colors.textMuted}; margin-bottom: 2px;">
                 <span>${sliderConf.label}</span>
                 <input type="number" step="any" class="de-val-input" value="${val}" style="width: 70px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); color: ${DS.colors.accent}; font-family: monospace; font-size: 10px; text-align: right; padding: 2px 4px; border-radius: 2px; outline: none;">
             </div>
@@ -1651,6 +1698,7 @@ function syncParamsToConfig(type: DroneType, params: any) {
     if (params.detectionRadius !== undefined) config.detectionRadius = params.detectionRadius;
     if (params.fovHalfAngle !== undefined) config.fovHalfAngle = params.fovHalfAngle;
     if (params.decelerationRadius !== undefined) config.decelerationRadius = params.decelerationRadius;
+    if (params.decayRate !== undefined) config.decayRate = params.decayRate;
 }
 
 function onParamChanged(key: string, value: number) {
@@ -1726,6 +1774,11 @@ function updatePlayerRefPosition() {
     if (!playerRefMesh) return;
     
     const params = currentParams[currentTab];
+    if (!params) {
+        playerRefMesh.visible = false;
+        return;
+    }
+    playerRefMesh.visible = true;
     
     let boundaryWidth = 1.0;
     if (params.colliderType === "Capsule") {
@@ -1741,6 +1794,7 @@ function updatePlayerRefPosition() {
 
 function updateMuzzleVisualLocation() {
     const params = currentParams[currentTab];
+    if (!params) return;
     if (!activeGLBModel) return;
     activeGLBModel.updateMatrixWorld(true);
 
@@ -1864,13 +1918,28 @@ function updateColliderPositionAndDimensions() {
 
     if (!showCollider) return;
 
+    const greenMat = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
+
+    if (currentTab === "PLAYER") {
+        // Player is ALWAYS a Capsule collider representing eye level and height
+        const radius = PLAYER_CALIBRATION_PARAMS.radius;
+        const totalHeight = PLAYER_CALIBRATION_PARAMS.totalHeight;
+        const cylLength = Math.max(0.1, totalHeight - 2 * radius);
+        const capGeo = new THREE.CapsuleGeometry(radius, cylLength, 4, 12);
+        const wireGeo = new THREE.EdgesGeometry(capGeo);
+        activeColliderWireframe = new THREE.LineSegments(wireGeo, greenMat);
+        // Position capsule so bottom sits exactly at ground level (y=0)
+        activeColliderWireframe.position.set(0, totalHeight / 2, 0);
+        scene.add(activeColliderWireframe);
+        return;
+    }
+
     const params = currentParams[currentTab];
+    if (!params) return;
 
     const ox = params.colliderX || 0.0;
     const oy = params.colliderY || 0.0;
     const oz = params.colliderZ || 0.0;
-
-    const greenMat = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
 
     if (params.colliderType === "Capsule") {
         const radius = params.colliderRadius || 0.8;
@@ -2333,15 +2402,29 @@ function triggerSingleShot() {
 }
 
 function openExportPanel() {
-    const out = {
-        _meta: {
-            app: "VEXEA",
-            version: "0.1.0",
-            exportTime: new Date().toISOString(),
-            description: "Calibrated drone performance and visual layout presets"
-        },
-        configs: currentParams
-    };
+    let out: any;
+    if (currentTab === "PLAYER") {
+        out = {
+            _meta: {
+                app: "VEXEA",
+                version: "0.1.0",
+                exportTime: new Date().toISOString(),
+                description: "Calibrated Player physics and Modular Weapon parameters preset"
+            },
+            playerPhysics: PLAYER_CALIBRATION_PARAMS,
+            weaponConfigs: DETAILED_WEAPONS
+        };
+    } else {
+        out = {
+            _meta: {
+                app: "VEXEA",
+                version: "0.1.0",
+                exportTime: new Date().toISOString(),
+                description: "Calibrated drone performance and visual layout presets"
+            },
+            configs: currentParams
+        };
+    }
 
     const json = JSON.stringify(out, null, 4);
     const blob = new Blob([json], { type: "application/json" });
@@ -2349,7 +2432,7 @@ function openExportPanel() {
     
     const a = document.createElement("a");
     a.href = url;
-    a.download = `vexea_drone_configs_${Date.now()}.json`;
+    a.download = currentTab === "PLAYER" ? `vexea_player_weapon_configs_${Date.now()}.json` : `vexea_drone_configs_${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -2394,9 +2477,13 @@ function tickLoop() {
 
     simulationTime += dt;
 
-    updateOrbitCamera();
-    runLoopSimulation(dt);
-    applyProceduralModelAnimations(dt);
+    if (currentTab === "PLAYER") {
+        updatePlayerCalibrationScene(dt);
+    } else {
+        updateOrbitCamera();
+        runLoopSimulation(dt);
+        applyProceduralModelAnimations(dt);
+    }
     updateVFX(dt, camera);
 
     if (localRenderer && scene && camera) {
@@ -3211,6 +3298,617 @@ function applyProceduralModelAnimations(dt: number) {
     
     activeGLBModel.updateMatrixWorld(true);
     updateMuzzleVisualLocation();
+}
+
+// -------------------------------------------------------------
+// Player Calibration & Modular Weapon Calibration Functionality
+// -------------------------------------------------------------
+
+let playerModelMesh: THREE.Group | null = null;
+
+const PLAYER_SLIDER_SCHEMAS: Record<string, Record<string, { label: string; min: number; max: number; step: number; getValue: () => number; setValue: (v: number) => void }>> = {
+    "Category 1 — View & Offsets (FP/TP)": {
+        hipX: {
+            label: "Hip X Offset", min: -0.5, max: 0.5, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.hipPosition[0],
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.hipPosition[0] = v; }
+        },
+        hipY: {
+            label: "Hip Y Offset", min: -1.0, max: 1.0, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.hipPosition[1],
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.hipPosition[1] = v; }
+        },
+        hipZ: {
+            label: "Hip Z Offset", min: -1.0, max: 1.0, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.hipPosition[2],
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.hipPosition[2] = v; }
+        },
+        adsX: {
+            label: "ADS X Offset", min: -0.5, max: 0.5, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.adsPosition[0],
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.adsPosition[0] = v; }
+        },
+        adsY: {
+            label: "ADS Y Offset", min: -1.0, max: 1.0, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.adsPosition[1],
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.adsPosition[1] = v; }
+        },
+        adsZ: {
+            label: "ADS Z Offset", min: -1.0, max: 1.0, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.adsPosition[2],
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.adsPosition[2] = v; }
+        },
+        adsTilt: {
+            label: "ADS Corrective Tilt", min: -0.5, max: 0.5, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.adsTilt,
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.adsTilt = v; }
+        }
+    },
+    "Category 2 — Collider & Muzzle Offsets": {
+        muzzleX: {
+            label: "Muzzle X Offset", min: -1.0, max: 1.0, step: 0.01,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.muzzleOffset[0],
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.muzzleOffset[0] = v; }
+        },
+        muzzleY: {
+            label: "Muzzle Y Offset", min: -1.0, max: 1.0, step: 0.01,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.muzzleOffset[1],
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.muzzleOffset[1] = v; }
+        },
+        muzzleZ: {
+            label: "Muzzle Z Offset", min: -2.0, max: 2.0, step: 0.01,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.muzzleOffset[2],
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].visualConfig.muzzleOffset[2] = v; }
+        },
+        playerRadius: {
+            label: "Player Collider Radius", min: 0.1, max: 1.5, step: 0.01,
+            getValue: () => PLAYER_CALIBRATION_PARAMS.radius,
+            setValue: (v) => { PLAYER_CALIBRATION_PARAMS.radius = v; updateColliderPositionAndDimensions(); }
+        },
+        playerHeight: {
+            label: "Player Total Height", min: 0.5, max: 3.0, step: 0.01,
+            getValue: () => PLAYER_CALIBRATION_PARAMS.totalHeight,
+            setValue: (v) => { PLAYER_CALIBRATION_PARAMS.totalHeight = v; updateColliderPositionAndDimensions(); }
+        }
+    },
+    "Category 3 — Recoil, Sway & Sound VFX": {
+        recoilForceUp: {
+            label: "Recoil Force Up (Pitch)", min: 0.0, max: 0.5, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].recoilForceUp,
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].recoilForceUp = v; }
+        },
+        recoilForceSide: {
+            label: "Recoil Force Side (Yaw)", min: 0.0, max: 0.5, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].recoilForceSide,
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].recoilForceSide = v; }
+        },
+        recoilRecoveryRate: {
+            label: "Recoil Recovery Rate", min: 1.0, max: 20.0, step: 0.1,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].recoilRecoveryRate,
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].recoilRecoveryRate = v; }
+        },
+        fireRateHz: {
+            label: "Fire Rate (Hz)", min: 1, max: 30, step: 1,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].fireRateHz,
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].fireRateHz = v; }
+        },
+        adsTransitionSpeed: {
+            label: "ADS Zoom Transition Speed", min: 1.0, max: 20.0, step: 0.1,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].adsTransitionSpeed,
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].adsTransitionSpeed = v; }
+        }
+    },
+    "Category 4 — Server-Authoritative Combat & Speeds": {
+        playerSpeed: {
+            label: "Player Movement Speed (m/s)", min: 1.0, max: 20.0, step: 0.1,
+            getValue: () => PLAYER_CALIBRATION_PARAMS.baseSpeed,
+            setValue: (v) => { PLAYER_CALIBRATION_PARAMS.baseSpeed = v; }
+        },
+        playerMaxHp: {
+            label: "Player Maximum Health", min: 1, max: 500, step: 1,
+            getValue: () => PLAYER_CALIBRATION_PARAMS.hp,
+            setValue: (v) => { PLAYER_CALIBRATION_PARAMS.hp = v; }
+        },
+        damage: {
+            label: "Bullet Damage", min: 1, max: 200, step: 1,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].damage,
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].damage = v; }
+        },
+        capacity: {
+            label: "Magazine Capacity", min: 1, max: 200, step: 1,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].capacity,
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].capacity = v; }
+        },
+        baseSpreadRad: {
+            label: "Base Spread (Rad)", min: 0.0, max: 0.1, step: 0.001,
+            getValue: () => DETAILED_WEAPONS[activePlayerWeaponKey as any].baseSpreadRad,
+            setValue: (v) => { DETAILED_WEAPONS[activePlayerWeaponKey as any].baseSpreadRad = v; }
+        }
+    }
+};
+
+function getModulatedPlayerValue(key: string): number {
+    let conf: any = null;
+    for (const cat of Object.keys(PLAYER_SLIDER_SCHEMAS)) {
+        if (PLAYER_SLIDER_SCHEMAS[cat][key]) {
+            conf = PLAYER_SLIDER_SCHEMAS[cat][key];
+            break;
+        }
+    }
+    if (!conf) return 0;
+    const baseVal = conf.getValue();
+
+    if (activeSliderAnimationKey !== key) {
+        return baseVal;
+    }
+
+    switch (key) {
+        case "hipX":
+        case "hipY":
+        case "hipZ":
+        case "adsX":
+        case "adsY":
+        case "adsZ":
+            return baseVal + Math.sin(sliderAnimTimer * 5.0) * 0.25;
+        case "adsTilt":
+            return baseVal + Math.sin(sliderAnimTimer * 5.0) * 0.15;
+        case "muzzleX":
+        case "muzzleY":
+        case "muzzleZ":
+            return baseVal + Math.sin(sliderAnimTimer * 5.0) * 0.3;
+        case "playerRadius":
+            return Math.max(0.1, baseVal + Math.sin(sliderAnimTimer * 5.0) * 0.15);
+        case "playerHeight":
+            return Math.max(0.5, baseVal + Math.sin(sliderAnimTimer * 5.0) * 0.4);
+        case "recoilForceUp":
+        case "recoilForceSide":
+            return Math.max(0.0, baseVal + Math.sin(sliderAnimTimer * 5.0) * 0.15);
+        case "recoilRecoveryRate":
+            return Math.max(1.0, baseVal + Math.sin(sliderAnimTimer * 5.0) * 5.0);
+        case "fireRateHz":
+            return Math.max(1, Math.round(baseVal + Math.sin(sliderAnimTimer * 5.0) * 8.0));
+        case "adsTransitionSpeed":
+            return Math.max(1.0, baseVal + Math.sin(sliderAnimTimer * 5.0) * 5.0);
+        case "playerSpeed":
+            return Math.max(1.0, baseVal + Math.sin(sliderAnimTimer * 5.0) * 2.0);
+        case "playerMaxHp":
+            return Math.max(1, Math.round(baseVal + Math.sin(sliderAnimTimer * 5.0) * 50.0));
+        case "damage":
+            return Math.max(1, Math.round(baseVal + Math.sin(sliderAnimTimer * 5.0) * 40.0));
+        case "capacity":
+            return Math.max(1, Math.round(baseVal + Math.sin(sliderAnimTimer * 5.0) * 30.0));
+        case "baseSpreadRad":
+            return Math.max(0.0, baseVal + Math.sin(sliderAnimTimer * 5.0) * 0.03);
+        default:
+            return baseVal;
+    }
+}
+
+function initPlayerTab() {
+    currentCategory = "Category 1 — View & Offsets (FP/TP)";
+    buildPlayerSliders();
+    loadPlayerCalibrationScene();
+}
+
+function buildPlayerSliders() {
+    const slidersCont = document.getElementById("de-sliders-container")!;
+    const picker = document.getElementById("de-category-picker") as HTMLSelectElement;
+    slidersCont.innerHTML = "";
+
+    const categories = Object.keys(PLAYER_SLIDER_SCHEMAS);
+    picker.innerHTML = categories.map(c => {
+        return `<option value="${c}" ${c === currentCategory ? 'selected' : ''}>CATEGORY: ${c.toUpperCase()}</option>`;
+    }).join("");
+
+    // Custom header for Active Weapon and Perspective selection
+    const headerBlock = document.createElement("div");
+    headerBlock.style.cssText = "margin-bottom: 12px; padding: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 4px;";
+    headerBlock.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 10px; font-weight: bold; color: ${DS.colors.accent}; letter-spacing: 0.5px;">ACTIVE WEAPON PRESET</span>
+            <select id="player-weapon-select" style="background: #000; color: ${DS.colors.text}; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; padding: 2px 4px; border-radius: 2px; outline: none;">
+                ${Object.keys(DETAILED_WEAPONS).map(k => `<option value="${k}" ${k === activePlayerWeaponKey ? 'selected' : ''}>${k.toUpperCase()}</option>`).join("")}
+            </select>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 10px; font-weight: bold; color: ${DS.colors.accent}; letter-spacing: 0.5px;">PERSPECTIVE VIEW</span>
+            <button id="player-perspective-btn" class="de-overlay-btn" style="padding: 2px 6px; font-size: 9px; min-width: 100px; text-align: center;">
+                ${isFirstPersonPerspective ? "FIRST PERSON (ADS)" : "THIRD PERSON"}
+            </button>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 10px; font-weight: bold; color: ${DS.colors.accent}; letter-spacing: 0.5px;">LOOP MODE</span>
+            <select id="player-loop-select" style="background: #000; color: ${DS.colors.text}; border: 1px solid rgba(255,255,255,0.1); font-size: 10px; padding: 2px 4px; border-radius: 2px; outline: none;">
+                <option value="IDLE" ${playerLoopMode === 'IDLE' ? 'selected' : ''}>IDLE BREATHING</option>
+                <option value="WALK" ${playerLoopMode === 'WALK' ? 'selected' : ''}>WALK SWAY</option>
+                <option value="ADS" ${playerLoopMode === 'ADS' ? 'selected' : ''}>ADS TRANSITION</option>
+                <option value="RELOAD" ${playerLoopMode === 'RELOAD' ? 'selected' : ''}>RELOAD</option>
+                <option value="DRAW" ${playerLoopMode === 'DRAW' ? 'selected' : ''}>DRAW / EQUIP</option>
+            </select>
+        </div>
+        <div style="display: flex; justify-content: center; margin-top: 10px;">
+            <button id="player-fire-btn" class="de-overlay-btn" style="width: 100%; padding: 6px; font-size: 10px; font-weight: bold; background: rgba(255, 0, 100, 0.15); border-color: rgba(255, 0, 100, 0.4); color: #ff0064;">
+                [ TRIGGER FIRE SINGLE SHOT ]
+            </button>
+        </div>
+    `;
+
+    slidersCont.appendChild(headerBlock);
+
+    // Bind event listeners for the player custom header
+    const weaponSelect = headerBlock.querySelector("#player-weapon-select") as HTMLSelectElement;
+    weaponSelect.addEventListener("change", (e: any) => {
+        activePlayerWeaponKey = e.target.value;
+        loadPlayerCalibrationScene();
+        buildPlayerSliders();
+    });
+
+    const perspectiveBtn = headerBlock.querySelector("#player-perspective-btn") as HTMLButtonElement;
+    perspectiveBtn.addEventListener("click", () => {
+        isFirstPersonPerspective = !isFirstPersonPerspective;
+        perspectiveBtn.textContent = isFirstPersonPerspective ? "FIRST PERSON (ADS)" : "THIRD PERSON";
+        // Reset/update player model visibilities
+        if (playerModelMesh) {
+            playerModelMesh.visible = !isFirstPersonPerspective;
+        }
+        updateColliderPositionAndDimensions();
+    });
+
+    const loopSelect = headerBlock.querySelector("#player-loop-select") as HTMLSelectElement;
+    loopSelect.addEventListener("change", (e: any) => {
+        playerLoopMode = e.target.value as any;
+        playerLoopTimer = 0.0;
+    });
+
+    const fireBtn = headerBlock.querySelector("#player-fire-btn") as HTMLButtonElement;
+    fireBtn.addEventListener("click", () => {
+        triggerPlayerFireAction();
+    });
+
+    // Now render category specific sliders
+    const activeCatData = PLAYER_SLIDER_SCHEMAS[currentCategory];
+    if (!activeCatData) return;
+
+    Object.keys(activeCatData).forEach(key => {
+        const sliderConf = activeCatData[key];
+        const val = sliderConf.getValue();
+
+        const isCurrentlyPlaying = activeSliderAnimationKey === key;
+        const btnText = isCurrentlyPlaying ? "STOP" : "PLAY";
+        const btnStyleColor = isCurrentlyPlaying ? "#FF0064" : "#fff";
+        const btnBorderColor = isCurrentlyPlaying ? "#FF0064" : DS.colors.border;
+
+        const block = document.createElement("div");
+        block.className = "de-slider-block";
+        block.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: ${DS.colors.textMuted}; margin-bottom: 2px;">
+                <span>${sliderConf.label}</span>
+                <input type="number" step="any" class="de-val-input" value="${val}" style="width: 70px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); color: ${DS.colors.accent}; font-family: monospace; font-size: 10px; text-align: right; padding: 2px 4px; border-radius: 2px; outline: none;">
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="range" class="de-slider" data-key="${key}" min="${sliderConf.min}" max="${sliderConf.max}" step="${sliderConf.step}" value="${val}" style="flex: 1; height: 32px; accent-color: ${DS.colors.accent};">
+                <button class="de-play-anim-btn de-overlay-btn" data-key="${key}" style="padding: 4px 8px; font-size: 10px; font-weight: bold; min-width: 65px; text-align: center; color: ${btnStyleColor}; border-color: ${btnBorderColor};">[ ${btnText} ]</button>
+            </div>
+        `;
+
+        const slider = block.querySelector(".de-slider") as HTMLInputElement;
+        const numInput = block.querySelector(".de-val-input") as HTMLInputElement;
+        const playBtn = block.querySelector(".de-play-anim-btn") as HTMLButtonElement;
+
+        playBtn.addEventListener("click", () => {
+            toggleSliderAnimation(key);
+        });
+
+        slider.addEventListener("input", (e: any) => {
+            const nVal = parseFloat(e.target.value);
+            sliderConf.setValue(nVal);
+            numInput.value = nVal.toString();
+            onPlayerParamChanged(key, nVal);
+        });
+
+        numInput.addEventListener("input", (e: any) => {
+            let nVal = parseFloat(e.target.value);
+            if (isNaN(nVal)) return;
+            nVal = Math.max(sliderConf.min, Math.min(sliderConf.max, nVal));
+            sliderConf.setValue(nVal);
+            slider.value = nVal.toString();
+            onPlayerParamChanged(key, nVal);
+        });
+
+        numInput.addEventListener("change", (e: any) => {
+            let nVal = parseFloat(e.target.value);
+            if (isNaN(nVal)) {
+                e.target.value = sliderConf.getValue().toString();
+                return;
+            }
+            nVal = Math.max(sliderConf.min, Math.min(sliderConf.max, nVal));
+            sliderConf.setValue(nVal);
+            e.target.value = nVal.toString();
+            slider.value = nVal.toString();
+            onPlayerParamChanged(key, nVal);
+        });
+
+        slidersCont.appendChild(block);
+    });
+}
+
+function onPlayerParamChanged(key: string, val: number) {
+    if (key === "playerRadius" || key === "playerHeight") {
+        updateColliderPositionAndDimensions();
+    }
+}
+
+async function loadPlayerCalibrationScene() {
+    // Clear standard drone artifacts
+    if (activeGLBModel) {
+        scene.remove(activeGLBModel);
+        activeGLBModel = null;
+    }
+    if (playerModelMesh) {
+        scene.remove(playerModelMesh);
+        playerModelMesh = null;
+    }
+    if (weaponsContainer) {
+        scene.remove(weaponsContainer);
+    }
+    if (activeMuzzleVisual) {
+        scene.remove(activeMuzzleVisual);
+        activeMuzzleVisual = null;
+    }
+    if (activeLightLeftVisual) {
+        scene.remove(activeLightLeftVisual);
+        activeLightLeftVisual = null;
+    }
+    if (activeLightRightVisual) {
+        scene.remove(activeLightRightVisual);
+        activeLightRightVisual = null;
+    }
+    if (activeColliderWireframe) {
+        scene.remove(activeColliderWireframe);
+        activeColliderWireframe = null;
+    }
+
+    // 1. Create Player Model group
+    playerModelMesh = new THREE.Group();
+    playerModelMesh.name = "PlayerModelGroup";
+    scene.add(playerModelMesh);
+
+    const loader = new GLTFLoader();
+    try {
+        const url = await getAssetUrl('bpre_rifleman.glb');
+        console.log(`[DevEntities] Sourcing Player GLB: ${url}`);
+        const gltf = await loader.loadAsync(url);
+        if (gltf && gltf.scene) {
+            gltf.scene.traverse((node: any) => {
+                if (node.isMesh && node.material) {
+                    node.material.metalness = 0.5;
+                    node.material.roughness = 0.5;
+                }
+            });
+            playerModelMesh.add(gltf.scene);
+        }
+    } catch (e) {
+        console.warn(`[DevEntities] Sourcing Player GLB failed, synthesizing premium fallback.`);
+        // Synthesize extremely slick fallback mannequin
+        const mat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, metalness: 0.8, roughness: 0.2 });
+        
+        // Torso
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.7), mat);
+        torso.position.y = 1.15;
+        playerModelMesh.add(torso);
+
+        // Head
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), mat);
+        head.position.set(0, 1.6, 0);
+        playerModelMesh.add(head);
+
+        // Legs
+        const lLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 0.7), mat);
+        lLeg.position.set(-0.12, 0.45, 0);
+        playerModelMesh.add(lLeg);
+
+        const rLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 0.7), mat);
+        rLeg.position.set(0.12, 0.45, 0);
+        playerModelMesh.add(rLeg);
+    }
+
+    // Hide character mesh if starting in first person view
+    playerModelMesh.visible = !isFirstPersonPerspective;
+
+    // 2. Initialize Authoritative Weapons Group
+    await initPlayerWeapons(scene, camera);
+
+    if (activePlayerWeaponKey === "rifle") {
+        weaponVisualState.activeSlot = 1;
+        if (rifleGroup) rifleGroup.visible = true;
+        if (pistolGroup) pistolGroup.visible = false;
+    } else if (activePlayerWeaponKey === "pistol") {
+        weaponVisualState.activeSlot = 2;
+        if (rifleGroup) rifleGroup.visible = false;
+        if (pistolGroup) pistolGroup.visible = true;
+    }
+
+    // Initialize interactive Muzzle Visual (Pink sphere)
+    const mGeo = new THREE.SphereGeometry(0.04, 8, 8);
+    const mMat = new THREE.MeshBasicMaterial({ color: 0xff0064, transparent: true, opacity: 0.85 });
+    activeMuzzleVisual = new THREE.Mesh(mGeo, mMat);
+    scene.add(activeMuzzleVisual);
+    activeMuzzleVisual.visible = showMuzzle;
+
+    updateColliderPositionAndDimensions();
+}
+
+function updatePlayerCalibrationScene(dt: number) {
+    if (!weaponsContainer) return;
+
+    playerLoopTimer += dt;
+    if (activeSliderAnimationKey) {
+        sliderAnimTimer += dt;
+    }
+
+    const stats = DETAILED_WEAPONS[activePlayerWeaponKey as any];
+    if (!stats) return;
+
+    // 1. Save original visualConfig values to prevent mutating global config state
+    const originalHip = [...stats.visualConfig.hipPosition];
+    const originalAds = [...stats.visualConfig.adsPosition];
+    const originalMuzzle = [...stats.visualConfig.muzzleOffset];
+    const originalTilt = stats.visualConfig.adsTilt || 0;
+
+    // 2. Temporarily apply modulated values for rendering
+    stats.visualConfig.hipPosition[0] = getModulatedPlayerValue("hipX");
+    stats.visualConfig.hipPosition[1] = getModulatedPlayerValue("hipY");
+    stats.visualConfig.hipPosition[2] = getModulatedPlayerValue("hipZ");
+
+    stats.visualConfig.adsPosition[0] = getModulatedPlayerValue("adsX");
+    stats.visualConfig.adsPosition[1] = getModulatedPlayerValue("adsY");
+    stats.visualConfig.adsPosition[2] = getModulatedPlayerValue("adsZ");
+
+    stats.visualConfig.adsTilt = getModulatedPlayerValue("adsTilt");
+
+    stats.visualConfig.muzzleOffset[0] = getModulatedPlayerValue("muzzleX");
+    stats.visualConfig.muzzleOffset[1] = getModulatedPlayerValue("muzzleY");
+    stats.visualConfig.muzzleOffset[2] = getModulatedPlayerValue("muzzleZ");
+
+    // 3. Perspective View Camera Transitions
+    const playerEyeLevel = PLAYER_CALIBRATION_PARAMS.totalHeight * 0.92;
+    const targetCamTarget = new THREE.Vector3(0, playerEyeLevel, 0);
+    const targetCamPos = new THREE.Vector3();
+
+    if (isFirstPersonPerspective) {
+        targetCamPos.set(0, playerEyeLevel, 0);
+        camTarget.lerp(targetCamTarget, 10.0 * dt);
+        camera.position.copy(targetCamPos);
+        
+        const targetRot = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0));
+        camera.quaternion.slerp(targetRot, 10.0 * dt);
+    } else {
+        targetCamTarget.set(0, playerEyeLevel / 2, 0);
+        camTarget.lerp(targetCamTarget, 10.0 * dt);
+        
+        const cosPhi = Math.cos(camPhi);
+        targetCamPos.x = camTarget.x + camRadius * Math.sin(camTheta) * cosPhi;
+        targetCamPos.y = camTarget.y + camRadius * Math.sin(camPhi);
+        targetCamPos.z = camTarget.z + camRadius * Math.cos(camTheta) * cosPhi;
+        
+        camera.position.copy(targetCamPos);
+        camera.lookAt(camTarget);
+    }
+
+    // 4. Calculate loop states & ADS/Moving lerps
+    const adsSpeed = getModulatedPlayerValue("adsTransitionSpeed");
+    if (playerLoopMode === "ADS") {
+        const targetAds = (Math.sin(playerLoopTimer * 2.0) + 1.0) / 2.0;
+        playerAdsLerp += (targetAds - playerAdsLerp) * adsSpeed * dt;
+    } else {
+        playerAdsLerp += (0 - playerAdsLerp) * adsSpeed * dt;
+    }
+    playerAdsLerp = Math.max(0.0, Math.min(1.0, playerAdsLerp));
+
+    let swayY = 0;
+    if (playerLoopMode === "WALK") {
+        playerSwayCycle += dt * 6.0;
+        swayY = Math.cos(playerSwayCycle * 2.0) * 0.008;
+    } else {
+        playerSwayCycle += dt * 1.5;
+        swayY = Math.cos(playerSwayCycle * 2.0) * 0.0015;
+    }
+
+    const isMoving = (playerLoopMode === "WALK");
+    const isADS = (playerLoopMode === "ADS" || (playerLoopMode === "IDLE" && isFirstPersonPerspective));
+
+    // Handle high-priority non-loop transitions (RELOAD and DRAW)
+    if (playerLoopMode === "RELOAD") {
+        if (weaponVisualState.currentState !== WeaponAnimState.RELOAD) {
+            transitionToState(WeaponAnimState.RELOAD, true);
+        }
+    } else if (playerLoopMode === "DRAW") {
+        if (weaponVisualState.currentState !== WeaponAnimState.DRAW) {
+            transitionToState(WeaponAnimState.DRAW, true);
+        }
+    }
+
+    // 5. Update Authoritative Weapons Container
+    if (isFirstPersonPerspective) {
+        updateWeaponsContainer(dt, camera, isADS, playerAdsLerp, isMoving);
+    } else {
+        // Run update so mixers and actions process normally
+        updateWeaponsContainer(dt, camera, isADS, playerAdsLerp, isMoving);
+        
+        // Reposition container relative to third person character model hand position
+        if (weaponsContainer) {
+            weaponsContainer.position.set(0.18, 1.1 + swayY, 0.25);
+            if (playerModelMesh) {
+                weaponsContainer.quaternion.copy(playerModelMesh.quaternion);
+            }
+            weaponsContainer.rotateY(Math.PI);
+        }
+    }
+
+    // 6. Restore original/base values in the global stats configuration
+    stats.visualConfig.hipPosition[0] = originalHip[0];
+    stats.visualConfig.hipPosition[1] = originalHip[1];
+    stats.visualConfig.hipPosition[2] = originalHip[2];
+
+    stats.visualConfig.adsPosition[0] = originalAds[0];
+    stats.visualConfig.adsPosition[1] = originalAds[1];
+    stats.visualConfig.adsPosition[2] = originalAds[2];
+
+    stats.visualConfig.muzzleOffset[0] = originalMuzzle[0];
+    stats.visualConfig.muzzleOffset[1] = originalMuzzle[1];
+    stats.visualConfig.muzzleOffset[2] = originalMuzzle[2];
+
+    stats.visualConfig.adsTilt = originalTilt;
+
+    // 7. Update Pink Muzzle Visual point using the authoritative world position
+    if (activeMuzzleVisual) {
+        getMuzzleWorldPosition(activeMuzzleVisual.position, camera);
+        activeMuzzleVisual.visible = showMuzzle;
+    }
+}
+
+function triggerPlayerFireAction() {
+    const stats = DETAILED_WEAPONS[activePlayerWeaponKey as any];
+    if (!stats) return;
+
+    const recoilForceUp = getModulatedPlayerValue("recoilForceUp");
+    const recoilForceSide = getModulatedPlayerValue("recoilForceSide");
+
+    // Apply recoil to the authoritative system
+    applyWeaponRecoil(recoilForceUp, recoilForceSide);
+
+    // 1. Play real-time Synthesized Synth Firing sound
+    const audioCtx = (window as any).audioCtx || new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (audioCtx) {
+        (window as any).audioCtx = audioCtx;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        let baseFreq = 180;
+        if (activePlayerWeaponKey === "pistol") baseFreq = 260;
+        if (activePlayerWeaponKey === "sniper") baseFreq = 110;
+        if (activePlayerWeaponKey === "shotgun") baseFreq = 90;
+        
+        osc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.15);
+        
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
+        
+        osc.type = "sawtooth";
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.2);
+    }
+
+    // 2. VFX Flash + Bullet Tracer Spawning inside calibration view
+    if (activeMuzzleVisual && activeMuzzleVisual.visible) {
+        triggerFlash(activeMuzzleVisual.position);
+        const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        spawnTracer(activeMuzzleVisual.position, dir);
+    }
 }
 
 // Global window registration

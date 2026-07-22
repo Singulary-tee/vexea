@@ -11,9 +11,9 @@ export const VFX_CONSTANTS = {
     LIGHT_INTENSITY: 25.0,
     LIGHT_DECAY: 2.0,
     LIGHT_DISTANCE: 8.0,
-    LIGHT_COLOR: 0xFF9D3B, // Warm high-intensity amber
-    CORE_COLOR: [1.0, 0.9, 0.7], // Inner core hot white-yellow
-    EDGE_COLOR: [1.0, 0.4, 0.1], // Outer gas plume orange-red
+    LIGHT_COLOR: 0xFF4500, // Matched to DS.colors.accent
+    CORE_COLOR: [1.0, 1.0, 1.0], // Inner core hot white
+    EDGE_COLOR: [1.0, 0.27, 0.0], // Outer gas plume orange-red (#FF4500 normalized)
     
     SPIKE_COUNT: 4,
     SPIKE_LENGTH: 1.5,

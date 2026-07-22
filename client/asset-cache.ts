@@ -369,7 +369,10 @@ export async function getCachedOrFetchUrl(
         ? "https://github.com/Singulary-tee/vexea/releases/download/Images"
         : "https://github.com/Singulary-tee/vexea/releases/download/Sound";
 
-    const downloadUrl = `${baseUrl}/${baseName}`;
+    const downloadUrl = baseName === "faction_card.jpg" 
+      ? "https://s3.filebase.com/vexea-international/Images/Backgrounds/faction_card.jpg"
+      : `${baseUrl}/${baseName}`;
+      
     const s = getSettings();
     const serverPrefix = s.serverUrl ? s.serverUrl.replace(/\/$/, "") : "";
     const proxyUrl = `${serverPrefix}/api/proxy-asset?url=${encodeURIComponent(downloadUrl)}`;
@@ -385,7 +388,7 @@ export async function getCachedOrFetchUrl(
       // Production builds outside of AI Studio must fetch directly from CDN without server proxy
       response = await fetch(downloadUrl);
       if (!response.ok) {
-        throw new Error(`[Cache] CDN fetch failed for ${baseName}: status ${response.status}`);
+        throw new Error(`[Cache] CDN fetch failed for ${baseName}: status ${response.status} ${response.statusText}`);
       }
     } else {
       try {
@@ -397,7 +400,8 @@ export async function getCachedOrFetchUrl(
         console.warn(`[Cache] Direct CDN fetch failed for ${baseName}, attempting proxy fallback:`, directErr);
         response = await fetch(proxyUrl);
         if (!response.ok) {
-          throw new Error(`[Cache] CDN fetch failed for ${baseName} via proxy fallback: ${response.statusText}`);
+          const errorText = await response.text().catch(() => "");
+          throw new Error(`[Cache] CDN fetch failed for ${baseName} via proxy fallback: ${response.status} ${response.statusText} - ${errorText}`);
         }
       }
     }
@@ -437,7 +441,7 @@ export async function getCachedOrFetchUrl(
         : category === "Video"
         ? "video/mp4"
         : category === "Image"
-        ? "image/png"
+        ? (baseName.toLowerCase().endsWith(".jpg") || baseName.toLowerCase().endsWith(".jpeg") ? "image/jpeg" : "image/png")
         : "application/octet-stream";
     const blob = new Blob([fullBuffer], { type: mime });
 
@@ -477,20 +481,20 @@ export async function ensureAssetsDownloaded(onComplete: () => void, mapId: stri
   const modal = document.createElement("div");
   Object.assign(modal.style, {
     position: "fixed", inset: "0", zIndex: "9999", display: "flex",
-    alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.85)",
+    alignItems: "center", justifyContent: "center", background: DS.utils.rgba('#000000', 0.85),
     backdropFilter: "blur(4px)"
   });
 
   const dialog = document.createElement("div");
   Object.assign(dialog.style, {
-    background: "#0A0A0A", border: "1px solid #C8882A", padding: "24px",
-    display: "flex", flexDirection: "column", gap: "16px", minWidth: "300px", maxWidth: "400px"
+    background: DS.colors.background, border: `${DS.borders.thin} ${DS.colors.accent}`, padding: DS.spacing.xxl,
+    display: "flex", flexDirection: "column", gap: DS.spacing.xl, minWidth: "300px", maxWidth: "400px"
   });
 
   const title = document.createElement("div");
   title.textContent = "GAME ASSETS REQUIRED";
   Object.assign(title.style, {
-    fontFamily: DS.typography.fontFamily, fontSize: "20px", color: "#C8882A",
+    fontFamily: DS.typography.fontFamily, fontSize: "20px", color: DS.colors.accent,
     fontWeight: "bold", textTransform: "uppercase"
   });
 
@@ -504,7 +508,7 @@ export async function ensureAssetsDownloaded(onComplete: () => void, mapId: stri
   const barWrapper = document.createElement("div");
   Object.assign(barWrapper.style, { width: "100%", height: "4px", background: "#1A1A1A" });
   const barInner = document.createElement("div");
-  Object.assign(barInner.style, { width: "0%", height: "100%", background: "#C8882A", transition: "width 0.1s" });
+  Object.assign(barInner.style, { width: "0%", height: "100%", background: DS.colors.accent, transition: "width 0.1s" });
   barWrapper.appendChild(barInner);
   
   const progressText = document.createElement("div");
@@ -527,8 +531,8 @@ export async function ensureAssetsDownloaded(onComplete: () => void, mapId: stri
   const acceptBtn = document.createElement("button");
   acceptBtn.textContent = "DOWNLOAD";
   Object.assign(acceptBtn.style, {
-    flex: "1", padding: "8px", background: "#C8882A", border: "none",
-    color: "#0A0A0A", fontFamily: DS.typography.fontFamily, fontWeight: "bold", cursor: "pointer"
+    flex: "1", padding: "8px", background: DS.colors.accent, border: "none",
+    color: DS.colors.background, fontFamily: DS.typography.fontFamily, fontWeight: "bold", cursor: "pointer"
   });
 
   acceptBtn.addEventListener("click", async () => {

@@ -1,13 +1,15 @@
+import { DS } from './design-system';
+
 export const HUD_HTML = `
     <!-- MAIN INTERACTIVE PORT -->
-    <div id="vexea-view" class="relative w-screen h-screen overflow-hidden bg-transparent  select-none text-white touch-none" style="font-family: 'Rajdhani', sans-serif !important; font-weight: 500 !important;">
+    <div id="vexea-view" class="relative w-screen h-screen overflow-hidden bg-transparent  select-none text-white touch-none" style="font-family: ${DS.typography.fontFamilySecondary} !important; font-weight: ${DS.typography.weightMedium} !important;">
       
       <!-- Death Overlay -->
-      <div id="death-overlay" style="display: none; position: absolute; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.88); flex-direction: column; align-items: center; justify-content: center; pointer-events: none; color: white; font-family: 'Rajdhani', sans-serif; user-select: none;">
-        <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(12px); padding: 2rem 3rem; border-radius: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-          <div style="font-size: 1.2rem; letter-spacing: 0.3em; color: rgba(255,255,255,0.4); text-transform: uppercase;">CONTRACTOR DOWN</div>
-          <div id="death-countdown" style="font-size: 5rem; color: #C8882A; line-height: 1.2;">5</div>
-          <div style="font-size: 0.85rem; letter-spacing: 0.4em; color: rgba(255,255,255,0.3); text-transform: uppercase;">RESPAWNING</div>
+      <div id="death-overlay" style="display: none; position: absolute; inset: 0; z-index: 1000; background: ${DS.shadows.overlay}; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; color: white; font-family: ${DS.typography.fontFamilySecondary}, sans-serif; user-select: none;">
+        <div style="background: rgba(255,255,255,0.04); border: ${DS.borders.thin} rgba(255,255,255,0.08); backdrop-filter: ${DS.glass.blur}; padding: 2rem 3rem; border-radius: ${DS.borders.radius.none}; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+          <div style="font-size: 1.2rem; letter-spacing: ${DS.typography.letterSpacing.wide}; color: rgba(255,255,255,0.4); text-transform: uppercase;">CONTRACTOR DOWN</div>
+          <div id="death-countdown" style="font-size: 5rem; color: ${DS.colors.accent}; line-height: 1.2;">5</div>
+          <div style="font-size: 0.85rem; letter-spacing: ${DS.typography.letterSpacing.extraWide}; color: rgba(255,255,255,0.3); text-transform: uppercase;">RESPAWNING</div>
         </div>
       </div>
 
@@ -25,12 +27,12 @@ export const HUD_HTML = `
   inset: 0 !important;
   pointer-events: none !important;
   user-select: none !important;
-  font-family: 'Rajdhani', sans-serif !important;
-  font-weight: 500 !important;
-  letter-spacing: 0.1em !important;
+  font-family: ${DS.typography.fontFamilySecondary} !important;
+  font-weight: ${DS.typography.weightMedium} !important;
+  letter-spacing: ${DS.typography.letterSpacing.tight} !important;
   z-index: 10 !important;
-  margin: 0 !important;
-  padding: 0 !important;
+  margin: ${DS.spacing.none} !important;
+  padding: ${DS.spacing.none} !important;
   color: white !important;
 }
 #hud-container * { box-sizing: border-box; }
@@ -45,34 +47,31 @@ export const HUD_HTML = `
 }
 
 /* SQUAD - TOP LEFT */
-#squad-container {
+#btn-match-status {
   position: absolute !important;
-  top: 2.1vh !important;
-  left: 1.5vw !important;
-  display: flex !important;
-  flex-direction: row !important;
-  gap: 1vh !important;
-  pointer-events: auto !important;
-}
-.squad-circle {
-  position: relative !important;
-  width: 3.5vw !important;
-  height: 3.5vw !important;
-  min-width: 32px !important;
-  min-height: 32px !important;
+  top: 1.05vh !important;
+  left: 0.75vw !important;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 50% !important;
+  background: ${DS.utils.rgba('#000000', 0.3)} !important;
+  border: none !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border-radius: 50% !important;
-  background: transparent !important;
-  border: 1px solid #22c55e !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  z-index: 100 !important;
   color: white !important;
+}
+#btn-match-status:hover {
+  background: ${DS.utils.rgba(DS.colors.text, 0.15)} !important;
 }
 
 /* TIMERS & TEXT - TOP CENTER */
 #hud-timer-container {
   position: absolute !important;
-  top: 2.1vh !important;
+  top: 1.05vh !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   display: flex !important;
@@ -83,12 +82,12 @@ export const HUD_HTML = `
   z-index: 12 !important;
 }
 #hud-timer {
-  font-weight: 500 !important;
+  font-weight: ${DS.typography.weightMedium} !important;
   white-space: nowrap !important;
   font-size: clamp(12px, 1.5vw, 18px) !important;
   background: transparent !important;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  font-family: 'Rajdhani', sans-serif !important;
+  font-family: ${DS.typography.fontFamilySecondary} !important;
 }
 #hud-location {
   color: white !important;
@@ -101,14 +100,14 @@ export const HUD_HTML = `
 /* MINIMAP - TOP RIGHT */
 #minimap-container {
   position: absolute !important;
-  top: 2.1vh !important;
-  right: 1.5vw !important;
+  top: 1.05vh !important;
+  right: 0.75vw !important;
   width: 104px !important;
   height: 95px !important;
   min-width: 104px !important;
   min-height: 95px !important;
   pointer-events: auto !important;
-  background: rgba(0, 0, 0, 0.3) !important;
+  background: ${DS.utils.rgba('#000000', 0.3)} !important;
   border: 1px solid rgba(255, 255, 255, 0.8) !important;
   border-radius: 15px !important;
   overflow: hidden !important;
@@ -125,7 +124,7 @@ export const HUD_HTML = `
   width: 90vw !important;
   height: 90vh !important;
   z-index: 10000 !important;
-  background: rgba(0, 0, 0, 0.95) !important;
+  background: ${DS.utils.rgba('#000000', 0.95)} !important;
   border-radius: 4px !important;
 }
 #minimap-container.fullscreen-minimap ~ #minimap-label {
@@ -139,17 +138,17 @@ export const HUD_HTML = `
 #minimap-label {
   position: absolute !important;
   /* Float below minimap with gap */
-  top: calc(2.1vh + 95px + 6px) !important;
-  right: 1.5vw !important;
+  top: calc(1.05vh + 95px + 3px) !important;
+  right: 0.75vw !important;
   width: 95px !important;
   text-align: center !important;
   color: white !important;
   background: transparent !important;
-  font-weight: 500 !important;
+  font-weight: ${DS.typography.weightMedium} !important;
   font-size: clamp(10px, 1.1vw, 14px) !important;
   border: none !important;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  font-family: 'Rajdhani', sans-serif !important;
+  font-family: ${DS.typography.fontFamilySecondary} !important;
 }
 #minimap-label svg {
   height: 12px !important;
@@ -179,12 +178,12 @@ export const HUD_HTML = `
   justify-content: center !important;
   color: white !important;
 }
-#btn-settings { top: 2vh !important; }
-#btn-mic { top: 12vh !important; }
-#btn-chat { top: 22vh !important; }
+#btn-settings { top: 1vh !important; }
+#btn-mic { top: 6vh !important; }
+#btn-chat { top: 11vh !important; }
 @media (max-width: 714px) {
   .btn-sidekick {
-    right: calc(1.5vw + 100px + 20px) !important;
+    right: calc(0.75vw + 100px + 10px) !important;
   }
 }
 
@@ -197,21 +196,21 @@ export const HUD_HTML = `
   width: 80vw;
   max-width: 450px;
   background: rgba(0, 0, 0, 0.85);
-  border: 1px solid #444;
-  border-radius: 8px;
-  padding: 20px;
+  border: ${DS.borders.thin} #444;
+  border-radius: ${DS.borders.radius.md};
+  padding: ${DS.spacing.md};
   display: none; /* hidden by default */
   pointer-events: auto;
   z-index: 100;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 7.5px;
 }
 /* MOVEMENT & JOYSTICK - BOTTOM LEFT */
 #joystick-boundary {
   position: absolute !important;
-  left: 4.9vw !important;
-  bottom: 9vh !important;
+  left: 2.45vw !important;
+  bottom: 4.5vh !important;
   width: 18.75vw !important;
   height: 18.75vw !important;
   min-width: 150px !important;
@@ -233,8 +232,8 @@ export const HUD_HTML = `
 
 #btn-sprint {
   position: absolute !important;
-  left: 7.14vw !important;
-  top: 16.56vh !important;
+  left: 3.57vw !important;
+  top: 8.28vh !important;
   width: 5.4vw !important;
   height: 5.4vw !important;
   min-width: 50px !important;
@@ -251,8 +250,8 @@ export const HUD_HTML = `
 
 #btn-fire-left {
   position: absolute !important;
-  left: 17vw !important;
-  bottom: 35vh !important;
+  left: 8.5vw !important;
+  bottom: 17.5vh !important;
   width: 5.4vw !important;
   height: 5.4vw !important;
   min-width: 50px !important;
@@ -270,7 +269,7 @@ export const HUD_HTML = `
 /* HEALTH BAR (Filled Rectangle) */
 #health-bar {
   position: absolute !important;
-  bottom: 2.5vh !important;
+  bottom: 1.25vh !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   width: 32vw !important;
@@ -288,7 +287,7 @@ export const HUD_HTML = `
 #health-plus-sq-wrap {
   position: absolute !important;
   left: 26vw !important;
-  bottom: 5vh !important;
+  bottom: 2.5vh !important;
   width: 7vw !important;
   height: 2.6vh !important;
   display: flex !important;
@@ -323,7 +322,7 @@ export const HUD_HTML = `
 /* WEAPONS - BOTTOM CENTER */
 #weapon-selector {
   position: absolute !important;
-  bottom: 8vh !important;
+  bottom: 4vh !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   width: 48vw !important;
@@ -336,7 +335,7 @@ export const HUD_HTML = `
 }
 #auto-label {
   position: absolute !important;
-  bottom: calc(8vh + 12vh + 8px) !important; /* Above weapon selector */
+  bottom: calc(4vh + 12vh + 4px) !important; /* Above weapon selector */
   left: 50% !important;
   transform: translateX(-50%) !important;
   color: white !important;
@@ -372,13 +371,13 @@ export const HUD_HTML = `
 }
 #weapon-1-ammo, #weapon-2-ammo {
   position: absolute !important;
-  bottom: 4px !important;
-  left: 4px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  font-family: 'Rajdhani', sans-serif !important;
-  font-weight: 500 !important;
-  letter-spacing: 0.1em !important;
+  bottom: ${DS.spacing.sm} !important;
+  left: ${DS.spacing.sm} !important;
+  margin: ${DS.spacing.none} !important;
+  padding: ${DS.spacing.none} !important;
+  font-family: ${DS.typography.fontFamilySecondary} !important;
+  font-weight: ${DS.typography.weightMedium} !important;
+  letter-spacing: ${DS.typography.letterSpacing.tight} !important;
   color: #CCCCCC !important;
   line-height: 1 !important;
   font-size: 10px !important;
@@ -427,8 +426,8 @@ export const HUD_HTML = `
 }
 
 #btn-fire-right {
-  right: 3vw !important;
-  bottom: 5vh !important;
+  right: 1.5vw !important;
+  bottom: 2.5vh !important;
   width: 13.5vw !important;
   height: 13.5vw !important;
   min-width: 100px !important;
@@ -436,8 +435,8 @@ export const HUD_HTML = `
 }
 
 #btn-ads {
-  right: 20vw !important;
-  bottom: 15vh !important;
+  right: 10vw !important;
+  bottom: 7.5vh !important;
   width: 6.75vw !important;
   height: 6.75vw !important;
   min-width: 60px !important;
@@ -445,8 +444,8 @@ export const HUD_HTML = `
 }
 
 #btn-reload {
-  right: 8vw !important;
-  bottom: 35vh !important;
+  right: 4vw !important;
+  bottom: 17.5vh !important;
   width: 5.25vw !important;
   height: 5.25vw !important;
   min-width: 45px !important;
@@ -454,8 +453,8 @@ export const HUD_HTML = `
 }
 
 #btn-jump {
-  right: 22vw !important;
-  bottom: 28vh !important;
+  right: 11vw !important;
+  bottom: 14vh !important;
   width: 6vw !important;
   height: 6vw !important;
   min-width: 50px !important;
@@ -463,8 +462,8 @@ export const HUD_HTML = `
 }
 
 #btn-crouch {
-  right: 2vw !important;
-  bottom: 25vh !important;
+  right: 1vw !important;
+  bottom: 12.5vh !important;
   width: 5.25vw !important;
   height: 5.25vw !important;
   min-width: 45px !important;
@@ -472,8 +471,8 @@ export const HUD_HTML = `
 }
 
 #btn-dash {
-  right: 22vw !important;
-  bottom: 2vh !important;
+  right: 11vw !important;
+  bottom: 1vh !important;
   width: 5.25vw !important;
   height: 5.25vw !important;
   min-width: 45px !important;
@@ -523,120 +522,71 @@ export const HUD_HTML = `
 <div id="hud-container">
   <div id="look-zone-right"></div>
   
-  <div id="squad-container">
-    <div id="squad-p1" class="squad-circle text-white">
-      <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
- viewBox="0 0 136.000000 126.000000"
- preserveAspectRatio="xMidYMid meet">
-<g transform="translate(0.000000,126.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
-<path d="M554 1130 c-144 -38 -186 -71 -200 -160 -7 -42 -6 -43 17 -36 13 3
-65 13 114 22 107 19 361 14 463 -9 l63 -15 -6 42 c-15 90 -48 117 -186 156
--90 25 -172 25 -265 0z"/>
-<path d="M485 935 c-110 -17 -151 -36 -158 -71 -3 -16 -4 -30 -2 -32 1 -2 43
-5 91 15 156 31 466 24 597 -13 13 -4 17 1 17 18 0 44 -21 58 -120 78 -111 23
--299 25 -425 5z"/>
-<path d="M465 835 c-49 -8 -109 -21 -132 -29 -44 -15 -193 -107 -214 -132 -14
--18 -31 -19 170 16 157 28 275 26 392 -4 183 -48 211 -50 366 -27 77 12 156
-21 174 21 42 0 36 5 -82 73 -70 40 -116 59 -175 71 -112 24 -382 30 -499 11z"/>
-<path d="M335 670 c-3 -5 -1 -46 5 -92 5 -45 10 -92 10 -103 -1 -18 -2 -17
--14 5 -25 46 -40 137 -28 165 11 24 10 25 -21 24 -17 0 -63 -6 -102 -13 l-70
--13 48 -21 c27 -12 59 -22 72 -22 29 0 41 -15 49 -63 5 -24 22 -55 45 -80 21
--24 49 -74 66 -117 23 -60 40 -85 89 -133 78 -76 126 -101 196 -101 69 -1 123
-29 198 108 29 31 55 56 58 56 2 0 4 -13 4 -29 0 -30 20 -95 27 -88 2 3 -1 35
--8 71 -10 61 -9 72 11 129 13 34 38 78 56 97 22 23 37 53 45 88 11 44 17 54
-38 58 43 10 141 56 141 66 0 10 -55 4 -143 -16 l-52 -11 -6 -60 c-5 -58 -25
--105 -42 -105 -5 0 -7 6 -4 13 3 8 8 44 12 80 6 56 5 67 -8 67 -11 0 -17 -16
--22 -62 -8 -80 -39 -198 -66 -250 -49 -96 -164 -181 -245 -181 -61 0 -144 53
--200 126 -60 80 -99 214 -106 359 -3 54 -17 75 -33 48z"/>
-<path d="M403 212 c-1 -44 2 -60 7 -47 11 25 12 102 3 108 -5 3 -9 -25 -10
--61z"/>
-</g>
-</svg>
+  <button id="btn-match-status" title="Match Status & Ping Diagnostics">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px; height:22px;">
+      <path d="M18 20V10M12 20V4M6 20v-6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+
+  <!-- MATCH STATUS & LIVE PING MODAL -->
+  <div id="match-status-modal" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85vw; max-width: 420px; background: rgba(12, 12, 14, 0.92); border: ${DS.borders.thin} ${DS.utils.rgba(DS.colors.text, 0.15)}; backdrop-filter: ${DS.glass.blur}; border-radius: ${DS.borders.radius.lg}; padding: ${DS.spacing.xxl}; z-index: 1000; color: white; font-family: ${DS.typography.fontFamilySecondary}, sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.7);">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 16px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; color: #22c55e;">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+        </div>
+        <div>
+          <div id="status-player-name" style="font-size: 1.1rem; font-weight: 700; letter-spacing: 0.05em; color: white;">OPERATIVE</div>
+          <div style="font-size: 0.75rem; color: #a1a1aa; text-transform: uppercase;">ACTIVE MATCH</div>
+        </div>
+      </div>
+      <button id="btn-close-match-status" style="background: transparent; border: none; color: #a1a1aa; font-size: 1.2rem; cursor: pointer; padding: 4px;">&#10005;</button>
     </div>
-    <div id="squad-p2" class="squad-circle text-white">
-      <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
- viewBox="0 0 107.000000 137.000000"
- preserveAspectRatio="xMidYMid meet">
-<g transform="translate(0.000000,137.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
-<path d="M442 1232 c-82 -30 -135 -74 -159 -131 -9 -20 -18 -76 -21 -125 -5
--85 -4 -89 14 -81 130 54 226 70 329 56 72 -11 163 -37 180 -52 20 -19 25 -7
-25 54 0 111 -39 201 -105 244 -28 19 -114 48 -170 58 -11 2 -53 -9 -93 -23z"/>
-<path d="M258 1150 c-61 -53 -85 -113 -94 -230 l-7 -93 39 28 c21 16 41 31 44
-33 3 2 8 48 11 103 5 88 9 104 37 149 17 27 27 50 23 50 -5 0 -28 -18 -53 -40z"/>
-<path d="M764 1168 c43 -59 59 -112 59 -196 l0 -84 38 -24 c21 -13 41 -24 44
--24 18 0 -13 198 -39 248 -16 31 -92 102 -109 102 -5 0 -2 -10 7 -22z"/>
-<path d="M425 926 c-65 -15 -191 -64 -230 -90 -26 -17 -30 -32 -16 -55 8 -12
-16 -10 50 7 23 12 58 31 79 42 145 76 334 66 498 -25 52 -29 68 -34 80 -25 24
-21 16 38 -29 65 -125 72 -314 108 -432 81z"/>
-<path d="M325 791 c-74 -10 -130 -33 -144 -59 -15 -29 -14 -116 3 -156 30 -72
-222 -111 279 -58 14 13 31 37 37 53 17 40 40 36 73 -11 41 -58 77 -74 151 -66
-131 14 184 68 172 174 -9 72 -18 87 -67 106 -33 13 -85 18 -243 21 -111 2
--228 0 -261 -4z m481 -40 c37 -14 54 -47 54 -101 0 -78 -21 -98 -121 -119 -71
--15 -96 -6 -144 53 -23 28 -46 46 -59 46 -12 0 -40 -20 -68 -51 l-47 -51 -70
-4 c-85 4 -120 26 -137 85 -23 79 6 129 81 143 72 13 473 6 511 -9z"/>
-<path d="M354 750 c-49 -3 -95 -10 -102 -14 -31 -19 -32 -124 -2 -161 15 -19
-73 -35 124 -35 34 0 45 6 90 55 31 34 59 55 72 55 14 0 39 -20 69 -55 41 -48
-51 -55 83 -55 57 1 113 16 134 38 28 27 27 117 0 144 -32 32 -243 45 -468 28z"/>
-<path d="M124 705 c-31 -47 -5 -155 52 -216 13 -14 31 -51 39 -82 19 -74 51
--123 133 -206 95 -95 183 -116 287 -67 99 46 225 214 225 301 0 13 7 30 15 37
-37 30 57 54 66 76 10 26 12 132 3 156 -13 33 -19 14 -19 -57 0 -86 -16 -125
--54 -129 -23 -3 -27 -10 -38 -68 -19 -92 -47 -143 -122 -220 -74 -76 -119 -96
--203 -88 -62 6 -114 42 -183 125 -43 53 -61 84 -76 138 -30 103 -36 115 -54
-109 -28 -11 -58 78 -52 153 2 35 3 63 1 63 -2 0 -11 -11 -20 -25z"/>
-</g>
-</svg>
+
+    <!-- MATCH STATS -->
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; text-align: center;">
+      <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;">
+        <div style="font-size: 0.7rem; color: #a1a1aa; text-transform: uppercase;">KILLS</div>
+        <div id="status-kills" style="font-size: 1.3rem; font-weight: 700; color: #22c55e;">0</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;">
+        <div style="font-size: 0.7rem; color: #a1a1aa; text-transform: uppercase;">DEATHS</div>
+        <div id="status-deaths" style="font-size: 1.3rem; font-weight: 700; color: #ef4444;">0</div>
+      </div>
+      <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;">
+        <div style="font-size: 0.7rem; color: #a1a1aa; text-transform: uppercase;">SCORE</div>
+        <div id="status-score" style="font-size: 1.3rem; font-weight: 700; color: #eab308;">0</div>
+      </div>
     </div>
-    <div id="squad-p3" class="squad-circle text-white">
-      <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
- viewBox="0 0 107.000000 137.000000"
- preserveAspectRatio="xMidYMid meet">
-<g transform="translate(0.000000,137.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
-<path d="M500 1250 c-14 -4 -58 -18 -99 -31 -133 -41 -206 -136 -231 -298 -7
--40 -10 -75 -7 -77 2 -2 41 14 86 36 101 50 182 70 286 70 121 0 207 -25 368
--108 27 -14 -12 167 -54 249 -19 38 -71 85 -125 112 -24 12 -193 60 -198 56 0
--1 -12 -5 -26 -9z"/>
-<path d="M424 920 c-54 -11 -193 -66 -223 -89 -22 -17 -22 -19 -8 -48 33 -64
-38 -64 182 -13 82 30 96 32 180 27 65 -3 110 -12 160 -32 105 -40 119 -41 150
--11 41 41 31 65 -45 104 -129 65 -270 87 -396 62z"/>
-<path d="M134 729 c-38 -42 -13 -178 41 -229 18 -17 25 -34 25 -60 0 -58 54
--152 133 -234 84 -86 121 -101 233 -94 85 6 120 26 205 123 72 81 84 103 99
-184 8 47 19 71 39 92 49 49 68 182 32 218 -20 20 -52 19 -70 -3 -5 -6 -11 -40
--13 -76 -4 -52 -12 -77 -41 -125 -20 -33 -48 -72 -62 -88 l-26 -27 -40 32
-c-39 31 -45 33 -136 35 -105 2 -135 -6 -175 -44 l-27 -26 -36 39 c-55 60 -105
-167 -105 225 0 72 -37 101 -76 58z m50 -112 c8 -98 -2 -108 -28 -30 -19 55
--20 87 -5 115 17 32 26 10 33 -85z m744 23 c-2 -49 -9 -75 -21 -87 -16 -16
--17 -15 -17 23 0 77 12 134 27 134 12 0 15 -13 11 -70z m-280 -236 c30 -20 30
--68 0 -88 -30 -22 -55 -20 -68 4 -7 13 -21 20 -39 20 -15 0 -36 -9 -46 -20
--24 -26 -41 -25 -70 5 -30 29 -31 49 -5 75 17 17 33 20 113 20 68 0 99 -4 115
--16z"/>
-</g>
-</svg>
-    </div>
-    <div id="squad-p4" class="squad-circle text-white">
-      <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
- viewBox="0 0 112.000000 122.000000"
- preserveAspectRatio="xMidYMid meet">
-<g transform="translate(0.000000,122.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
-<path d="M488 1107 c-65 -19 -154 -75 -193 -122 -99 -120 -185 -375 -185 -544
-0 -79 51 -165 135 -228 89 -67 101 -68 39 -2 -142 150 -143 172 -15 367 93
-139 129 172 223 203 68 21 70 21 134 4 85 -23 141 -74 230 -207 124 -186 124
--218 -4 -350 -36 -38 -60 -68 -54 -68 6 0 44 27 85 59 112 89 138 156 118 306
--26 192 -116 413 -200 487 -93 83 -219 121 -313 95z"/>
-<path d="M350 581 c0 -24 41 -51 75 -51 62 0 36 28 -52 54 -14 5 -23 3 -23 -3z"/>
-<path d="M703 567 c-24 -11 -43 -25 -43 -29 0 -4 17 -8 38 -8 27 0 45 7 60 23
-21 23 20 38 -2 36 -6 0 -30 -10 -53 -22z"/>
-<path d="M246 512 c-10 -29 11 -89 35 -102 10 -6 19 -21 19 -33 0 -55 23 -100
-86 -166 35 -38 80 -76 98 -85 46 -22 118 -20 165 4 71 36 181 183 181 242 0 9
-11 34 25 54 25 36 33 88 16 98 -5 3 -11 -11 -15 -32 -3 -23 -16 -47 -31 -60
--17 -15 -25 -32 -25 -55 0 -43 -59 -136 -124 -196 l-48 -43 -68 4 c-59 3 -74
-8 -107 34 -54 44 -120 144 -128 196 -4 23 -17 54 -30 68 -13 14 -28 41 -33 60
--8 32 -9 33 -16 12z"/>
-</g>
-</svg>
+
+    <!-- NETCODE & PING DIAGNOSTICS -->
+    <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+      <div style="font-size: 0.8rem; font-weight: 700; letter-spacing: 0.1em; color: #a1a1aa; margin-bottom: 8px; text-transform: uppercase; display: flex; align-items: center; justify-content: space-between;">
+        <span>NETCODE & PING STATS</span>
+        <span id="status-net-mode" style="color: #3b82f6; font-size: 0.7rem;">CLIENT PREDICTIVE</span>
+      </div>
+      
+      <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem;">
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #71717a;">PING (RTT):</span>
+          <span id="status-ping-val" style="font-weight: 700; color: #22c55e;">-- ms</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #71717a;">JITTER:</span>
+          <span id="status-jitter-val" style="color: #d4d4d8;">0 ms</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #71717a;">SERVER TICK RATE:</span>
+          <span id="status-tick-val" style="color: #d4d4d8;">60 Hz</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #71717a;">UNACKNOWLEDGED INPUTS:</span>
+          <span id="status-pending-inputs" style="color: #d4d4d8;">0</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -644,7 +594,7 @@ fill="#ffffff" stroke="none">
     <div id="hud-timer">TIME LEFT: 00:00</div>
   </div>
 
-  <div id="compass-placeholder" style="position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); width: 20vw; height: 4vh; border: none !important; background: rgba(0, 0, 0, 0.3) !important; z-index: 11 !important;"></div>
+  <div id="compass-placeholder" style="position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); width: 20vw; height: 4vh; border: none !important; background: ${DS.utils.rgba('#000000', 0.3)} !important; z-index: 11 !important;"></div>
 
   <div id="minimap-container">
     <canvas id="minimap-canvas"></canvas>
@@ -654,7 +604,7 @@ fill="#ffffff" stroke="none">
  viewBox="0 0 101.000000 116.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,116.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M491 1018 c-18 -47 -81 -199 -176 -423 -178 -421 -204 -485 -200
 -485 8 0 331 154 350 167 11 7 29 13 40 13 12 0 103 -40 204 -90 100 -49 185
 -90 187 -90 10 0 -8 44 -171 425 -89 209 -172 406 -184 438 -27 67 -38 77 -50
@@ -671,7 +621,7 @@ fill="#ffffff" stroke="none">
  viewBox="0 0 119.000000 117.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,117.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M501 1023 c-6 -21 -11 -44 -11 -51 0 -7 -19 -22 -42 -32 l-43 -19
 -44 25 c-24 13 -49 24 -55 24 -17 0 -106 -93 -106 -110 0 -8 12 -31 26 -52 24
 -35 25 -40 14 -70 -18 -46 -22 -49 -76 -59 -26 -5 -51 -15 -56 -22 -11 -18
@@ -693,7 +643,7 @@ l-12 51 -79 0 -78 0 -10 -37z m188 -271 c14 -10 39 -35 55 -56 28 -35 31 -44
  viewBox="0 0 138.000000 138.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,138.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M602 1170 c-66 -41 -72 -62 -72 -283 0 -229 7 -255 80 -296 75 -42
 160 -17 205 60 17 30 20 56 24 208 4 206 -4 245 -60 296 -34 31 -46 35 -92 35
 -34 0 -63 -7 -85 -20z"/>
@@ -711,7 +661,7 @@ fill="#ffffff" stroke="none">
  viewBox="0 0 117.000000 101.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,101.000000) scale(0.050000,-0.050000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M409 1752 c-173 -75 -193 -153 -185 -694 l6 -411 56 -74 c108 -141
 117 -142 764 -149 l579 -6 106 -80 c158 -119 165 -119 166 -5 0 90 6 101 79
 151 138 96 143 118 136 642 -9 694 48 654 -939 653 -542 0 -721 -7 -768 -27z
@@ -736,7 +686,7 @@ m386 -565 c56 -61 57 -107 4 -174 -80 -102 -259 -48 -259 78 0 156 149 212
  viewBox="0 0 165.000000 165.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,165.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M1387 1536 c-43 -19 -108 -52 -145 -74 -76 -46 -232 -160 -232 -170
 0 -4 51 -59 114 -121 102 -102 117 -113 132 -101 33 28 173 251 205 327 17 43
 34 99 37 126 6 59 -3 60 -111 13z"/>
@@ -755,7 +705,7 @@ fill="#ffffff" stroke="none">
      viewBox="0 0 147.000000 147.000000"
      preserveAspectRatio="xMidYMid meet">
     <g transform="translate(0.000000,147.000000) scale(0.100000,-0.100000)"
-     fill="#ffffff" stroke="none">
+     fill="${DS.colors.text}" stroke="none">
     <path d="M845 1268 c-35 -19 -55 -52 -55 -91 0 -54 52 -107 105 -107 52 0 105
      53 105 105 0 74 -91 129 -155 93z"/>
     <path d="M627 1013 c-38 -25 -84 -60 -103 -78 l-34 -32 0 -120 c0 -123 6 -143
@@ -774,12 +724,12 @@ fill="#ffffff" stroke="none">
   </button>
 
   <div id="auto-label">AUTO &rarr;</div>
-  <button id="btn-walkie" class="btn-util" style="position: absolute; left: 26vw; bottom: 8vh;">
+  <button id="btn-walkie" class="btn-util" style="position: absolute; left: 26vw; bottom: 4vh;">
     <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
  viewBox="0 0 74.000000 163.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,163.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M234 1512 c-7 -4 -13 -67 -17 -172 -3 -91 -8 -212 -12 -270 -6 -104
 -6 -105 -43 -143 l-37 -38 -3 -198 c-3 -196 -3 -198 22 -246 24 -44 26 -58 26
 -180 0 -111 3 -135 17 -146 12 -11 57 -14 190 -14 161 0 176 1 189 19 10 15
@@ -796,10 +746,10 @@ fill="#ffffff" stroke="none">
 </svg>
   </button>
   
-  <button id="btn-helmet" class="btn-util" style="position: absolute; left: 34.5vw; bottom: 8vh; width: 7vw; height: 7vw; min-width: 64px; min-height: 64px; display: flex; align-items: center; justify-content: center; background: transparent; border: none;">
+  <button id="btn-helmet" class="btn-util" style="position: absolute; left: 34.5vw; bottom: 4vh; width: 7vw; height: 7vw; min-width: 64px; min-height: 64px; display: flex; align-items: center; justify-content: center; background: transparent; border: none;">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="width: 70%; height: 70%;" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M 50 15 C 26 15 18 30 18 52 C 18 55 20 58 23 58 C 26 58 28 55 29 52 C 32 35 41 25 50 25 C 59 25 68 35 71 52 C 72 55 74 58 77 58 C 80 58 82 55 82 52 C 82 30 74 15 50 15 Z" fill="rgba(255, 255, 255, 0.08)" />
-      <path d="M 21 54 C 21 48 79 48 79 54 C 79 58 75 62 70 62 L 30 62 C 25 62 21 58 21 54 Z" fill="rgba(255, 255, 255, 0.2)" />
+      <path d="M 50 15 C 26 15 18 30 18 52 C 18 55 20 58 23 58 C 26 58 28 55 29 52 C 32 35 41 25 50 25 C 59 25 68 35 71 52 C 72 55 74 58 77 58 C 80 58 82 55 82 52 C 82 30 74 15 50 15 Z" fill="${DS.utils.rgba(DS.colors.text, 0.08)}" />
+      <path d="M 21 54 C 21 48 79 48 79 54 C 79 58 75 62 70 62 L 30 62 C 25 62 21 58 21 54 Z" fill="${DS.utils.rgba(DS.colors.text, 0.2)}" />
       <path d="M 46 15 L 46 25" stroke-width="3" />
       <path d="M 54 15 L 54 25" stroke-width="3" />
       <path d="M 38 18 C 42 21 44 26 43 31" />
@@ -809,7 +759,7 @@ fill="#ffffff" stroke="none">
     </svg>
   </button>
   
-  <div id="weapon-slots-wrap" style="position: absolute; left: 50%; transform: translateX(-50%); bottom: 8vh;">
+  <div id="weapon-slots-wrap" style="position: absolute; left: 50%; transform: translateX(-50%); bottom: 4vh;">
     <div id="weapon-slot-1" class="weapon-slot active">
       <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
  viewBox="0 0 183.000000 107.000000"
@@ -860,18 +810,18 @@ fill="currentColor" stroke="none">
     </div>
   </div>
 
-  <div id="medkit-arrow" style="position: absolute; right: 26vw; bottom: calc(8vh + 7vw + 10px); width: 24px; height: 24px; color: white; opacity: 0.85; pointer-events: auto; display: flex; align-items: center; justify-content: center;">
+  <div id="medkit-arrow" style="position: absolute; right: 26vw; bottom: calc(4vh + 7vw + 5px); width: 24px; height: 24px; color: white; opacity: 0.85; pointer-events: auto; display: flex; align-items: center; justify-content: center;">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%;">
       <polyline points="18 15 12 9 6 15"></polyline>
     </svg>
   </div>
-  <button id="btn-medkit" class="btn-util" style="position: absolute; right: 26vw; bottom: 8vh;">
+  <button id="btn-medkit" class="btn-util" style="position: absolute; right: 26vw; bottom: 4vh;">
     
     <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
  viewBox="0 0 128.000000 117.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,117.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M470 1030 c-15 -15 -20 -33 -20 -79 l0 -59 -141 -4 -141 -3 -29 -33
 -29 -32 0 -319 0 -319 28 -30 c23 -24 40 -32 87 -37 50 -7 555 2 563 9 1 2 -5
 19 -13 39 -46 109 19 260 130 302 59 23 156 17 213 -13 23 -12 45 -22 48 -22
@@ -912,7 +862,7 @@ fill="currentColor" stroke="none">
  viewBox="0 0 125.000000 126.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,126.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M335 1155 c-5 -2 -23 -6 -39 -10 -38 -8 -154 -119 -177 -170 -10 -22
 -19 -54 -19 -71 0 -40 43 -105 119 -179 l61 -60 150 150 c83 82 150 155 150
 161 0 13 -124 134 -160 156 -27 17 -69 28 -85 23z"/>
@@ -931,7 +881,7 @@ fill="#ffffff" stroke="none">
  viewBox="0 0 127.000000 128.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,127.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M274 1134 c-59 -39 -143 -134 -156 -177 -19 -63 1 -105 96 -203 l84
 -87 151 152 c83 83 151 155 151 159 0 10 -138 144 -170 166 -38 25 -110 21
 -156 -10z"/>
@@ -963,7 +913,7 @@ m77 -82 c32 -31 36 -68 9 -83 -20 -10 -51 -4 -51 11 0 4 7 6 15 3 19 -8 19 4
  viewBox="0 0 165.000000 165.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,165.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M1387 1536 c-43 -19 -108 -52 -145 -74 -76 -46 -232 -160 -232 -170
 0 -4 51 -59 114 -121 102 -102 117 -113 132 -101 33 28 173 251 205 327 17 43
 34 99 37 126 6 59 -3 60 -111 13z"/>
@@ -981,7 +931,7 @@ fill="#ffffff" stroke="none">
  viewBox="0 0 123.000000 125.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,125.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M596 1123 c-4 -4 -6 -95 -6 -203 l1 -195 -44 -47 -44 -48 -199 -2
 c-271 -4 -266 -22 6 -26 l206 -2 18 -31 c10 -17 27 -34 38 -38 18 -6 19 -18
 21 -211 2 -186 4 -205 20 -208 16 -3 17 11 17 197 l0 200 45 46 46 45 199 0
@@ -1000,14 +950,14 @@ l-25 16 0 204 c0 163 -3 204 -13 204 -8 0 -17 -3 -21 -7z"/>
 </svg>
   </button>
   <button id="btn-reload" class="btn-action">
-    <svg version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 138.000000 138.000000" preserveAspectRatio="xMidYMid meet"><g transform="translate(0.000000,138.000000) scale(0.100000,-0.100000)" fill="#ffffff" stroke="none"><path d="M650 808 c0 -11 86 -160 140 -245 16 -24 35 -30 45 -13 7 11 -15 49-109 193 -47 71 -76 96 -76 65z"/><path d="M747 805 c-7 -18 9 -29 43 -29 18 -1 26 -7 28 -24 4 -28 29 -40 45-22 9 9 2 20 -32 51 -46 41 -75 49 -84 24z m30 -12 c-4 -3 -10 -3 -14 0 -3 40 7 7 7 7 0 10 -3 7 -7z m73 -53 c0 -5 -5 -10 -11 -10 -5 0 -7 5 -4 10 3 6 810 11 10 2 0 4 -4 4 -10z"/><path d="M580 771 c0 -23 150 -273 168 -279 20 -6 14 44 -10 82 -89 140 -142216 -150 216 -4 0 -8 -8 -8 -19z"/><path d="M510 738 c0 -22 153 -289 164 -285 21 7 18 49 -7 85 -13 20 -48 76-78 124 -49 79 -79 108 -79 76z"/><path d="M491 537 c-17 -17 -14 -22 44 -67 44 -34 58 -40 69 -30 23 18 8 43-21 35 -30 -7 -53 10 -53 40 0 26 -22 39 -39 22z m24 -17 c3 -5 1 -10 -4 -10-6 0 -11 5 -11 10 0 6 2 10 4 10 3 0 8 -4 11 -10z"/></g></svg>
+    <svg version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 138.000000 138.000000" preserveAspectRatio="xMidYMid meet"><g transform="translate(0.000000,138.000000) scale(0.100000,-0.100000)" fill="${DS.colors.text}" stroke="none"><path d="M650 808 c0 -11 86 -160 140 -245 16 -24 35 -30 45 -13 7 11 -15 49-109 193 -47 71 -76 96 -76 65z"/><path d="M747 805 c-7 -18 9 -29 43 -29 18 -1 26 -7 28 -24 4 -28 29 -40 45-22 9 9 2 20 -32 51 -46 41 -75 49 -84 24z m30 -12 c-4 -3 -10 -3 -14 0 -3 40 7 7 7 7 0 10 -3 7 -7z m73 -53 c0 -5 -5 -10 -11 -10 -5 0 -7 5 -4 10 3 6 810 11 10 2 0 4 -4 4 -10z"/><path d="M580 771 c0 -23 150 -273 168 -279 20 -6 14 44 -10 82 -89 140 -142216 -150 216 -4 0 -8 -8 -8 -19z"/><path d="M510 738 c0 -22 153 -289 164 -285 21 7 18 49 -7 85 -13 20 -48 76-78 124 -49 79 -79 108 -79 76z"/><path d="M491 537 c-17 -17 -14 -22 44 -67 44 -34 58 -40 69 -30 23 18 8 43-21 35 -30 -7 -53 10 -53 40 0 26 -22 39 -39 22z m24 -17 c3 -5 1 -10 -4 -10-6 0 -11 5 -11 10 0 6 2 10 4 10 3 0 8 -4 11 -10z"/></g></svg>
   </button>
   <button id="btn-jump" class="btn-action">
     <svg version="1.0" xmlns="http://www.w3.org/2000/svg"
  viewBox="0 0 109.000000 122.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,122.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M369 915 c-96 -109 -193 -219 -217 -245 -23 -27 -42 -51 -42 -54 0
 -3 55 -7 123 -8 l122 -3 3 -248 2 -247 185 0 185 0 2 247 3 248 125 5 124 5
 -189 215 c-105 118 -204 230 -221 248 l-30 35 -175 -198z"/>
@@ -1019,7 +969,7 @@ fill="#ffffff" stroke="none">
  viewBox="0 0 152.000000 152.000000"
  preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,152.000000) scale(0.100000,-0.100000)"
-fill="#ffffff" stroke="none">
+fill="${DS.colors.text}" stroke="none">
 <path d="M775 1388 c-26 -15 -42 -35 -60 -76 -13 -29 -12 -37 5 -78 11 -25 20
 -48 20 -50 0 -2 -29 -4 -65 -4 -58 0 -65 2 -65 19 0 29 -15 34 -81 26 -48 -6
 -59 -10 -59 -25 0 -27 -18 -30 -180 -31 -176 -1 -192 -4 -188 -33 3 -20 9 -21
@@ -1044,41 +994,41 @@ m-65 -309 c46 -5 86 -12 89 -14 4 -5 -23 -81 -37 -103 -7 -9 -31 -4 -105 25
   </div>
 
   <!-- POST MATCH SUMMARY SCREEN -->
-  <div id="post-match-screen" style="display: none; position: absolute; inset: 0; z-index: 2000; background: rgba(5, 5, 5, 0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); flex-direction: column; align-items: center; justify-content: center; color: white; padding: 24px;">
-    <div style="width: 100%; max-width: 640px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(10, 10, 10, 0.85); box-shadow: 0 0 30px rgba(0,0,0,0.8); padding: 32px; display: flex; flex-direction: column; gap: 24px;">
+  <div id="post-match-screen" style="display: none; position: absolute; inset: 0; z-index: 2000; background: ${DS.utils.rgba('#050505', 0.95)}; backdrop-filter: ${DS.glass.blur}; -webkit-backdrop-filter: ${DS.glass.blur}; flex-direction: column; align-items: center; justify-content: center; color: white; padding: ${DS.spacing.lg};">
+    <div style="width: 100%; max-width: 640px; border: ${DS.borders.thin} ${DS.utils.rgba(DS.colors.text, 0.08)}; background: ${DS.utils.rgba('#0A0A0A', 0.85)}; box-shadow: 0 0 30px rgba(0,0,0,0.8); padding: ${DS.spacing.xl}; display: flex; flex-direction: column; gap: ${DS.spacing.lg};">
       
       <!-- TITLE & STATUS -->
-      <div style="text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 16px;">
-        <div id="summary-victory-status" style="font-size: 28px; font-weight: 500; letter-spacing: 6px; color: #C8882A;">OPERATION COMPLETE</div>
-        <div style="font-size: 11px; letter-spacing: 3px; color: #888888; margin-top: 4px;">CONTRACT DIVISION SYSTEM ENGAGEMENT SUMMARY</div>
+      <div style="text-align: center; border-bottom: ${DS.borders.thin} ${DS.utils.rgba(DS.colors.text, 0.1)}; padding-bottom: ${DS.spacing.md};">
+        <div id="summary-victory-status" style="font-size: 28px; font-weight: ${DS.typography.weightMedium}; letter-spacing: ${DS.typography.letterSpacing.extraWide}; color: ${DS.colors.accent};">OPERATION COMPLETE</div>
+        <div style="font-size: ${DS.typography.tiny}; letter-spacing: ${DS.typography.letterSpacing.wide}; color: ${DS.colors.textSecondary}; margin-top: ${DS.spacing.sm};">CONTRACT DIVISION SYSTEM ENGAGEMENT SUMMARY</div>
       </div>
 
       <!-- PERSONAL SUMMARY GRID -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 20px;">
-        <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
           <div style="font-size: 10px; letter-spacing: 2px; color: #888888;">CONTRACTOR SCORE</div>
           <div id="summary-score" style="font-size: 36px; font-weight: 500; color: white;">0</div>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 8px; justify-content: center; align-items: flex-end; text-align: right;">
-          <div style="font-size: 10px; letter-spacing: 2px; color: #888888;">BATTLEPASS TIER</div>
-          <div style="font-size: 18px; font-weight: 500; color: #C8882A; display: flex; align-items: center; gap: 6px;">
+        <div style="display: flex; flex-direction: column; gap: 4px; justify-content: center; align-items: flex-end; text-align: right;">
+          <div style="font-size: 10px; letter-spacing: ${DS.typography.letterSpacing.tight}; color: #888888;">BATTLEPASS TIER</div>
+          <div style="font-size: 18px; font-weight: ${DS.typography.weightMedium}; color: ${DS.colors.accent}; display: flex; align-items: center; gap: ${DS.spacing.sm};">
             TIER <span id="summary-bp-tier">1</span> <span style="font-size: 12px; color: #4ade80;">(+20% XP)</span>
           </div>
         </div>
       </div>
 
       <!-- PERFORMANCE METRICS STATS -->
-      <div style="display: flex; flex-direction: column; gap: 12px;">
-        <div style="font-size: 11px; letter-spacing: 3px; color: #C8882A; font-weight: 500;">PERFORMANCE ASSESSMENT</div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-size: 11px; letter-spacing: 3px; color: ${DS.colors.accent}; font-weight: 500;">PERFORMANCE ASSESSMENT</div>
         
-        <div id="summary-stats-container" style="display: flex; flex-direction: column; gap: 8px;">
+        <div id="summary-stats-container" style="display: flex; flex-direction: column; gap: 4px;">
           <!-- Dynamically filled stats rows -->
         </div>
       </div>
 
       <!-- REWARDS GAINED (CREDITS, XP, PASS) -->
-      <div style="background: rgba(200, 136, 42, 0.05); border: 1px solid rgba(200, 136, 42, 0.15); padding: 16px; display: flex; flex-direction: column; gap: 8px;">
-        <div style="font-size: 10px; letter-spacing: 2px; color: #C8882A; font-weight: 500;">EARNED CREDITS & STAMINA TARIFF</div>
+      <div style="background: ${DS.utils.rgba(DS.colors.accent, 0.05)}; border: ${DS.borders.thin} ${DS.utils.rgba(DS.colors.accent, 0.15)}; padding: ${DS.spacing.md}; display: flex; flex-direction: column; gap: ${DS.spacing.sm};">
+        <div style="font-size: 10px; letter-spacing: ${DS.typography.letterSpacing.tight}; color: ${DS.colors.accent}; font-weight: ${DS.typography.weightMedium};">EARNED CREDITS & STAMINA TARIFF</div>
         <div style="display: flex; justify-content: space-between; font-size: 13px;">
           <span style="color: #888888;">MATCH COMPLETION ALLOTMENT</span>
           <span style="color: #4ade80; font-weight: 500;">+25 CR</span>
@@ -1091,7 +1041,7 @@ m-65 -309 c46 -5 86 -12 89 -14 4 -5 -23 -81 -37 -103 -7 -9 -31 -4 -105 25
 
       <!-- DISPATCH BUTTON -->
       <div>
-        <button id="main-menu-btn" style="width: 100%; padding: 14px; background: #C8882A; border: none; color: #0A0A0A; font-family: inherit; font-size: 16px; font-weight: 500; letter-spacing: 3px; cursor: pointer; transition: all 200ms ease;">
+        <button id="main-menu-btn" style="width: 100%; padding: 14px; background: ${DS.colors.accent}; border: none; color: ${DS.colors.background}; font-family: inherit; font-size: 16px; font-weight: ${DS.typography.weightMedium}; letter-spacing: ${DS.typography.letterSpacing.wide}; cursor: pointer; transition: all 200ms ease;">
           RETURN TO COMMAND PORTAL
         </button>
       </div>

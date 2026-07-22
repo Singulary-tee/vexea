@@ -1,7 +1,8 @@
 import * as THREE from "three/webgpu";
 import { MatchController } from "../../MatchController";
+import { DS } from "../../design-system";
 import { GlobalState } from "../../state";
-import { ZONE_BOUNDS, WAYPOINTS, DRONE_CONFIGS, DroneType } from "../../../shared/constants";
+import { ZONE_BOUNDS, WAYPOINTS, DRONE_CONFIGS, DroneType, INTEL_CONFIGS, DroneState } from "../../../shared/constants";
 
 export class DiagnosisSystem {
     private match: MatchController;
@@ -15,7 +16,7 @@ export class DiagnosisSystem {
     private droneSphereGeom = new THREE.SphereGeometry(1, 12, 12);
     private droneBoxGeom = new THREE.BoxGeometry(2, 2, 2);
     private droneCapsuleGeom = new THREE.CapsuleGeometry(1, 2, 4, 8); // radius 1, length 2 (total 4)
-    private droneWireMat = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
+    private droneWireMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(DS.colors.accent), wireframe: true });
     private activeDronesThisTick = new Set<string>();
     private interpLinesGroup: THREE.Group | null = null;
     private interpLines: Map<number, THREE.Line> = new Map();
@@ -50,7 +51,7 @@ export class DiagnosisSystem {
         for (const wp of Object.values(WAYPOINTS)) {
             const sphere = new THREE.Mesh(
                 new THREE.SphereGeometry(1.5, 8, 8),
-                new THREE.MeshBasicMaterial({ color: 0x00aaff, wireframe: true, depthTest: false })
+                new THREE.MeshBasicMaterial({ color: new THREE.Color(DS.colors.accent), wireframe: true, depthTest: false })
             );
             sphere.position.set(wp.x, wp.y, wp.z);
             this.navPointsGroup.add(sphere);
@@ -67,7 +68,7 @@ export class DiagnosisSystem {
                 new THREE.Vector3(bound.center.x - bound.halfSize.x, 0, bound.center.z - bound.halfSize.z),
                 new THREE.Vector3(bound.center.x + bound.halfSize.x, 40, bound.center.z + bound.halfSize.z)
             );
-            const helper = new THREE.Box3Helper(box, new THREE.Color(0xff00ff));
+            const helper = new THREE.Box3Helper(box, new THREE.Color(DS.colors.accent));
             this.zoneBorders.add(helper);
         }
         
@@ -112,7 +113,7 @@ export class DiagnosisSystem {
                     positions.push(path.origin.x, path.origin.y, path.origin.z);
                     positions.push(path.impact.x, path.impact.y, path.impact.z);
                     
-                    const col = path.type === "HIT_CONFIRMED" ? new THREE.Color(1, 0, 0) : new THREE.Color(0,  greenColorVal(), 0);
+                    const col = path.type === "HIT_CONFIRMED" ? new THREE.Color(DS.colors.danger) : new THREE.Color(DS.colors.success);
                     function greenColorVal() { return 1; } // Green helper
                     colors.push(col.r, col.g, 0);
                     colors.push(col.r, col.g, 0);
@@ -136,7 +137,7 @@ export class DiagnosisSystem {
                 while(this.hitSpheres.children.length < this.match.serverBulletPaths.length) {
                     const mesh = new THREE.Mesh(
                         new THREE.SphereGeometry(0.5, 8, 8),
-                        new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false })
+                        new THREE.MeshBasicMaterial({ color: new THREE.Color(DS.colors.danger), depthTest: false })
                     );
                     mesh.renderOrder = 1000;
                     this.hitSpheres.add(mesh);
@@ -147,7 +148,7 @@ export class DiagnosisSystem {
                         child.visible = true;
                         const path = this.match.serverBulletPaths[i];
                         child.position.copy(path.impact);
-                        (child.material as THREE.MeshBasicMaterial).color.setHex(path.type === "HIT_CONFIRMED" ? 0xff0000 : 0x00ff00);
+                        (child.material as THREE.MeshBasicMaterial).color.set(path.type === "HIT_CONFIRMED" ? DS.colors.danger : DS.colors.success);
                     } else {
                         child.visible = false;
                     }
@@ -167,7 +168,7 @@ export class DiagnosisSystem {
                 for (const [id, buffer] of this.match.droneJitterMap.entries()) {
                     if (buffer.count > 1) {
                         const head = buffer.states[(buffer.head - 1 + 3) % 3];
-                        if (head.state === 5) {
+                        if (head.state === DroneState.DEAD) {
                             if (this.interpLines.has(id)) this.interpLines.get(id)!.visible = false;
                             continue;
                         }
@@ -176,7 +177,7 @@ export class DiagnosisSystem {
                         if (!line) {
                             line = new THREE.Line(
                                 new THREE.BufferGeometry(),
-                                new THREE.LineBasicMaterial({ color: 0x00ffff, depthTest: false })
+                                new THREE.LineBasicMaterial({ color: new THREE.Color(DS.colors.accent), depthTest: false })
                             );
                             line.renderOrder = 998;
                             this.interpLines.set(id, line);
@@ -205,7 +206,7 @@ export class DiagnosisSystem {
                 for (const [id, buffer] of (this.match as any).droneJitterMap.entries()) {
                     if (buffer.count > 0) {
                         const head = buffer.getLatest();
-                        if (head.state === 5) continue; // DEAD
+                        if (head.state === DroneState.DEAD) continue; // DEAD
                         
                         const idStr = id.toString();
                         this.activeDronesThisTick.add(idStr);
@@ -277,12 +278,11 @@ export class DiagnosisSystem {
 
             if (vis.aiSight && (window as any).camera) {
                 const camera = (window as any).camera as THREE.PerspectiveCamera;
-                const sightPositions: number[] = [];
-                
+
                 for (const [id, buffer] of this.match.droneJitterMap.entries()) {
                     if (buffer.count > 0) {
                         const head = buffer.states[(buffer.head - 1 + 3) % 3];
-                        if (head.state === 5) continue; // DEAD
+                        if (head.state === DroneState.DEAD) continue; // DEAD
                         
                         // Floating Text
                         const pos = new THREE.Vector3(head.posX, head.posY + 2, head.posZ);
@@ -297,18 +297,18 @@ export class DiagnosisSystem {
                             div.style.left = `${x}px`;
                             div.style.top = `${y}px`;
                             div.style.transform = "translate(-50%, -100%)";
-                            div.style.color = "#0f0";
-                            div.style.background = "rgba(0,0,0,0.7)";
+                            div.style.color = DS.colors.success;
+                            div.style.background = DS.shadows.overlay;
                             div.style.padding = "2px 4px";
                             div.style.fontSize = "10px";
                             div.style.fontFamily = "monospace";
                             div.style.whiteSpace = "pre";
                             
                             let stateName = "IDLE";
-                            if (head.state === 1) stateName = "PATROL";
-                            if (head.state === 2) stateName = "PURSUIT";
-                            if (head.state === 3) stateName = "ATTACK";
-                            if (head.state === 4) stateName = "REPOS";
+                            if (head.state === DroneState.PATROLLING) stateName = "PATROL";
+                            if (head.state === DroneState.PURSUING) stateName = "PURSUIT";
+                            if (head.state === DroneState.ATTACKING) stateName = "ATTACK";
+                            if (head.state === DroneState.REPOSITIONING) stateName = "REPOS";
                             
                             let text = `ID:${id} ${stateName}\nMode:${(head as any).mode || 'N/A'}`;
                             if ((head as any).memory && (head as any).memory.length > 0) {
@@ -320,36 +320,75 @@ export class DiagnosisSystem {
                         }
                         
                         // Build Sight Cone wireframe points
-                        const origin = new THREE.Vector3(head.posX, head.posY, head.posZ);
+                        const origin = new THREE.Vector3(head.posX, head.posY + 0.5, head.posZ);
                         const forwardAngle = 2 * Math.atan2(head.rotY, head.rotW);
-                        const sightDist = 30;
+                        
+                        const conf = INTEL_CONFIGS[head.type] || { sightDistance: 50, visionConeAngle: Math.PI/2 };
+                        const droneConfig = DRONE_CONFIGS[head.type as DroneType];
+                        const sightDist = droneConfig?.detectionRadius ?? conf.sightDistance;
+                        const visionConeAngle = droneConfig?.fovHalfAngle ? (droneConfig.fovHalfAngle * 2) : conf.visionConeAngle;
+                        
+                        const dx = this.match.playerPos.x - origin.x;
+                        const dy = (this.match.playerPos.y + 0.5) - origin.y;
+                        const dz = this.match.playerPos.z - origin.z;
+                        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                        
+                        const qx = head.rotX;
+                        const qy = head.rotY;
+                        const qz = head.rotZ;
+                        const qw = head.rotW;
 
-                        const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), forwardAngle);
+                        const forwardX = 2 * (qx * qz + qw * qy);
+                        const forwardY = 2 * (qy * qz - qw * qx);
+                        const forwardZ = 1 - 2 * (qx * qx + qy * qy);
+
+                        const fLen = Math.sqrt(forwardX * forwardX + forwardY * forwardY + forwardZ * forwardZ);
+                        const fx = fLen > 0 ? forwardX / fLen : 0;
+                        const fy = fLen > 0 ? forwardY / fLen : 0;
+                        const fz = fLen > 0 ? forwardZ / fLen : 1;
+                        
+                        let fov = visionConeAngle;
+                        if (head.type === DroneType.HUMANOID) {
+                            fov = Math.max(Math.PI / 6, (Math.PI / 2) * (1 - dist / sightDist));
+                        }
+                        const halfAngle = fov / 2;
+                        
+                        // The visual cone itself is built using the same constants the server uses.
+                        // However, to know if we are actually detected (including wall occlusion),
+                        // we MUST use the server-authoritative state sent over the network, NOT a client-side math hack.
+                        const isDetected = head.playerInFOV;
+                        const color = isDetected ? DS.colors.danger : DS.colors.accent;
+
+                        const sightPositions: number[] = [];
+
+                        const forward = new THREE.Vector3(fx, fy, fz);
                         const centerEnd = origin.clone().add(forward.clone().multiplyScalar(sightDist));
                         sightPositions.push(origin.x, origin.y, origin.z, centerEnd.x, centerEnd.y, centerEnd.z);
 
-                        const leftDir = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), forwardAngle - 0.35);
+                        // Calculate up and right vectors based on the drone's rotation
+                        const droneQuat = new THREE.Quaternion(qx, qy, qz, qw);
+                        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(droneQuat);
+                        
+                        const leftDir = forward.clone().applyAxisAngle(up, -halfAngle);
                         const leftEnd = origin.clone().add(leftDir.multiplyScalar(sightDist));
                         sightPositions.push(origin.x, origin.y, origin.z, leftEnd.x, leftEnd.y, leftEnd.z);
 
-                        const rightDir = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), forwardAngle + 0.35);
+                        const rightDir = forward.clone().applyAxisAngle(up, halfAngle);
                         const rightEnd = origin.clone().add(rightDir.multiplyScalar(sightDist));
                         sightPositions.push(origin.x, origin.y, origin.z, rightEnd.x, rightEnd.y, rightEnd.z);
 
                         // Connect Left and Right
                         sightPositions.push(leftEnd.x, leftEnd.y, leftEnd.z, rightEnd.x, rightEnd.y, rightEnd.z);
-                    }
-                }
 
-                if (sightPositions.length > 0) {
-                    const sightGeom = new THREE.BufferGeometry();
-                    sightGeom.setAttribute('position', new THREE.Float32BufferAttribute(sightPositions, 3));
-                    const lineSegments = new THREE.LineSegments(
-                        sightGeom,
-                        new THREE.LineBasicMaterial({ color: 0x00ffff, depthTest: false })
-                    );
-                    lineSegments.renderOrder = 999;
-                    this.aiSightGroup!.add(lineSegments);
+                        const sightGeom = new THREE.BufferGeometry();
+                        sightGeom.setAttribute('position', new THREE.Float32BufferAttribute(sightPositions, 3));
+                        const lineSegments = new THREE.LineSegments(
+                            sightGeom,
+                            new THREE.LineBasicMaterial({ color: color, depthTest: false })
+                        );
+                        lineSegments.renderOrder = 999;
+                        this.aiSightGroup!.add(lineSegments);
+                    }
                 }
             }
         }

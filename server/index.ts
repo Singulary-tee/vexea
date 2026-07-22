@@ -366,7 +366,11 @@ app.get("/api/proxy-asset", async (req, res) => {
   }
 
   try {
-    const fetchResponse = await fetch(fileUrl);
+    const fetchResponse = await fetch(fileUrl, {
+      headers: {
+        "User-Agent": "Vexea-Game-Server/1.0"
+      }
+    });
     if (!fetchResponse.ok) {
       return res
         .status(fetchResponse.status)
@@ -458,6 +462,16 @@ io.onConnection((channel: ChannelAdapter) => {
 
     // Re-associate binding pointer
     currentRoom = targetRoom;
+  });
+
+  channel.on("ping", () => {
+    channel.emit("pong", {});
+  });
+
+  channel.on("latency_report", (data: any) => {
+    if (pState && typeof data?.latency === "number") {
+      pState.ping = data.latency;
+    }
   });
 
   channel.on("player_ready", () => {

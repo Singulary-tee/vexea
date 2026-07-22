@@ -21,6 +21,7 @@ export interface NiagaraMuzzleFlash {
 
 const flashPool: NiagaraMuzzleFlash[] = [];
 const POOL_SIZE = 8;
+const POOL_LIGHTS_COUNT = 2; // Capped to 2 point lights max to preserve fragment shader performance
 let _scene: THREE.Scene;
 
 // Pre-allocated math cache objects for Zero-GC during ticks
@@ -92,7 +93,7 @@ export function initFiringVFX(scene: THREE.Scene, hasLights: boolean) {
     _scene.add(spikeMesh);
 
     let light: THREE.PointLight | null = null;
-    if (hasLights) {
+    if (hasLights && i < POOL_LIGHTS_COUNT) {
       light = new THREE.PointLight(
         VFX_CONSTANTS.FIRING.LIGHT_COLOR,
         0,
@@ -172,12 +173,16 @@ export function triggerNiagaraFlash(
     inst.spikeMesh.visible = true; // Fully enable visual Niagara-style spikes
 
     if (attachToPlayer) {
-      // Store camera relative local spike orientation so it rotates with player camera
+      // Store camera relative local spike orientation and offset so it rotates with player camera
       const camera = (window as any).camera;
       if (camera) {
         _tempQuat.copy(camera.quaternion).invert();
         inst.localSpikeQuat.copy(q).premultiply(_tempQuat);
+        
+        inst.localOffset.copy(muzzlePos).sub(camera.position);
+        inst.localOffset.applyQuaternion(_tempQuat);
       } else {
+        inst.localOffset.set(0, 0, 0);
         inst.localSpikeQuat.copy(q);
       }
     } else if (attachToDroneId !== null && match && match.droneJitterMap) {
@@ -233,7 +238,8 @@ export function updateFiringVFX(deltaTime: number, camera: THREE.PerspectiveCame
       } else {
         // Handle Dynamic Attachment
         if (inst.attachToPlayer) {
-          getMuzzleWorldPosition(inst.coreMesh.position, camera);
+          _tempOffset.copy(inst.localOffset).applyQuaternion(camera.quaternion);
+          inst.coreMesh.position.copy(camera.position).add(_tempOffset);
           inst.spikeMesh.position.copy(inst.coreMesh.position);
           inst.spikeMesh.quaternion.copy(camera.quaternion).multiply(inst.localSpikeQuat);
           if (inst.light) {

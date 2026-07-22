@@ -1,4 +1,4 @@
-import { processDroneIntelligence, DroneIntelConfig, INTEL_CONFIGS } from "./ai/DroneIntelligence";
+import { processDroneIntelligence } from "./ai/DroneIntelligence";
 import { GoogleGenAI, Type } from "@google/genai";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { ACTIVE_GAMEMODE } from "../shared/gamemode-configs.js";
@@ -22,10 +22,18 @@ import {
   TOTAL_STATE_BUFFER_SIZE as CONST_BUFFER_SIZE,
   PLAYER_CENTER_OFFSET,
   PLAYER_TOTAL_HEIGHT,
+  PLAYER_BASE_SPEED,
+  PLAYER_CROUCH_SPEED,
+  PLAYER_SPRINT_MULTIPLIER,
+  PLAYER_DASH_MULTIPLIER,
+  PLAYER_JUMP_VELOCITY,
+  PLAYER_GRAVITY,
   CAMERA_MAX_HP,
   PLAYER_MAX_HP,
   PLAYER_RESPAWN_DELAY_DEFAULT,
   getDroneMuzzleWorldPosition,
+  INTEL_CONFIGS,
+  DroneIntelConfig
 } from "../shared/constants";
 import { ChannelAdapter } from "./transport/adapter";
 import { getMapById } from "../shared/maps/map-registry";
@@ -159,6 +167,7 @@ export interface ServerDrone {
   velX: number;
   velY: number;
   velZ: number;
+  playerInFOV?: boolean;
   rad: number;
   hp: number;
   groupId: string;
@@ -175,7 +184,7 @@ export interface ServerDrone {
   currentVelocity?: { x: number; y: number; z: number };
   currentHeading?: { x: number; y: number; z: number };
   currentSpeed?: number;
-  avoidanceState?: { active: boolean; direction: number; ticksRemaining: number } | null;
+  avoidanceState?: { active: boolean; direction: number; ticksRemaining: number; transitioning?: boolean; transitionX?: number; transitionZ?: number; } | null;
   stuckTicks?: number;
 }
 
@@ -1204,9 +1213,9 @@ export class MatchRoom {
               const isDash = (inputMask & 0x80) !== 0;
 
               let speedMultiplier = 1.0;
-              if (isSprint) speedMultiplier = 1.6;
-              if (isCrouch) speedMultiplier = 0.5;
-              if (isDash) speedMultiplier = 2.5;
+              if (isSprint) speedMultiplier = PLAYER_SPRINT_MULTIPLIER;
+              if (isCrouch) speedMultiplier = PLAYER_CROUCH_SPEED / PLAYER_BASE_SPEED;
+              if (isDash) speedMultiplier = PLAYER_DASH_MULTIPLIER;
 
               let moveX = 0;
               let moveZ = 0;
@@ -1226,16 +1235,16 @@ export class MatchRoom {
               const dirZ =
                 -moveX * Math.sin(player.yaw) + moveZ * Math.cos(player.yaw);
 
-              const moveSpeed = 4.5 * speedMultiplier;
+              const moveSpeed = PLAYER_BASE_SPEED * speedMultiplier;
               player.velX = dirX * moveSpeed;
               player.velZ = dirZ * moveSpeed;
 
               // Simple jump / gravity mechanics
-              const gravity = -18.0;
+              const gravity = -PLAYER_GRAVITY;
               player.velY += gravity * 0.0166;
               const grounded = player.kcc.computedGrounded();
               if (isJump && grounded) {
-                player.velY = 7.0;
+                player.velY = PLAYER_JUMP_VELOCITY;
               }
 
               const desiredTranslation = {
@@ -2185,10 +2194,29 @@ export class MatchRoom {
             d.avoidanceState.ticksRemaining--;
             if (d.avoidanceState.ticksRemaining <= 0) {
                d.avoidanceState.active = false;
+               d.avoidanceState.transitioning = true;
+               
+               let lastAvoidX = 0;
+               let lastAvoidZ = 0;
+               if (d.avoidanceState.direction === -1) {
+                  lastAvoidX = dirX * cos45 - dirZ * sin45;
+                  lastAvoidZ = dirX * sin45 + dirZ * cos45;
+               } else {
+                  lastAvoidX = dirX * cos45 + dirZ * sin45;
+                  lastAvoidZ = -dirX * sin45 + dirZ * cos45;
+               }
+               const avoidLen = Math.sqrt(lastAvoidX * lastAvoidX + lastAvoidZ * lastAvoidZ);
+               if (avoidLen > 0.001) {
+                  lastAvoidX /= avoidLen;
+                  lastAvoidZ /= avoidLen;
+               }
+               d.avoidanceState.transitionX = lastAvoidX;
+               d.avoidanceState.transitionZ = lastAvoidZ;
+
                const droneTypeName = DroneType[d.type] || "UNKNOWN";
                console.log(
                   `[AVOIDANCE DEACTIVATED] Tick: ${this.serverTick} | Drone ID: ${d.id} (${droneTypeName}) | ` +
-                  `Ticks reached 0 and obstacle cleared`
+                  `Ticks reached 0 and obstacle cleared. Transitioning back.`
                );
             }
          }
@@ -2227,13 +2255,35 @@ export class MatchRoom {
          }
       }
 
+      let baseSteerX = steerX;
+      let baseSteerZ = steerZ;
+
+      if (d.avoidanceState && d.avoidanceState.transitioning) {
+         const currentAngle = Math.atan2(d.avoidanceState.transitionX, d.avoidanceState.transitionZ);
+         const targetAngle = Math.atan2(steerX, steerZ);
+         let angleDiff = targetAngle - currentAngle;
+         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+         if (Math.abs(angleDiff) <= maxYawRatePerTick) {
+            d.avoidanceState.transitioning = false;
+         } else {
+            const clampedDiff = clamp(angleDiff, -maxYawRatePerTick, maxYawRatePerTick);
+            const nextAngle = currentAngle + clampedDiff;
+            d.avoidanceState.transitionX = Math.sin(nextAngle);
+            d.avoidanceState.transitionZ = Math.cos(nextAngle);
+         }
+         baseSteerX = d.avoidanceState.transitionX;
+         baseSteerZ = d.avoidanceState.transitionZ;
+      }
+
       if (isAir) {
          if (d.type === DroneType.ROTARY_SHOOTER && d.mode === "COMBAT" && distToTarget < INTEL_CONFIGS[d.type].engagementMin) {
-            steerX = -steerX; steerY = -steerY; steerZ = -steerZ;
+            baseSteerX = -baseSteerX; steerY = -steerY; baseSteerZ = -baseSteerZ;
          }
 
-         let airSteerX = steerX;
-         let airSteerZ = steerZ;
+         let airSteerX = baseSteerX;
+         let airSteerZ = baseSteerZ;
          if (avoidanceActive) {
             airSteerX = avoidX;
             airSteerZ = avoidZ;
@@ -2255,8 +2305,8 @@ export class MatchRoom {
          let targetHZ = d.currentVelocityZ;
 
          if (d.mode === "COMBAT") {
-            targetHX = dxToTarget;
-            targetHZ = dzToTarget;
+            targetHX = baseSteerX;
+            targetHZ = baseSteerZ;
          }
 
          if (avoidanceActive) {
@@ -2298,8 +2348,8 @@ export class MatchRoom {
          const cX = d.currentHeadingX / hLen;
          const cZ = d.currentHeadingZ / hLen;
 
-         let finalSteerX = steerX;
-         let finalSteerZ = steerZ;
+         let finalSteerX = baseSteerX;
+         let finalSteerZ = baseSteerZ;
          if (avoidanceActive) {
             finalSteerX = avoidX;
             finalSteerZ = avoidZ;
@@ -2436,6 +2486,23 @@ export class MatchRoom {
               direction: recoveryDirection,
               ticksRemaining: MIN_AVOIDANCE_TICKS * 2
            };
+
+           // Apply a small immediate positional nudge away from the obstacle (opposite of current heading direction)
+           const headingLen = Math.sqrt(d.currentHeadingX * d.currentHeadingX + d.currentHeadingZ * d.currentHeadingZ);
+           const nudgeDirX = headingLen > 0.001 ? -d.currentHeadingX / headingLen : -1;
+           const nudgeDirZ = headingLen > 0.001 ? -d.currentHeadingZ / headingLen : 0;
+           const nudgeAmount = 0.3; // 0.3 meters nudge back
+           
+           d.posX += nudgeDirX * nudgeAmount;
+           d.posZ += nudgeDirZ * nudgeAmount;
+           
+           if (d.body) {
+              d.body.setNextKinematicTranslation({
+                 x: d.posX,
+                 y: d.posY,
+                 z: d.posZ,
+              });
+           }
 
            d.stuckTicks = 0;
         }
@@ -2908,7 +2975,11 @@ export class MatchRoom {
         this.payloadWriter.setFloat32(byteOffset + 22, d.rotZ, true);
         this.payloadWriter.setFloat32(byteOffset + 26, d.rotW, true);
         this.payloadWriter.setUint8(byteOffset + 30, d.state);
-        this.payloadWriter.setUint8(byteOffset + 31, d.type);
+        let finalType = d.type;
+        if (d.playerInFOV) {
+          finalType |= 128;
+        }
+        this.payloadWriter.setUint8(byteOffset + 31, finalType);
 
         byteOffset += DRONE_STRUCT_SIZE;
         if (byteOffset >= CONST_BUFFER_SIZE) {

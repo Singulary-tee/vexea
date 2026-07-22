@@ -19,6 +19,7 @@ export interface ExplosionInstance {
 }
 
 const POOL_SIZE = 4;
+const LARGE_LIGHTS_COUNT = 1; // Cap explosion point lights to 1 max
 const explosionPool: ExplosionInstance[] = [];
 
 // Fireballs/Plumes
@@ -86,7 +87,7 @@ export function initLargeVFX(scene: THREE.Scene, hasLights: boolean) {
   // Create Explosion instances
   for (let i = 0; i < POOL_SIZE; i++) {
     let light: THREE.PointLight | null = null;
-    if (hasLights) {
+    if (hasLights && i < LARGE_LIGHTS_COUNT) {
       light = new THREE.PointLight(
         VFX_CONSTANTS.FIRING.LIGHT_COLOR,
         0,

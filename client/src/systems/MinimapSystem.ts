@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { MatchController } from "../../MatchController";
 import { DroneState } from "../../../shared/constants";
 import { PanZoomSurface } from "../ui/PanZoomSurface";
+import { DS } from "../../design-system";
 
 export class MinimapSystem {
   private canvas: HTMLCanvasElement | null = null;
@@ -138,8 +139,8 @@ export class MinimapSystem {
           const zx = cx + (zone.bounds.xMin - (isFS ? 0 : px)) * scaleX;
           const zz = cy + (zone.bounds.zMin - (isFS ? 0 : pz)) * scaleZ;
           
-          ctx.fillStyle = "rgba(50,50,50,0.2)";
-          ctx.strokeStyle = "rgba(255,255,255,0.05)";
+          ctx.fillStyle = DS.utils.rgba(DS.colors.surface, 0.2);
+          ctx.strokeStyle = DS.glass.border;
           ctx.lineWidth = 1;
           ctx.fillRect(zx, zz, zWidth * scaleX, zHeight * scaleZ);
           ctx.strokeRect(zx, zz, zWidth * scaleX, zHeight * scaleZ);
@@ -155,8 +156,8 @@ export class MinimapSystem {
           const bw = b.size.x * (b.scale?.x || 1) * scaleX;
           const bh = b.size.z * (b.scale?.z || 1) * scaleZ;
 
-          ctx.fillStyle = "rgba(150,150,150,0.3)";
-          ctx.strokeStyle = "rgba(255,255,255,0.85)";
+          ctx.fillStyle = DS.utils.rgba(DS.colors.textMuted, 0.3);
+          ctx.strokeStyle = DS.utils.rgba(DS.colors.text, 0.4);
           ctx.lineWidth = 0.5;
 
           ctx.save();
@@ -177,10 +178,10 @@ export class MinimapSystem {
       const head = buffer.states[(buffer.head - 1 + 3) % 3];
       if (!head || head.state === DroneState.DEAD) return;
 
-      let color = "#CFCFCF"; // Ground
+      let color = DS.colors.textSecondary; // Ground
       if (head.type === 0 || head.type === 1 || head.type === 3)
-        color = "#00AAFF"; // Air
-      else if (head.type === 2) color = "#FFFF00"; // Recon
+        color = DS.colors.accent; // Air
+      else if (head.type === 2) color = DS.colors.warning; // Recon
 
       const dx = cx + (head.posX - (isFS ? 0 : px)) * scaleX;
       const dz = cy + (head.posZ - (isFS ? 0 : pz)) * scaleZ;
@@ -192,7 +193,7 @@ export class MinimapSystem {
       ctx.beginPath();
       ctx.arc(dx, dz, 4.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "#ffffff";
+      ctx.strokeStyle = DS.colors.text;
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.restore();

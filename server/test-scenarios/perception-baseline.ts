@@ -56,21 +56,59 @@ async function run() {
   console.log("Drone position:", { x: drone.posX, y: drone.posY, z: drone.posZ });
   console.log("Drone state/mode before:", drone.state, "/", drone.mode);
 
-  // Synchronously call drone intelligence processing
-  const nowMs = Date.now();
-  processDroneIntelligence(nowMs, room.drones, room.players, room.rapierWorld, RAPIER);
+  // Synchronously call drone intelligence processing to trigger NORMAL -> COMBAT transition
+  let nowMs = Date.now();
+  processDroneIntelligence(nowMs, room.drones, room.players, room.rapierWorld, RAPIER, 0.0166);
 
   console.log("Drone state/mode after 1 tick:", drone.state, "/", drone.mode);
   console.log("Drone target identified:", drone.combatTarget ? "YES" : "NO");
   if (drone.combatTarget) {
     console.log("  Target confidence:", (drone.combatTarget as any).confidence);
-    console.log("  Target position:", {
-      x: drone.combatTarget.lastSensedPosition.x,
-      y: drone.combatTarget.lastSensedPosition.y,
-      z: drone.combatTarget.lastSensedPosition.z
-    });
   }
-  
+
+  // Verify transition to COMBAT has succeeded
+  if (drone.mode !== "COMBAT") {
+    console.error("TEST FAILED: Drone did not transition to COMBAT");
+    room.shutdown();
+    process.exit(1);
+  }
+
+  console.log("\n--- SIMULATING PLAYER ESCAPE (DECAY TO NORMAL) ---");
+  // Move player far away out of sight range
+  player.posX = 1000;
+  player.posY = 1000;
+  player.posZ = 1000;
+  if (player.body) {
+    player.body.setTranslation({ x: 1000, y: 1000, z: 1000 }, true);
+  }
+
+  // Step virtual ticks forward, using dt = 1.0 seconds to decay quickly
+  // DECAY_RATE = 1.0 / 15.0; and dt = 1.0 means each step decays confidence by ~0.0667.
+  // We need to decay below UNKNOWN_THRESHOLD (0.2) to transition back to NORMAL.
+  for (let step = 1; step <= 25; step++) {
+    nowMs += 1000; // Increment time by 1s
+    processDroneIntelligence(nowMs, room.drones, room.players, room.rapierWorld, RAPIER, 1.0);
+    
+    const record = drone.memoryRecords?.find(r => r.entityId === player.id);
+    const conf = record ? record.confidence : 0;
+    
+    if (step % 5 === 0 || drone.mode === "NORMAL") {
+      console.log(`Step ${step} | Player Distance: Far | Memory Confidence: ${conf.toFixed(4)} | Drone Mode: ${drone.mode}`);
+    }
+
+    if (drone.mode === "NORMAL") {
+      console.log(`Drone successfully returned to NORMAL at step ${step}!`);
+      break;
+    }
+  }
+
+  if (drone.mode !== "NORMAL") {
+    console.error("TEST FAILED: Drone did not transition back to NORMAL");
+    room.shutdown();
+    process.exit(1);
+  }
+
+  console.log("STATUS: SUCCESS - All transitions occurred and logged successfully.");
   room.shutdown();
 }
 

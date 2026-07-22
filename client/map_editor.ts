@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ZONES, ZoneName } from '../shared/constants';
+import { DS } from './design-system';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 
@@ -33,7 +34,7 @@ export const initMapEditor = (
     scene.add(transformControl as any);
 
     // Outline Helper
-    const boxHelper = new THREE.BoxHelper(new THREE.Mesh(new THREE.BoxGeometry(1,1,1)), 0x22c55e);
+    const boxHelper = new THREE.BoxHelper(new THREE.Mesh(new THREE.BoxGeometry(1,1,1)), new THREE.Color(DS.colors.success).getHex());
     boxHelper.visible = false;
     scene.add(boxHelper);
 
@@ -44,7 +45,7 @@ export const initMapEditor = (
     
     const uiHTML = `
       <!-- Top Bar -->
-      <div class="w-full flex flex-wrap items-center justify-between p-2 bg-black/80 pointer-events-auto backdrop-blur border-b border-gray-700">
+      <div class="w-full flex flex-wrap items-center justify-between p-2 bg-black/80 pointer-events-auto backdrop-blur border-b border-[${DS.colors.border}]">
           <div class="flex flex-wrap gap-2 items-center">
             <button id="btn-exit-editor" class="px-3 py-1 bg-red-900/80 text-white rounded active:bg-red-800 border border-red-700 mr-2">EXIT</button>
             <button id="btn-fullscreen" class="px-3 py-1 bg-gray-700 text-white rounded active:bg-gray-600 border border-gray-600">FULLSCREEN</button>
@@ -52,25 +53,25 @@ export const initMapEditor = (
             
             <div class="h-6 w-px bg-gray-600 mx-1"></div>
             
-            <select id="sel-add" class="bg-black border border-gray-600 text-white px-2 py-1 rounded cursor-pointer">
+            <select id="sel-add" class="bg-black border border-[${DS.colors.border}] text-white px-2 py-1 rounded cursor-pointer">
               <option value="">+ ADD OBJECT</option>
               <option value="cube">Cube</option>
               <option value="wall">Wall</option>
               <option value="spawn">Spawn</option>
             </select>
 
-            <select id="sel-zone" class="bg-black border border-gray-600 text-white px-2 py-1 rounded cursor-pointer">
+            <select id="sel-zone" class="bg-black border border-[${DS.colors.border}] text-white px-2 py-1 rounded cursor-pointer">
               ${Object.values(ZONES).map(z => `<option value="${z}">Zone: ${z.toUpperCase()}</option>`).join("")}
             </select>
           </div>
 
           <div class="flex gap-2 items-center mt-2 sm:mt-0">
-            <select id="sel-mode" class="bg-black border border-gray-600 text-white px-2 py-1 rounded cursor-pointer">
+            <select id="sel-mode" class="bg-black border border-[${DS.colors.border}] text-white px-2 py-1 rounded cursor-pointer">
               <option value="translate">Translate</option>
               <option value="rotate">Rotate</option>
               <option value="scale">Scale</option>
             </select>
-            <select id="sel-snap" class="bg-black border border-gray-600 text-white px-2 py-1 rounded cursor-pointer">
+            <select id="sel-snap" class="bg-black border border-[${DS.colors.border}] text-white px-2 py-1 rounded cursor-pointer">
               <option value="0.5">Snap: 0.5</option>
               <option value="1" selected>Snap: 1.0</option>
               <option value="2">Snap: 2.0</option>
@@ -89,11 +90,11 @@ export const initMapEditor = (
       </div>
 
       <!-- Settings Modal -->
-      <div id="editor-settings-modal" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/95 border border-gray-600 p-6 rounded hidden pointer-events-auto flex-col gap-4 min-w-[250px]">
+      <div id="editor-settings-modal" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/95 border border-[${DS.colors.border}] p-6 rounded hidden pointer-events-auto flex-col gap-4 min-w-[250px]">
         <h2 class="text-xl font-bold text-white mb-2">Editor Settings</h2>
         <label class="flex justify-between items-center text-gray-300">
             Grid Size:
-            <input type="number" id="inp-grid-size" value="100" class="w-20 bg-gray-800 border border-gray-600 rounded px-2 text-white">
+            <input type="number" id="inp-grid-size" value="100" class="w-20 bg-gray-800 border border-[${DS.colors.border}] rounded px-2 text-white">
         </label>
         <button id="btn-close-settings" class="mt-4 px-4 py-2 bg-gray-700 text-white rounded active:bg-gray-600 border border-gray-600">CLOSE</button>
       </div>
@@ -102,29 +103,29 @@ export const initMapEditor = (
     document.body.appendChild(editorUI);
 
     // Materials
-    const ZONE_COLORS: Record<string, number> = {
-        [ZONES.SPAWN]: 0x5a6982,
-        [ZONES.COURTYARD]: 0x8292ab,
-        [ZONES.WAREHOUSE]: 0x93c5fd,
-        [ZONES.BRIDGE]: 0xfca5a5,
-        [ZONES.PLANT]: 0x86efac,
-        [ZONES.TUNNELS]: 0xd8b4fe,
-        [ZONES.CORE]: 0xfde047
+    const ZONE_COLORS: Record<string, string> = {
+        [ZONES.SPAWN]: DS.colors.zones.spawn,
+        [ZONES.COURTYARD]: DS.colors.zones.courtyard,
+        [ZONES.WAREHOUSE]: DS.colors.zones.warehouse,
+        [ZONES.BRIDGE]: DS.colors.zones.bridge,
+        [ZONES.PLANT]: DS.colors.zones.plant,
+        [ZONES.TUNNELS]: DS.colors.zones.tunnels,
+        [ZONES.CORE]: DS.colors.zones.core
     };
     
     // Instead of instancing many materials, we use the zone array
     const unselectedMats: Record<string, THREE.MeshStandardMaterial> = {};
     for (const z of Object.values(ZONES)) {
-        unselectedMats[z] = new THREE.MeshStandardMaterial({ color: ZONE_COLORS[z] || 0x888888, roughness: 0.8 });
+        unselectedMats[z] = new THREE.MeshStandardMaterial({ color: new THREE.Color(ZONE_COLORS[z] || 0x888888), roughness: 0.8 });
     }
 
     // Grid Helper Re-init mechanism
-    let editorGrid = new THREE.GridHelper(100, 100, 0xffffff, 0x555555);
+    let editorGrid = new THREE.GridHelper(100, 100, new THREE.Color(DS.colors.textPrimary), new THREE.Color(DS.colors.border));
     scene.add(editorGrid);
 
     const updateGrid = (size: number) => {
       scene.remove(editorGrid);
-      editorGrid = new THREE.GridHelper(size, size, 0xffffff, 0x555555);
+      editorGrid = new THREE.GridHelper(size, size, new THREE.Color(DS.colors.textPrimary), new THREE.Color(DS.colors.border));
       scene.add(editorGrid);
     };
 

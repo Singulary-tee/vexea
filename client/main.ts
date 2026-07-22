@@ -16,6 +16,7 @@ declare global {
  */
 
 import "./index.css";
+import { DS } from "./design-system";
 if ((import.meta as any).env?.DEV) {
   import("./dev_menu");
 }
@@ -247,10 +248,10 @@ const initClient = async () => {
       micActive = !micActive;
       if (micActive) {
         micBtn.classList.add("active");
-        micBtn.style.color = "#FF4B4B"; // red indicator
+        micBtn.style.color = DS.colors.danger; // red indicator
       } else {
         micBtn.classList.remove("active");
-        micBtn.style.color = "white";
+        micBtn.style.color = DS.colors.text;
       }
     });
   }
@@ -510,7 +511,7 @@ const initClient = async () => {
   scene = new THREE.Scene();
   
   // TEMPORARY DIAGNOSTIC VISUAL - REMOVE AFTER COLLISION TEST
-  const wallMat = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: false, transparent: true, opacity: 0.5 });
+  const wallMat = new THREE.MeshBasicMaterial({ color: DS.colors.dev, wireframe: false, transparent: true, opacity: 0.5 });
   const wallGeoms = [
     { size: [10, 6, 1], pos: [0, 1.5, 5] },
     { size: [10, 6, 1], pos: [0, 1.5, -5] },
@@ -524,7 +525,7 @@ const initClient = async () => {
     scene.add(mesh);
   }
 
-  const grid = new THREE.GridHelper(800, 80, 0x444444, 0x222222);
+  const grid = new THREE.GridHelper(800, 80, DS.colors.border, DS.colors.background);
   grid.position.y = 0.01;
   scene.add(grid);
 
@@ -656,7 +657,7 @@ if (mainMenuBtn) {
 
 const setup3DStage = async () => {
   if (!scene) scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x151b2c);
+  scene.background = new THREE.Color(DS.colors.background);
 
   const canvasContainer = document.getElementById("canvas-container");
 
@@ -727,7 +728,25 @@ const setup3DStage = async () => {
     }
   }
 
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  let initWidth = window.innerWidth;
+  let initHeight = window.innerHeight;
+  if (IS_MOBILE) {
+    const maxDimension = 1000;
+    if (initWidth > maxDimension || initHeight > maxDimension) {
+      const aspectRatio = initWidth / initHeight;
+      if (initWidth > initHeight) {
+        initWidth = maxDimension;
+        initHeight = Math.round(maxDimension / aspectRatio);
+      } else {
+        initHeight = maxDimension;
+        initWidth = Math.round(maxDimension * aspectRatio);
+      }
+    }
+  }
+  renderer.setSize(initWidth, initHeight, false);
+  renderer.domElement.style.width = "100%";
+  renderer.domElement.style.height = "100%";
+
   if ((window as any).composer) {
     (window as any).composer.setSize(window.innerWidth, window.innerHeight);
     const pixelRatio = renderer.getPixelRatio();
@@ -738,7 +757,7 @@ const setup3DStage = async () => {
         1 / (window.innerHeight * pixelRatio);
     }
   }
-  renderer.setPixelRatio(IS_MOBILE ? Math.min(window.devicePixelRatio, 1.5) : window.devicePixelRatio);
+  renderer.setPixelRatio(IS_MOBILE ? Math.min(window.devicePixelRatio, 1.2) : window.devicePixelRatio);
 
   const W = window as any;
   W.renderer = renderer;
@@ -785,9 +804,28 @@ const setup3DStage = async () => {
 
 // 4. Input & Controls binds (Zero allocations in trigger keys)
 const handleWindowResize = () => {
+  let width = window.innerWidth;
+  let height = window.innerHeight;
+  
+  if (IS_MOBILE) {
+    const maxDimension = 1000;
+    if (width > maxDimension || height > maxDimension) {
+      const aspectRatio = width / height;
+      if (width > height) {
+        width = maxDimension;
+        height = Math.round(maxDimension / aspectRatio);
+      } else {
+        height = maxDimension;
+        width = Math.round(maxDimension * aspectRatio);
+      }
+    }
+  }
+
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(width, height, false);
+  renderer.domElement.style.width = "100%";
+  renderer.domElement.style.height = "100%";
 };
 
 let lastTime = performance.now();
@@ -965,6 +1003,31 @@ const animateFrame = async () => {
        );
      }
 
+    // 4. Weapon Position Sync (Smooth spring-recoil, breathing sway, and draw-holster animations)
+    if (weaponsContainer) {
+      const _w0 = performance.now();
+      updateWeaponsContainer(dt, camera, match.isADS, match.currentAdsLerp, inputManager.moveX !== 0 || inputManager.moveZ !== 0);
+      (window as any).devSubsystems.weapons = performance.now() - _w0;
+
+      // Hide Center Crosshair dynamically when aiming down sights (ADS)
+      const crosshair = document.getElementById("center-crosshair");
+      if (crosshair) {
+        // Smoothly fade out crosshair as match.currentAdsLerp approaches 1.0
+        crosshair.style.opacity = Math.max(0, 1.0 - match.currentAdsLerp).toString();
+        crosshair.style.display = match.currentAdsLerp > 0.9 ? "none" : "block";
+      }
+
+      // Toggle sprint button / running SVG display
+      const btnSprint = document.getElementById("btn-sprint");
+      if (btnSprint) {
+        if ((window as any).isEditMode) {
+          btnSprint.style.setProperty("display", "flex", "important");
+        } else {
+          btnSprint.style.setProperty("display", inputManager.isSprinting ? "flex" : "none", "important");
+        }
+      }
+    }
+
      syncVisualProjectiles(dt);
 
     if (match.visuals) {
@@ -1029,30 +1092,7 @@ const animateFrame = async () => {
       }
     }
 
-    // 4. Weapon Position Sync (Smooth spring-recoil, breathing sway, and draw-holster animations)
-    if (weaponsContainer) {
-      const _w0 = performance.now();
-      updateWeaponsContainer(dt, camera, match.isADS, match.currentAdsLerp, inputManager.moveX !== 0 || inputManager.moveZ !== 0);
-      (window as any).devSubsystems.weapons = performance.now() - _w0;
 
-      // Hide Center Crosshair dynamically when aiming down sights (ADS)
-      const crosshair = document.getElementById("center-crosshair");
-      if (crosshair) {
-        // Smoothly fade out crosshair as match.currentAdsLerp approaches 1.0
-        crosshair.style.opacity = Math.max(0, 1.0 - match.currentAdsLerp).toString();
-        crosshair.style.display = match.currentAdsLerp > 0.9 ? "none" : "block";
-      }
-
-      // Toggle sprint button / running SVG display
-      const btnSprint = document.getElementById("btn-sprint");
-      if (btnSprint) {
-        if ((window as any).isEditMode) {
-          btnSprint.style.setProperty("display", "flex", "important");
-        } else {
-          btnSprint.style.setProperty("display", inputManager.isSprinting ? "flex" : "none", "important");
-        }
-      }
-    }
 
     // 4.5 Minimap Arrow Rotation
     const arrow = document.getElementById("minimap-player-arrow");
@@ -1124,7 +1164,7 @@ let serverCubeMesh: THREE.Mesh | undefined;
   if (!clientCubeMesh) {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshBasicMaterial({
-      color: 0x00aaff,
+      color: DS.colors.dev,
       wireframe: true,
       transparent: true,
       opacity: 0.8
@@ -1153,7 +1193,7 @@ let serverCubeMesh: THREE.Mesh | undefined;
   if (!serverCubeMesh) {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshBasicMaterial({
-      color: 0xff3333,
+      color: DS.colors.danger,
       wireframe: true,
       transparent: true,
       opacity: 0.8

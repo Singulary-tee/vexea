@@ -45,16 +45,16 @@ export const WEAPON_SWITCH_DURATION = 0.4; // 400ms switch cooldown
 
 export const DEV_WEAPON_OFFSETS = {
   rifle: {
-    hip: new THREE.Vector3(0.025, -0.49, 0.05),
-    ads: new THREE.Vector3(-0.075, -0.42, 0),
-    muzzle: new THREE.Vector3(0, 0, -0.5),
-    adsTilt: -0.05 // Corrective tilt for SMG ADS alignment
+    hip: new THREE.Vector3(DETAILED_WEAPONS.rifle.visualConfig.hipPosition[0], DETAILED_WEAPONS.rifle.visualConfig.hipPosition[1], DETAILED_WEAPONS.rifle.visualConfig.hipPosition[2]),
+    ads: new THREE.Vector3(DETAILED_WEAPONS.rifle.visualConfig.adsPosition[0], DETAILED_WEAPONS.rifle.visualConfig.adsPosition[1], DETAILED_WEAPONS.rifle.visualConfig.adsPosition[2]),
+    muzzle: new THREE.Vector3(DETAILED_WEAPONS.rifle.visualConfig.muzzleOffset[0], DETAILED_WEAPONS.rifle.visualConfig.muzzleOffset[1], DETAILED_WEAPONS.rifle.visualConfig.muzzleOffset[2]),
+    adsTilt: DETAILED_WEAPONS.rifle.visualConfig.adsTilt
   },
   pistol: {
-    hip: new THREE.Vector3(0.005, -0.16, -0.185),
-    ads: new THREE.Vector3(0, -0.135, -0.06),
-    muzzle: new THREE.Vector3(-0.115, -0.2, -0.2),
-    adsTilt: 0
+    hip: new THREE.Vector3(DETAILED_WEAPONS.pistol.visualConfig.hipPosition[0], DETAILED_WEAPONS.pistol.visualConfig.hipPosition[1], DETAILED_WEAPONS.pistol.visualConfig.hipPosition[2]),
+    ads: new THREE.Vector3(DETAILED_WEAPONS.pistol.visualConfig.adsPosition[0], DETAILED_WEAPONS.pistol.visualConfig.adsPosition[1], DETAILED_WEAPONS.pistol.visualConfig.adsPosition[2]),
+    muzzle: new THREE.Vector3(DETAILED_WEAPONS.pistol.visualConfig.muzzleOffset[0], DETAILED_WEAPONS.pistol.visualConfig.muzzleOffset[1], DETAILED_WEAPONS.pistol.visualConfig.muzzleOffset[2]),
+    adsTilt: DETAILED_WEAPONS.pistol.visualConfig.adsTilt
   }
 };
 (window as any).DEV_WEAPON_OFFSETS = DEV_WEAPON_OFFSETS;
@@ -350,10 +350,11 @@ export function isSwitchingWeapon(): boolean {
 }
 
 export function getMuzzleWorldPosition(outVec: THREE.Vector3, camera: THREE.Camera): void {
+  if (weaponsContainer) {
+    weaponsContainer.updateMatrixWorld(true);
+  }
   const activeMesh = weaponVisualState.activeSlot === 1 ? rifleGroup : pistolGroup;
   if (activeMesh && (activeMesh as any).muzzleNode) {
-    // First, make sure the local offset of the dummy node is 0
-    (activeMesh as any).muzzleNode.position.set(0, 0, 0);
     (activeMesh as any).muzzleNode.updateMatrixWorld(true);
     
     // Get the base animated world position from the model's muzzle or bone
@@ -362,17 +363,18 @@ export function getMuzzleWorldPosition(outVec: THREE.Vector3, camera: THREE.Came
     // ONLY apply the camera-space offset if this is a procedurally created dynamic muzzle fallback.
     // Authored gltf muzzle nodes are already placed perfectly at the tip.
     if ((activeMesh as any).isProceduralMuzzle) {
-      const muzzleOffset = weaponVisualState.activeSlot === 1 ? DEV_WEAPON_OFFSETS.rifle.muzzle : DEV_WEAPON_OFFSETS.pistol.muzzle;
+      const activeStats = weaponVisualState.activeSlot === 1 ? DETAILED_WEAPONS.rifle : DETAILED_WEAPONS.pistol;
+      const muzzleOffset = activeStats.visualConfig.muzzleOffset;
       
-      // Convert the camera's rotation to world axes so the DEV_WEAPON_OFFSETS 
+      // Convert the camera's rotation to world axes so the offsets 
       // predictably apply in view space (X=Right, Y=Up, Z=Backward)
       const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
       const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
       const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
       
-      outVec.addScaledVector(right, muzzleOffset.x);
-      outVec.addScaledVector(up, muzzleOffset.y);
-      outVec.addScaledVector(forward, muzzleOffset.z);
+      outVec.addScaledVector(right, muzzleOffset[0]);
+      outVec.addScaledVector(up, muzzleOffset[1]);
+      outVec.addScaledVector(forward, muzzleOffset[2]);
     }
   } else {
     outVec.copy(camera.position);
@@ -460,9 +462,13 @@ export function updateWeaponsContainer(
   }
 
   // Hip / ADS alignments.
-  const offsets = activeSlot === 1 ? DEV_WEAPON_OFFSETS.rifle : DEV_WEAPON_OFFSETS.pistol;
-  const hipX = offsets.hip.x, hipY = offsets.hip.y, hipZ = offsets.hip.z;
-  const adsX = offsets.ads.x, adsY = offsets.ads.y, adsZ = offsets.ads.z;
+  const hipX = stats.visualConfig.hipPosition[0];
+  const hipY = stats.visualConfig.hipPosition[1];
+  const hipZ = stats.visualConfig.hipPosition[2];
+
+  const adsX = stats.visualConfig.adsPosition[0];
+  const adsY = stats.visualConfig.adsPosition[1];
+  const adsZ = stats.visualConfig.adsPosition[2];
 
   const baseTargetX = hipX + (adsX - hipX) * currentAdsLerp;
   const baseTargetY = hipY + (adsY - hipY) * currentAdsLerp;
@@ -504,7 +510,7 @@ export function updateWeaponsContainer(
   weaponsContainer.rotateY(-weaponVisualState.recoilYaw + (swayX * 1.5));
   
   // Apply sway roll and ADS corrective tilt
-  const adsTilt = (offsets as any).adsTilt || 0;
+  const adsTilt = stats.visualConfig.adsTilt || 0;
   weaponsContainer.rotateZ((-swayX * 4.0) + (adsTilt * currentAdsLerp));
   
   // Model files are facing +Z instead of -Z, so spin them 180 on Y

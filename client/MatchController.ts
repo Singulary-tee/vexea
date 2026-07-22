@@ -26,18 +26,19 @@ export interface NetworkDroneState {
   rotW: number;
   state: DroneState;
   type: DroneType;
+  playerInFOV: boolean;
 }
 
 export class DroneRingBuffer {
   public states: NetworkDroneState[] = [
-    { t: 0, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, rotW: 1, state: 0, type: 0 },
-    { t: 0, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, rotW: 1, state: 0, type: 0 },
-    { t: 0, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, rotW: 1, state: 0, type: 0 }
+    { t: 0, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, rotW: 1, state: 0, type: 0, playerInFOV: false },
+    { t: 0, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, rotW: 1, state: 0, type: 0, playerInFOV: false },
+    { t: 0, posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, rotW: 1, state: 0, type: 0, playerInFOV: false }
   ];
   public head = 0;
   public count = 0;
 
-  public push(t: number, posX: number, posY: number, posZ: number, rotX: number, rotY: number, rotZ: number, rotW: number, state: number, type: number) {
+  public push(t: number, posX: number, posY: number, posZ: number, rotX: number, rotY: number, rotZ: number, rotW: number, state: number, type: number, playerInFOV: boolean) {
     const s = this.states[this.head];
     s.t = t;
     s.posX = posX;
@@ -49,6 +50,7 @@ export class DroneRingBuffer {
     s.rotW = rotW;
     s.state = state;
     s.type = type;
+    s.playerInFOV = playerInFOV;
     this.head = (this.head + 1) % 3;
     if (this.count < 3) this.count++;
   }
@@ -71,6 +73,7 @@ export interface VisualInstance {
 
 export interface PlayerHistoryNode {
   seq: number;
+  time?: number;
   x: number;
   y: number;
   z: number;

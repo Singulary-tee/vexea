@@ -1,6 +1,7 @@
 import { MatchController } from "../../MatchController";
 import { getSocketChannel } from "../../main";
 import { getSettings } from "../../settings";
+import { DS } from "../../design-system";
 
 export class ReconnectionSystem {
   private match: MatchController;
@@ -24,7 +25,7 @@ export class ReconnectionSystem {
       const statusEl = document.getElementById("dev-disconnect-status");
       if (statusEl) {
         statusEl.innerText = "Status: Disconnected";
-        statusEl.style.color = "#ef4444";
+        statusEl.style.color = DS.colors.danger;
       }
 
       if (this.simulatedDisconnectActive) {
@@ -41,7 +42,7 @@ export class ReconnectionSystem {
       const statusEl = document.getElementById("dev-disconnect-status");
       if (statusEl) {
         statusEl.innerText = "Status: Connected";
-        statusEl.style.color = "#10b981";
+        statusEl.style.color = DS.colors.success;
       }
 
       // Rejoin the match
@@ -64,7 +65,7 @@ export class ReconnectionSystem {
     const statusEl = document.getElementById("dev-disconnect-status");
     if (statusEl) {
       statusEl.innerText = "Status: Simulating Disconnect...";
-      statusEl.style.color = "#f59e0b";
+      statusEl.style.color = DS.colors.warning;
     }
 
     // Force disconnect

@@ -9,7 +9,7 @@ import { EXTENDED_SOUNDS, EXTENDED_TEXTURES } from "./splash";
 
 let styleInjected = false;
 let activeCardId: string | null = null;
-let currentRightPanelMode: 'DEFAULT' | 'MULTIPLAYER' | 'FACTION' | 'STATISTICS' | 'FEEDBACK' | 'STORE' | 'PROFILE' | 'MAP_EDITOR' = 'DEFAULT';
+let currentRightPanelMode: 'DEFAULT' | 'MULTIPLAYER' | 'FACTION' | 'INTEL' | 'FEEDBACK' | 'STORE' | 'PROFILE' | 'MAP_EDITOR' | 'PLAY' | 'LOADOUT' = 'DEFAULT';
 let userFaction: string | null = null;
 let registeredUserData: any = null;
 let userSubscriptionUnsubscribe: (() => void) | null = null;
@@ -86,50 +86,11 @@ export function initMainMenu() {
         -webkit-backdrop-filter: ${DS.glass.blur};
         border: ${DS.glass.border};
       }
-      .mm-left-col { width: clamp(200px, 25vw, 320px); }
-      .mm-right-col { width: clamp(280px, 30vw, 400px); right: clamp(16px, 3vw, 32px); }
-      .mm-bot-banner { width: 40vw; max-width: 500px; min-width: 280px; }
-      .mm-wordmark { font-size: clamp(24px, 4vw, 48px); }
-      .mm-card-text { font-size: clamp(16px, 2vw, 24px); }
-      .mm-card {
-        transition: flex 320ms cubic-bezier(0.4,0,0.2,1), min-height 320ms cubic-bezier(0.4,0,0.2,1), max-height 320ms cubic-bezier(0.4,0,0.2,1), background-color 320ms cubic-bezier(0.4,0,0.2,1), border 320ms cubic-bezier(0.4,0,0.2,1), transform 320ms cubic-bezier(0.4,0,0.2,1);
-        flex: 1 1 0px;
-        min-height: clamp(32px, 6vh, 48px);
-        max-height: clamp(60px, 12vh, 80px);
-        overflow: hidden;
-      }
-      .mm-card-expanded {
-        flex: 4 1 0px !important;
-        min-height: clamp(140px, 20vh, 220px) !important;
-        max-height: clamp(200px, 30vh, 320px) !important;
-        background-size: cover !important;
-        background-position: center !important;
-        background-repeat: no-repeat !important;
-      }
-      .mm-card[data-id="MULTIPLAYER"].mm-card-expanded { background-image: url('${getAssetUrl("multiplayer_card.png")}') !important; }
-      .mm-card[data-id="STATISTICS"].mm-card-expanded { background-image: url('${getAssetUrl("statistics_card.png")}') !important; }
-      .mm-card[data-id="STORE"].mm-card-expanded { background-image: url('${getAssetUrl("store_card.png")}') !important; }
-      .mm-card[data-id="FEEDBACK"].mm-card-expanded { background-image: url('${getAssetUrl("feedback_card.png")}') !important; }
-      .mm-card.faction-vibe.mm-card-expanded { background-image: url('${getAssetUrl("vibeCo_card.png")}') !important; }
-      .mm-card.faction-slop.mm-card-expanded { background-image: url('${getAssetUrl("slopInc_card.png")}') !important; }
-      .mm-card-dimmed {
-        opacity: 0.3 !important;
-      }
+      .mm-wordmark { font-size: clamp(18px, 3vw, 36px); }
       .mm-right-panel-content {
         transition: opacity ${DS.transitions.panel};
       }
       
-      .mm-loop-bg {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        z-index: 1;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 500ms ease-in-out;
-      }
       .mm-fisheye-wrap {
         position: absolute;
         inset: 0;
@@ -141,22 +102,49 @@ export function initMainMenu() {
       .mm-fisheye-wrap > * {
         pointer-events: auto;
       }
-      .mm-vignette {
-        display: none;
+      .mm-top-shadow {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: clamp(80px, 15vh, 160px);
+        background: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0) 100%);
+        z-index: 1;
+        pointer-events: none;
+      }
+      .mm-new-card {
+        position: relative;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        box-shadow: inset 0 0 60px rgba(0,0,0,0.9), inset 0 0 20px rgba(0,0,0,0.6), 0 6px 15px rgba(0,0,0,0.4);
+        cursor: pointer;
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.2s, border 0.2s;
+        display: flex;
+        flex-direction: column;
+        border: none;
+        container-type: inline-size;
+      }
+      .mm-new-card:hover {
+        transform: scale(1.02);
+        box-shadow: inset 0 0 40px rgba(0,0,0,0.7), inset 0 0 10px rgba(0,0,0,0.4), 0 10px 25px rgba(0,0,0,0.6), 0 0 20px rgba(255,255,255,0.05);
+        z-index: 10;
+      }
+      .mm-new-card-title {
+        font-family: ${DS.typography.fontFamily};
+        font-weight: bold;
+        font-size: clamp(10px, 8cqi, 28px);
+        text-transform: uppercase;
+        color: #FFFFFF;
+        text-shadow: 1px 1px 4px rgba(0,0,0,1);
+        padding: clamp(4px, 4cqi, 16px);
+        z-index: 2;
+        pointer-events: none;
       }
       #settings-sidebar::-webkit-scrollbar { display:none; }
-      .mm-left-col { overflow-y: auto; overflow-x: hidden; }
       @media (max-width: 768px) {
-         .mm-left-col { width: 320px; }
-         .mm-bot-banner { width: 50vw; }
-         .mm-wordmark { font-size: 32px !important; }
+         .mm-wordmark { font-size: 24px !important; }
          .mm-profile-rank { display: none !important; }
-         .mm-glass { backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important; }
-         .mm-card-text { font-size: clamp(14px, 2vw, 18px) !important; }
-      }
-      @keyframes pulse {
-        0%, 100% { opacity: 0.8; transform: scale(1); }
-        50% { opacity: 0.5; transform: scale(1.05); }
+         .mm-new-card-title { font-size: clamp(12px, 10cqi, 24px) !important; padding: 8px !important; }
       }
       @keyframes fade-in {
         from { opacity: 0; }
@@ -171,61 +159,12 @@ export function initMainMenu() {
   el.id = 'main-menu-screen';
   Object.assign(el.style, {
     position: 'fixed', inset: '0', zIndex: '900', display: 'none',
-    backgroundColor: '#000',
-    backgroundImage: `url('${getAssetUrl("splash_screen.png")}')`,
+    backgroundColor: DS.colors.background,
+    backgroundImage: `url('${getAssetUrl("faction_card.jpg")}')`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-    opacity: '0', transition: 'opacity 500ms ease-out',
+    opacity: '0', transition: `opacity ${DS.transitions.panel}`,
     overflow: 'hidden'
-  });
-
-  const loopBg = document.createElement('video');
-  loopBg.className = 'mm-loop-bg';
-  loopBg.muted = true;
-  loopBg.autoplay = true;
-  loopBg.playsInline = true;
-  loopBg.setAttribute('playsinline', 'true');
-  loopBg.setAttribute('muted', 'true');
-  el.appendChild(loopBg);
-
-  const menuVideos = ['Mainvideo1.mp4'];
-  const videoUrls: string[] = [];
-  let currentVideoIndex = -1;
-
-  async function playRandomVideo() {
-    if (videoUrls.length === 0) return;
-    let nextIdx = 0;
-    if (videoUrls.length > 1) {
-      do {
-        nextIdx = Math.floor(Math.random() * videoUrls.length);
-      } while (nextIdx === currentVideoIndex);
-    }
-    currentVideoIndex = nextIdx;
-    loopBg.src = videoUrls[currentVideoIndex];
-    loopBg.load();
-    try {
-      await loopBg.play();
-    } catch (err) {
-      console.warn("[Menu Video] Playback blocked or failed:", err);
-    }
-  }
-
-  loopBg.addEventListener('playing', () => {
-    loopBg.style.opacity = '1';
-  });
-
-  loopBg.addEventListener('ended', () => {
-    loopBg.style.opacity = '0';
-    setTimeout(() => {
-      playRandomVideo();
-    }, 500);
-  });
-
-  Promise.all(menuVideos.map(v => getCachedOrFetchUrl(v, 'Video'))).then(urls => {
-    videoUrls.push(...urls);
-    playRandomVideo();
-  }).catch(e => {
-    console.warn("[Menu Video] Error reading cached videos:", e);
   });
 
   const fisheyeWrap = document.createElement('div');
@@ -236,16 +175,21 @@ export function initMainMenu() {
   vignette.className = 'mm-vignette';
   el.appendChild(vignette);
 
-  // Region 1 & 2 — Top Row: VEXEA Wordmark and Profile Mode
+  const topShadow = document.createElement('div');
+  topShadow.className = 'mm-top-shadow';
+  el.appendChild(topShadow);
+
+  // Region 1 & 2 — Top Row: VEXEΛ Wordmark and Profile Mode
   const topRow = document.createElement('div');
   Object.assign(topRow.style, {
-    position: 'absolute', top: 'clamp(12px, 2vh, 24px)', left: 'clamp(16px, 3vw, 32px)', right: 'clamp(16px, 3vw, 32px)', zIndex: '2',
-    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'
+    position: 'absolute', top: '0', left: '0', right: '0', zIndex: '10',
+    padding: 'clamp(12px, 2.5vh, 20px) clamp(16px, 3vw, 32px)',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
   });
-  
+
   const wordmark = document.createElement('div');
   wordmark.className = 'mm-wordmark';
-  wordmark.textContent = 'VEXEA';
+  wordmark.textContent = 'VEXEΛ';
   Object.assign(wordmark.style, {
     fontFamily: DS.typography.fontFamily, color: DS.colors.accent, letterSpacing: '4px',
     textTransform: 'uppercase', fontWeight: DS.typography.weightBold
@@ -253,19 +197,62 @@ export function initMainMenu() {
   topRow.appendChild(wordmark);
 
   const profileBox = document.createElement('div');
-  profileBox.className = 'mm-glass';
   Object.assign(profileBox.style, {
-    padding: 'clamp(4px, 1vh, 8px) clamp(6px, 1vw, 12px)', display: 'flex', alignItems: 'center', gap: 'clamp(6px, 1vw, 12px)'
+    padding: 'clamp(4px, 1vh, 8px) clamp(6px, 1vw, 12px)', display: 'flex', alignItems: 'center', gap: 'clamp(12px, 2vw, 24px)'
   });
+
+  const pFullscreen = document.createElement('div');
+  pFullscreen.style.color = DS.colors.textMuted;
+  pFullscreen.style.cursor = 'pointer';
+  pFullscreen.style.display = 'flex';
+  pFullscreen.style.alignItems = 'center';
+  pFullscreen.style.transition = 'color 0.2s';
+  pFullscreen.title = 'Toggle Fullscreen';
+
+  const updateFullscreenIcon = () => {
+    if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
+      pFullscreen.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6m10-6h-6v6M4 10h6V4m10 6h-6V4"/></svg>`;
+    } else {
+      pFullscreen.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>`;
+    }
+  };
+  updateFullscreenIcon();
+
+  pFullscreen.addEventListener('click', (e) => {
+    e.stopPropagation();
+    try {
+      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+        const docEl = document.documentElement as any;
+        if (docEl.requestFullscreen) docEl.requestFullscreen();
+        else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+      } else {
+        const doc = document as any;
+        if (doc.exitFullscreen) doc.exitFullscreen();
+        else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+      }
+    } catch (err) {
+      console.warn("Fullscreen toggle failed:", err);
+    }
+  });
+
+  pFullscreen.addEventListener('mouseenter', () => { pFullscreen.style.color = DS.colors.text; });
+  pFullscreen.addEventListener('mouseleave', () => { pFullscreen.style.color = DS.colors.textMuted; });
+  document.addEventListener('fullscreenchange', updateFullscreenIcon);
+  document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+  profileBox.appendChild(pFullscreen);
+
+  const fsDivider = document.createElement('div');
+  Object.assign(fsDivider.style, { width: '1px', height: 'clamp(14px, 2vh, 20px)', background: 'rgba(255,255,255,0.1)' });
+  profileBox.appendChild(fsDivider);
 
   const pIcon = document.createElement('div');
   pIcon.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
-  pIcon.style.color = '#888888';
+  pIcon.style.color = DS.colors.textMuted;
   profileBox.appendChild(pIcon);
 
   profileNameText = document.createElement('div');
   Object.assign(profileNameText.style, {
-    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', color: '#E8E8E8', uppercase: 'true', letterSpacing: '2px'
+    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(8px, 1.25vh, 12px)', color: DS.colors.text, uppercase: 'true', letterSpacing: '2px'
   });
   profileBox.appendChild(profileNameText);
 
@@ -273,243 +260,288 @@ export function initMainMenu() {
   profileRankBadge.className = 'mm-profile-rank';
   Object.assign(profileRankBadge.style, {
     background: DS.colors.accent, padding: 'clamp(2px, 0.5vh, 4px) clamp(5px, 1vw, 10px)',
-    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', fontWeight: DS.typography.weightBold, color: '#0A0A0A'
+    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(8px, 1.25vh, 12px)', fontWeight: DS.typography.weightBold, color: DS.colors.background
   });
   profileBox.appendChild(profileRankBadge);
 
   const divider = document.createElement('div');
-  Object.assign(divider.style, { width: '1px', height: 'clamp(14px, 2vh, 20px)', background: '#2A2A2A' });
+  Object.assign(divider.style, { width: '1px', height: 'clamp(14px, 2vh, 20px)', background: 'rgba(255,255,255,0.1)' });
   profileBox.appendChild(divider);
 
+  const pFeedback = document.createElement('div');
+  pFeedback.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+  pFeedback.style.color = DS.colors.textMuted;
+  pFeedback.style.cursor = 'pointer';
+  pFeedback.style.display = 'flex';
+  pFeedback.style.alignItems = 'center';
+  pFeedback.style.transition = 'color 0.2s';
+  pFeedback.title = 'Send Feedback';
+  pFeedback.onclick = (e) => { e.stopPropagation(); setActiveCard('FEEDBACK'); };
+  pFeedback.addEventListener('mouseenter', () => { pFeedback.style.color = DS.colors.text; });
+  pFeedback.addEventListener('mouseleave', () => { pFeedback.style.color = DS.colors.textMuted; });
+  profileBox.appendChild(pFeedback);
+
   const pGear = document.createElement('div');
-  pGear.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>`;
-  pGear.style.color = '#888888';
+  pGear.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>`;
+  pGear.style.color = DS.colors.textMuted;
   pGear.style.cursor = 'pointer';
   pGear.onclick = () => { import("../settings").then(({ openSettings }) => openSettings()); };
   profileBox.appendChild(pGear);
   topRow.appendChild(profileBox);
   
-  fisheyeWrap.appendChild(topRow);
+  el.appendChild(topRow);
   updateProfileBox();
 
-  // Region 4 — Right Column: Contextual Info Panel (Done before left column to exist for handlers)
-  const rightColumn = document.createElement('div');
-  rightColumn.className = 'mm-glass mm-right-col';
-  rightColumn.id = 'mm-right-col';
-  Object.assign(rightColumn.style, {
-    position: 'absolute', top: 'clamp(64px, 12vh, 96px)', bottom: 'clamp(64px, 12vh, 96px)', width: 'clamp(280px, 30vw, 400px)', right: 'clamp(16px, 3vw, 32px)', zIndex: '2',
-    padding: 'clamp(16px, 4vh, 48px)', display: 'flex', flexDirection: 'column', gap: '0', overflowX: 'hidden', overflowY: 'auto'
+  const mainLayout = document.createElement('div');
+  mainLayout.id = 'mm-main-layout';
+  Object.assign(mainLayout.style, {
+    position: 'absolute', top: 'clamp(140px, 26vh, 180px)', bottom: 'clamp(120px, 22vh, 160px)', 
+    left: 'clamp(15px, 3vw, 30px)', right: 'clamp(15px, 3vw, 30px)', zIndex: '2',
+    display: 'flex', flexDirection: 'row', gap: 'clamp(40px, 10vw, 150px)',
+    maxWidth: '800px', margin: '0 auto', transition: 'opacity 0.3s'
   });
 
-  rightPanelContent = document.createElement('div');
-  rightPanelContent.className = 'mm-right-panel-content';
-  Object.assign(rightPanelContent.style, {
-    display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '800px', margin: '0 auto', gap: 'clamp(8px, 2vh, 16px)'
-  });
-  rightColumn.appendChild(rightPanelContent);
-  fisheyeWrap.appendChild(rightColumn);
-
-  // Region 3 — Left Column: Navigation Cards
-  leftColumn = document.createElement('div');
-  leftColumn.className = 'mm-glass mm-left-col';
-  Object.assign(leftColumn.style, {
-    position: 'absolute', top: 'clamp(64px, 12vh, 96px)', bottom: 'clamp(64px, 12vh, 96px)', left: 'clamp(16px, 3vw, 32px)', width: 'clamp(200px, 25vw, 320px)', zIndex: '2',
-    display: 'flex', flexDirection: 'column', gap: 'clamp(4px, 1vh, 8px)', overflowY: 'auto'
+  const menuLeftColumn = document.createElement('div');
+  Object.assign(menuLeftColumn.style, {
+    display: 'flex', flexDirection: 'column', gap: 'clamp(5px, 0.75vh, 10px)', flex: '1', minHeight: '0'
   });
 
-  const createNavCard = (id: string, text: string, isDisabled: boolean = false) => {
+  const menuRightColumn = document.createElement('div');
+  Object.assign(menuRightColumn.style, {
+    display: 'flex', flexDirection: 'column', gap: 'clamp(5px, 0.75vh, 10px)', flex: '1', minHeight: '0'
+  });
+
+  const leftBottomRow = document.createElement('div');
+  Object.assign(leftBottomRow.style, {
+    display: 'flex', gap: 'clamp(3px, 0.5vw, 5px)', flex: '1'
+  });
+
+  const rightBottomRow = document.createElement('div');
+  Object.assign(rightBottomRow.style, {
+    display: 'flex', gap: 'clamp(3px, 0.5vw, 5px)', flex: '1'
+  });
+
+  const createNewCard = (title: string, bgImage: string) => {
     const card = document.createElement('div');
-    card.className = 'mm-card';
-    card.dataset.id = id;
+    card.className = 'mm-new-card';
     Object.assign(card.style, {
-      borderLeft: `3px solid ${DS.colors.accent}`, padding: 'clamp(10px, 2vh, 20px) clamp(12px, 2vw, 24px)', cursor: isDisabled ? 'default' : 'pointer',
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start', position: 'relative'
+      flex: '1', backgroundImage: `url('${getAssetUrl(bgImage)}')`
     });
 
-    if (isDisabled) {
-      card.style.opacity = '0.4';
-      card.style.pointerEvents = 'none';
-      card.style.borderLeft = `3px solid ${DS.colors.border}`;
-    }
+    const titleEl = document.createElement('div');
+    titleEl.textContent = title;
+    titleEl.className = 'mm-new-card-title';
+    card.appendChild(titleEl);
 
-    const tEl = document.createElement('div');
-    tEl.className = 'mm-card-text';
-    tEl.textContent = text;
-    Object.assign(tEl.style, {
-      fontFamily: DS.typography.fontFamily, fontWeight: DS.typography.weightBold, textTransform: 'uppercase',
-      color: 'rgba(232,232,232,0.7)', letterSpacing: '2px', position: 'relative', zIndex: '2'
-    });
-    card.appendChild(tEl);
-
-    if (!isDisabled) {
-      const applyHover = () => {
-        card.style.border = DS.glass.borderAccentFull;
-        card.style.borderLeft = `3px solid ${DS.colors.accent}`;
-        card.style.background = 'rgba(200, 136, 42, 0.06)';
-        card.style.boxShadow = `${DS.glass.glowOuter}, ${DS.glass.glowInner}`;
-        tEl.style.color = '#E8E8E8';
-        card.style.transform = 'scaleX(1.02)';
-      };
-      const removeHover = () => {
-        if (activeCardId === id) return; // Keep hover styles if active
-        card.style.border = '1px solid transparent';
-        card.style.borderBottom = '1px solid rgba(255,255,255,0.02)';
-        card.style.borderLeft = `3px solid ${DS.colors.accent}`;
-        card.style.background = 'transparent';
-        card.style.boxShadow = 'none';
-        tEl.style.color = 'rgba(232,232,232,0.7)';
-        card.style.transform = 'scaleX(1)';
-      };
-
-      card.addEventListener('mouseenter', () => {
-        setActiveCard(id); 
-        applyHover(); 
-      });
-      card.addEventListener('mouseleave', () => {
-        if (activeCardId !== id) removeHover();
-      });
-      card.addEventListener('click', () => {
-        setActiveCard(id);
-      });
-    }
-
-    return { card, tEl };
+    return { card, titleEl };
   };
 
-  const mpCard = createNavCard('MULTIPLAYER', 'MULTIPLAYER');
-  multiplayerCard = mpCard.card;
+  // --- Middle Row ---
+  // PLAY
+  const playObj = createNewCard('PLAY', 'multiplayer_card.png');
+  const playCard = playObj.card;
+  playCard.style.flex = '1.8';
+  playObj.titleEl.style.fontSize = 'clamp(14px, 12cqi, 42px)';
+  playCard.onclick = (e) => {
+    e.stopPropagation();
+    setActiveCard('PLAY');
+  };
   
-  leftColumn.appendChild(multiplayerCard);
-  leftColumn.appendChild(createNavCard('FACTION', 'FACTION').card);
-  leftColumn.appendChild(createNavCard('STORE', 'STORE').card);
-  leftColumn.appendChild(createNavCard('STATISTICS', 'STATISTICS').card);
-  leftColumn.appendChild(createNavCard('FEEDBACK', 'FEEDBACK').card);
+  const playContent = document.createElement('div');
+  Object.assign(playContent.style, {
+    flex: '1', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'flex-end',
+    padding: 'clamp(6px, 1vh, 12px)', gap: '5px', zIndex: '2', pointerEvents: 'none'
+  });
 
   if (IS_DEV) {
-    const devBtn = createNavCard('DEV_QUICKSTART', 'DEV QUICK START').card;
-    Object.assign(devBtn.style, {
-      background: 'rgba(255,0,100,0.15)', border: '1px solid rgba(255,0,100,0.4)',
-      borderLeft: '3px solid #FF0064'
-    });
-    (devBtn.firstChild as HTMLElement).style.color = '#FF0064';
-    devBtn.addEventListener('click', () => {
-       const mapId = getDefaultMap().id;
-       ensureAssetsDownloaded(() => {
-           try {
-               const docEl = document.documentElement as any;
-               if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-                   if (docEl.requestFullscreen) docEl.requestFullscreen();
-                   else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
-               }
-           } catch (err) {}
+    const devContainer = document.createElement('div');
+    Object.assign(devContainer.style, { display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end', marginBottom: 'auto', pointerEvents: 'auto' });
+    
+    const createDevBtn = (text: string, onClick: (e:Event) => void) => {
+        const btn = document.createElement('div');
+        btn.textContent = text;
+        Object.assign(btn.style, {
+            color: DS.colors.background, border: 'none', background: DS.colors.accent,
+            padding: '4px 8px', fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 3cqi, 14px)', cursor: 'pointer',
+            fontWeight: 'bold', textShadow: 'none', borderRadius: '2px'
+        });
+        btn.onclick = onClick;
+        devContainer.appendChild(btn);
+    };
 
-           // Direct dispatch bypassing screens
-           window.dispatchEvent(new CustomEvent('start-match', { detail: { mode: 'STANDARD', class: 'ASSAULT', solo: true, map: getDefaultMap() }}));
-           screenManager.showGame();
-       }, mapId);
+    createDevBtn('DEV QUICK START', (e) => {
+        e.stopPropagation();
+        const mapId = getDefaultMap().id;
+        ensureAssetsDownloaded(() => {
+            window.dispatchEvent(new CustomEvent('start-match', { detail: { mode: 'STANDARD', class: 'ASSAULT', solo: true, map: getDefaultMap() }}));
+            screenManager.showGame();
+        }, mapId);
     });
-    devQuickstartBtn = devBtn;
-    leftColumn.appendChild(devBtn);
-
-    const mapEditorBtn = createNavCard('MAP_EDITOR', 'MAP EDITOR').card;
-    Object.assign(mapEditorBtn.style, {
-      background: 'rgba(255,0,100,0.15)', border: '1px solid rgba(255,0,100,0.4)',
-      borderLeft: '3px solid #FF0064'
+    createDevBtn('MAP EDITOR', (e) => {
+        e.stopPropagation();
+        screenManager.showDevMapEditor();
     });
-    (mapEditorBtn.firstChild as HTMLElement).style.color = '#FF0064';
-    mapEditorBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      screenManager.showDevMapEditor();
-    }, true);
-    leftColumn.appendChild(mapEditorBtn);
-
-    const devEntitiesBtn = createNavCard('DEV_ENTITIES', 'DEV ENTITIES').card;
-    Object.assign(devEntitiesBtn.style, {
-      background: 'rgba(255,0,100,0.15)', border: '1px solid rgba(255,0,100,0.4)',
-      borderLeft: '3px solid #FF0064'
+    createDevBtn('DEV ENTITIES', (e) => {
+        e.stopPropagation();
+        screenManager.showDevEntities();
     });
-    (devEntitiesBtn.firstChild as HTMLElement).style.color = '#FF0064';
-    devEntitiesBtn.addEventListener('click', (e) => {
-      console.log("[MainMenu] Dev Entities button clicked");
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      screenManager.showDevEntities();
-    }, true);
-    leftColumn.appendChild(devEntitiesBtn);
+    playContent.appendChild(devContainer);
   }
 
-  const backBtn = document.createElement('div');
-  backBtn.className = 'mm-back-btn';
-  backBtn.innerHTML = '&#8592; BACK';
-  Object.assign(backBtn.style, {
-    display: 'none',
-    position: 'absolute',
-    bottom: 'clamp(12px, 2vh, 24px)',
-    left: 'clamp(16px, 3vw, 32px)',
-    width: 'clamp(200px, 25vw, 320px)',
-    zIndex: '10',
-    padding: 'clamp(8px, 1.5vh, 16px)',
-    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', textTransform: 'uppercase',
-    color: '#E8E8E8', letterSpacing: '3px', cursor: 'pointer', textAlign: 'center', background: 'rgba(10,10,10,0.85)',
-    backdropFilter: DS.glass.blur, webkitBackdropFilter: DS.glass.blur,
-    borderRadius: '4px',
-    border: DS.glass.border
+  const qmBtn = document.createElement('div');
+  qmBtn.textContent = 'QUICK START';
+  Object.assign(qmBtn.style, {
+    color: DS.colors.background, background: DS.colors.accent, border: 'none',
+    padding: 'clamp(3px, 0.75vh, 5px) clamp(6px, 1.5cqi, 12px)',
+    fontFamily: DS.typography.fontFamily, fontWeight: DS.typography.weightBold,
+    fontSize: 'clamp(9px, 5cqi, 17px)', cursor: 'pointer', pointerEvents: 'auto',
+    borderRadius: '2px', textAlign: 'center'
   });
-  backBtn.addEventListener('mouseenter', () => { backBtn.style.background = 'rgba(255,255,255,0.05)'; });
-  backBtn.addEventListener('mouseleave', () => { backBtn.style.background = 'rgba(10,10,10,0.85)'; });
-  backBtn.addEventListener('click', (e) => {
+  qmBtn.onclick = (e) => {
+      e.stopPropagation();
+      const mapId = getDefaultMap().id;
+      ensureAssetsDownloaded(() => {
+          try {
+              const docEl = document.documentElement as any;
+              if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+                  if (docEl.requestFullscreen) docEl.requestFullscreen();
+                  else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+              }
+          } catch (err) {}
+          window.dispatchEvent(new CustomEvent('start-match', { detail: { mode: 'STANDARD', class: 'ASSAULT', solo: true, map: getDefaultMap() }}));
+          screenManager.showGame();
+      }, mapId);
+  };
+  playContent.appendChild(qmBtn);
+  playCard.appendChild(playContent);
+  menuLeftColumn.appendChild(playCard);
+
+  // INTEL
+  const intelObj = createNewCard('INTEL', 'statistics_card.png');
+  const intelCard = intelObj.card;
+  intelCard.style.flex = '1.8';
+  intelObj.titleEl.style.fontSize = 'clamp(14px, 12cqi, 42px)';
+  
+  const intelInternal = document.createElement('div');
+  Object.assign(intelInternal.style, {
+    flex: '1', display: 'flex', flexDirection: 'column', padding: 'clamp(6px, 1vh, 12px)', zIndex: '2', pointerEvents: 'none'
+  });
+  
+  const statsLabel = document.createElement('div');
+  statsLabel.textContent = 'Stats';
+  Object.assign(statsLabel.style, { 
+    fontFamily: DS.typography.fontFamily, color: DS.colors.accent, fontSize: 'clamp(7px, 4cqi, 13px)', 
+    textTransform: 'uppercase', marginBottom: 'auto', textAlign: 'right'
+  });
+  
+  const dividerLine = document.createElement('div');
+  Object.assign(dividerLine.style, { width: '100%', height: '1px', background: 'rgba(255,0,0,0.4)', margin: '6px 0' });
+  
+  const challengesLabel = document.createElement('div');
+  challengesLabel.textContent = 'Challenges';
+  Object.assign(challengesLabel.style, { 
+    fontFamily: DS.typography.fontFamily, color: 'rgba(255,0,0,0.8)', fontSize: 'clamp(7px, 4cqi, 13px)', 
+    textTransform: 'uppercase', textAlign: 'right'
+  });
+
+  intelInternal.appendChild(statsLabel);
+  intelInternal.appendChild(dividerLine);
+  intelInternal.appendChild(challengesLabel);
+  intelCard.appendChild(intelInternal);
+
+  intelCard.onclick = (e) => {
     e.stopPropagation();
-    clearActiveCard();
+    setActiveCard('INTEL');
+  };
+  menuRightColumn.appendChild(intelCard);
+
+  // --- Bottom Rows ---
+  const addBottomCard = (id: string, title: string, img: string, container: HTMLElement, flexValue: string = '1') => {
+    const obj = createNewCard(title, img);
+    if (id === 'FACTION' || id === 'FEEDBACK') {
+      obj.card.style.aspectRatio = '1 / 1';
+      obj.card.style.flex = 'none';
+    } else {
+      obj.card.style.flex = flexValue;
+    }
+    if (id === 'FACTION') obj.card.id = 'faction-card';
+    obj.card.onclick = (e) => {
+      e.stopPropagation();
+      setActiveCard(id);
+    };
+    container.appendChild(obj.card);
+  };
+
+  addBottomCard('LOADOUT', 'LOADOUT', 'Blueprint.png', leftBottomRow, '1');
+  addBottomCard('STORE', 'STORE', 'store_card.png', rightBottomRow, '2');
+  addBottomCard('FACTION', 'FACTION', 'vibeCo_card.png', rightBottomRow, '1');
+
+  menuLeftColumn.appendChild(leftBottomRow);
+  menuRightColumn.appendChild(rightBottomRow);
+  mainLayout.appendChild(menuLeftColumn);
+  mainLayout.appendChild(menuRightColumn);
+  fisheyeWrap.appendChild(mainLayout);
+
+  const tabContentLayout = document.createElement('div');
+  tabContentLayout.id = 'mm-tab-layout';
+  Object.assign(tabContentLayout.style, {
+    position: 'absolute', top: 'clamp(40px, 7.5vh, 60px)', bottom: 'clamp(15px, 2.5vh, 30px)', 
+    left: 'clamp(15px, 2.5vw, 30px)', right: 'clamp(15px, 2.5vw, 30px)', zIndex: '3',
+    display: 'none', flexDirection: 'column',
+    maxWidth: '600px', margin: '0 auto'
   });
-  fisheyeWrap.appendChild(backBtn);
 
-  fisheyeWrap.appendChild(leftColumn);
-
-  // Bottom Banner
-  const botBanner = document.createElement('div');
-  botBanner.className = 'mm-glass mm-bot-banner';
-  Object.assign(botBanner.style, {
-    position: 'absolute', bottom: 'clamp(12px, 2vh, 24px)', left: '50%', transform: 'translateX(-50%)', zIndex: '2',
-    height: 'clamp(48px, 8vh, 64px)', display: 'flex', alignItems: 'center', padding: '0 clamp(8px, 2vw, 16px)', gap: 'clamp(8px, 2vw, 16px)', cursor: 'pointer'
+  const backBtn = document.createElement('div');
+  backBtn.textContent = 'BACK TO MENU';
+  Object.assign(backBtn.style, {
+    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)',
+    color: DS.colors.warning, cursor: 'pointer', marginBottom: '20px', fontWeight: 'bold'
   });
-  botBanner.addEventListener('click', () => setActiveCard('MULTIPLAYER'));
+  backBtn.onclick = () => {
+    setActiveCard('DEFAULT');
+  };
+  tabContentLayout.appendChild(backBtn);
 
-  const botImg = document.createElement('div');
-  Object.assign(botImg.style, {
-    width: 'clamp(32px, 6vh, 48px)', height: 'clamp(32px, 6vh, 48px)', border: DS.glass.borderAccent, background: '#1A1208',
-    backgroundImage: `url('${getAssetUrl("splash_screen.png")}')`, backgroundSize: 'cover', backgroundPosition: 'center'
+  const tabTitle = document.createElement('div');
+  tabTitle.id = 'dynamic-panel-title';
+  Object.assign(tabTitle.style, {
+    fontFamily: DS.typography.fontFamily, fontSize: 'clamp(24px, 4vh, 48px)',
+    color: DS.colors.text, textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '20px',
+    textShadow: DS.shadows.text
   });
-  botBanner.appendChild(botImg);
+  tabContentLayout.appendChild(tabTitle);
 
-  const botTextCol = document.createElement('div');
-  Object.assign(botTextCol.style, { display: 'flex', flexDirection: 'column' });
-  const botTitle = document.createElement('div');
-  botTitle.textContent = 'FEATURED OPERATION';
-  Object.assign(botTitle.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(12px, 2vh, 16px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase', color: '#E8E8E8' });
-  const botSub = document.createElement('div');
-  botSub.textContent = '(Standard · Open Match)';
-  Object.assign(botSub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(9px, 1.5vh, 12px)', color: '#888888' });
-  botTextCol.appendChild(botTitle);
-  botTextCol.appendChild(botSub);
-  botBanner.appendChild(botTextCol);
-
-  fisheyeWrap.appendChild(botBanner);
+  rightPanelContent = document.createElement('div');
+  Object.assign(rightPanelContent.style, {
+    display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto',
+    flex: '1', scrollbarWidth: 'none', msOverflowStyle: 'none'
+  });
+  tabContentLayout.appendChild(rightPanelContent);
+  fisheyeWrap.appendChild(tabContentLayout);
 
   document.body.appendChild(el);
 
-  // Set initial state
-  clearActiveCard();
+  // Trigger default panel render for INTEL
+  currentRightPanelMode = 'DEFAULT';
+  renderRightPanel();
 
   setTimeout(() => { if (el) el.style.opacity = '1'; }, 50);
 }
 
 function updateProfileBox() {
+  const factionCard = document.getElementById('faction-card');
+  if (factionCard) {
+    let img = 'vibeCo_card.png';
+    if (userFaction === 'SLOP INC.') img = 'slopInc_card.png';
+    import('../asset-cache').then(({ getAssetUrl }) => {
+      factionCard.style.backgroundImage = `url('${getAssetUrl(img)}')`;
+    });
+  }
   if (registeredUserData) {
     profileNameText.textContent = `${registeredUserData.displayName.toUpperCase()}`;
     profileRankBadge.textContent = `${registeredUserData.battlePass || 1}`;
     profileRankBadge.style.display = 'block';
-    profileNameText.style.color = '#E8E8E8';
+    profileNameText.style.color = DS.colors.text;
 
     let crDisplay = document.getElementById('profile-cr-display');
     if (!crDisplay) {
@@ -517,7 +549,7 @@ function updateProfileBox() {
       crDisplay.id = 'profile-cr-display';
       Object.assign(crDisplay.style, {
         fontFamily: DS.typography.fontFamily,
-        fontSize: 'clamp(9px, 1.25vh, 12px)',
+        fontSize: 'clamp(8px, 1vh, 10px)',
         color: DS.colors.accent,
         letterSpacing: '1.2px',
         marginTop: '2px',
@@ -531,7 +563,7 @@ function updateProfileBox() {
     localStorage.setItem('guestId', guestId);
     profileNameText.textContent = `GUEST — [${guestId}]`;
     profileRankBadge.textContent = '—';
-    profileNameText.style.color = '#888888';
+    profileNameText.style.color = DS.colors.textMuted;
 
     const crDisplay = document.getElementById('profile-cr-display');
     if (crDisplay) crDisplay.remove();
@@ -539,74 +571,29 @@ function updateProfileBox() {
 }
 
 function setActiveCard(id: string) {
-  if (activeCardId === id && currentRightPanelMode === id as any) return;
+  if (currentRightPanelMode === id as any) return;
   import('../audio').then(({ audioManager }) => audioManager.play('click'));
-  activeCardId = id;
   currentRightPanelMode = id as any;
-
-  Array.from(leftColumn.children).forEach(child => {
-     const c = child as HTMLElement;
-     const tEl = c.querySelector('.mm-card-text') as HTMLElement;
-     
-     if (c.dataset.id === id) {
-       c.classList.add('mm-card-expanded');
-       c.classList.remove('mm-card-dimmed');
-       
-       if (id === 'FACTION') {
-          if (userFaction === 'VIBE CO.') c.classList.add('faction-vibe');
-          else if (userFaction === 'SLOP INC.') c.classList.add('faction-slop');
-       }
-
-       c.style.border = DS.glass.borderAccentFull;
-       c.style.borderLeft = `3px solid ${DS.colors.accent}`;
-       c.style.background = 'rgba(200, 136, 42, 0.06)';
-       c.style.boxShadow = `${DS.glass.glowOuter}, ${DS.glass.glowInner}`;
-       if (tEl) tEl.style.color = '#E8E8E8';
-       c.style.transform = 'scaleX(1.02)';
-     } else {
-       if (c.dataset.id) {
-         c.classList.add('mm-card-dimmed');
-
-         c.style.border = '1px solid transparent';
-         c.style.borderBottom = '1px solid rgba(255,255,255,0.02)';
-         c.style.borderLeft = c.dataset.id === 'STORE' ? `3px solid transparent` : `3px solid ${DS.colors.accent}`;
-         c.style.background = 'transparent';
-         c.style.boxShadow = 'none';
-         if (tEl) tEl.style.color = 'rgba(232,232,232,0.7)';
-         c.style.transform = 'scaleX(1)';
-         c.classList.remove('mm-card-expanded');
-       }
-     }
-  });
-
-  const backBtn = document.querySelector('.mm-back-btn') as HTMLElement | null;
-  if (backBtn) backBtn.style.display = 'block';
-
-  renderRightPanel();
+  const titleEl = document.getElementById('dynamic-panel-title');
+  if (titleEl) {
+    titleEl.textContent = id === 'DEFAULT' ? 'INTEL' : id;
+  }
+  
+  const mainLayout = document.getElementById('mm-main-layout');
+  const tabLayout = document.getElementById('mm-tab-layout');
+  
+  if (id === 'DEFAULT') {
+    if (mainLayout) mainLayout.style.display = 'flex';
+    if (tabLayout) tabLayout.style.display = 'none';
+  } else {
+    if (mainLayout) mainLayout.style.display = 'none';
+    if (tabLayout) tabLayout.style.display = 'flex';
+    renderRightPanel();
+  }
 }
 
 function clearActiveCard() {
-  activeCardId = null;
-  currentRightPanelMode = 'DEFAULT';
-  Array.from(leftColumn.children).forEach(child => {
-     const c = child as HTMLElement;
-     if (!c.dataset.id) return;
-     c.classList.remove('mm-card-dimmed');
-     c.classList.remove('mm-card-expanded');
-     c.style.border = '1px solid transparent';
-     c.style.borderBottom = '1px solid rgba(255,255,255,0.02)';
-     c.style.borderLeft = c.dataset.id === 'STORE' ? `3px solid transparent` : `3px solid ${DS.colors.accent}`;
-     c.style.background = 'transparent';
-     c.style.boxShadow = 'none';
-     c.style.transform = 'scaleX(1)';
-     const tEl = c.querySelector('.mm-card-text') as HTMLElement;
-     if (tEl) tEl.style.color = 'rgba(232,232,232,0.7)';
-  });
-
-  const backBtn = document.querySelector('.mm-back-btn') as HTMLElement | null;
-  if (backBtn) backBtn.style.display = 'none';
-
-  renderRightPanel();
+  setActiveCard('DEFAULT');
 }
 
 function createPanelBlock(label: string, renderContent: (container: HTMLElement) => void, isLast: boolean = false) {
@@ -620,7 +607,7 @@ function createPanelBlock(label: string, renderContent: (container: HTMLElement)
     lbl.textContent = label;
     Object.assign(lbl.style, {
       fontFamily: DS.typography.fontFamily, fontSize: 'clamp(8px, 1.25vh, 11px)', textTransform: 'uppercase',
-      color: '#888888', letterSpacing: '4px', marginBottom: 'clamp(4px, 1vh, 8px)'
+      color: DS.colors.textMuted, letterSpacing: '4px', marginBottom: 'clamp(4px, 1vh, 8px)'
     });
     block.appendChild(lbl);
   }
@@ -641,117 +628,8 @@ function renderRightPanel() {
   setTimeout(() => {
     rightPanelContent.innerHTML = '';
     
-    if (currentRightPanelMode === 'DEFAULT') {
-      rightPanelContent.appendChild(createPanelBlock('ACTIVE CONTRACTORS', c => {
-        const val = document.createElement('div');
-        val.textContent = '—'; // Pull from sever if available
-        Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(16px, 3vh, 24px)', fontWeight: DS.typography.weightBold, color: '#E8E8E8' });
-        const sub = document.createElement('div');
-        sub.textContent = 'Matches —    Rank —';
-        Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888' });
-        c.appendChild(val); c.appendChild(sub);
-      }));
-      rightPanelContent.appendChild(createPanelBlock('FEATURED OPERATION', c => {
-        const val = document.createElement('div'); val.textContent = 'INFILTRATION';
-        Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', fontWeight: DS.typography.weightBold, color: '#E8E8E8' });
-        const sub = document.createElement('div'); sub.textContent = 'Standard mode. 5–10 contractors.';
-        Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888' });
-        c.appendChild(val); c.appendChild(sub);
-      }));
-      rightPanelContent.appendChild(createPanelBlock('LATEST UPDATE', c => {
-        const val = document.createElement('div'); val.textContent = 'BUILD 0.1.0';
-        Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8' });
-        const sub = document.createElement('div'); sub.textContent = 'Initial development build.';
-        Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888' });
-        c.appendChild(val); c.appendChild(sub);
-      }));
-      rightPanelContent.appendChild(createPanelBlock('CURRENT EVENT', c => {
-        const val = document.createElement('div'); val.textContent = 'NONE ACTIVE';
-        Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#555555' });
-        const sub = document.createElement('div'); sub.textContent = 'Check back later.';
-        Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#444444' });
-        c.appendChild(val); c.appendChild(sub);
-      }, true));
-    } 
-    else if (currentRightPanelMode === 'MULTIPLAYER') {
-      rightPanelContent.appendChild(createPanelBlock('GAME MODE', c => {
-         const opActive = document.createElement('div'); opActive.textContent = 'INFILTRATION';
-         Object.assign(opActive.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', borderLeft: '2px solid ' + DS.colors.accent, background: 'rgba(200,136,42,0.08)', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)', marginBottom: 'clamp(2px, 0.5vh, 4px)' });
-         const opFuture = document.createElement('div'); opFuture.innerHTML = 'HARDCORE <span style="font-size:clamp(8px, 1.25vh, 11px); color:#555555">COMING SOON</span>';
-         Object.assign(opFuture.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', opacity: '0.35', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)' });
-         c.appendChild(opActive); c.appendChild(opFuture);
-      }));
-      rightPanelContent.appendChild(createPanelBlock('MATCH TYPE', c => {
-         const opActive = document.createElement('div'); opActive.textContent = 'OPEN MATCH';
-         Object.assign(opActive.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', borderLeft: '2px solid ' + DS.colors.accent, background: 'rgba(200,136,42,0.08)', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)', marginBottom: 'clamp(2px, 0.5vh, 4px)' });
-         const op2 = document.createElement('div'); op2.textContent = 'PRIVATE MATCH';
-         Object.assign(op2.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', opacity: '0.6', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)' });
-         c.appendChild(opActive); c.appendChild(op2);
-      }));
-      rightPanelContent.appendChild(createPanelBlock('CONTRACTORS', c => {
-         const val = document.createElement('div'); val.textContent = '1 / 10';
-         Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8' });
-         const sub = document.createElement('div'); sub.textContent = 'Waiting for contractors...';
-         Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888' });
-         c.appendChild(val); c.appendChild(sub);
-      }));
-      rightPanelContent.appendChild(createPanelBlock('', c => {
-         const btn = document.createElement('button');
-         btn.textContent = 'DEPLOY';
-         Object.assign(btn.style, {
-           width: '100%', height: 'clamp(32px, 6vh, 48px)', background: DS.colors.accent, color: '#0A0A0A', border: 'none',
-           fontFamily: DS.typography.fontFamily, fontSize: 'clamp(16px, 3vh, 24px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase',
-           cursor: 'pointer'
-         });
-         btn.addEventListener('click', () => { 
-             if (registeredUserData && (registeredUserData.energy || 0) < 10) {
-                 showMenuNotification("DEPLOYMENT REJECTED: INSUFFICIENT ENERGY. REFILL DEV CREDITS IN STATISTICS.", "warning");
-                 return;
-             }
-             ensureAssetsDownloaded(() => screenManager.showLobby(), getDefaultMap().id); 
-         });
-         c.appendChild(btn);
-      }, true));
-    }
-    else if (currentRightPanelMode === 'FACTION') {
-      const auth = getAuth();
-      const isGuest = !auth.currentUser || auth.currentUser.isAnonymous;
-      rightPanelContent.appendChild(createPanelBlock('CURRENT FACTION', c => {
-         const val = document.createElement('div'); val.textContent = isGuest ? 'UNAFFILIATED' : (userFaction || 'UNASSIGNED');
-         Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8' });
-         c.appendChild(val);
-      }));
-      rightPanelContent.appendChild(createPanelBlock('ENLIST', c => {
-         ['VIBE CO.', 'SLOP INC.'].forEach((f, i) => {
-            const btn = document.createElement('div'); btn.textContent = f;
-            const isSelected = userFaction === f;
-            Object.assign(btn.style, {
-              fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', padding: 'clamp(6px, 1.5vh, 12px)', marginBottom: 'clamp(4px, 1vh, 8px)', cursor: isGuest ? 'default' : 'pointer',
-              borderLeft: isSelected ? '2px solid ' + DS.colors.accent : '2px solid transparent',
-              background: isSelected ? 'rgba(200,136,42,0.08)' : 'transparent',
-              color: isSelected ? '#E8E8E8' : '#888888'
-            });
-            c.appendChild(btn);
-         });
-      }));
-      rightPanelContent.appendChild(createPanelBlock('', c => {
-         const btn = document.createElement('button');
-         btn.textContent = 'CONFIRM';
-         Object.assign(btn.style, {
-           width: '100%', height: 'clamp(32px, 6vh, 48px)', background: isGuest ? '#333' : DS.colors.accent, color: isGuest ? '#666' : '#0A0A0A', border: 'none',
-           fontFamily: DS.typography.fontFamily, fontSize: 'clamp(16px, 3vh, 24px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase', cursor: isGuest ? 'default' : 'pointer'
-         });
-         if (isGuest) btn.disabled = true;
-         c.appendChild(btn);
-         if (isGuest) {
-            const sub = document.createElement('div'); sub.textContent = 'Sign in to save faction.';
-            Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: '#888888', textAlign: 'center', marginTop: 'clamp(4px, 1vh, 8px)' });
-            c.appendChild(sub);
-         }
-      }, true));
-    }
-    else if (currentRightPanelMode === 'STATISTICS') {
-       rightPanelContent.appendChild(createPanelBlock('LIFETIME STATS', c => {
+    if (currentRightPanelMode === 'DEFAULT' || currentRightPanelMode === 'INTEL') {
+       rightPanelContent.appendChild(createPanelBlock(currentRightPanelMode === 'DEFAULT' ? 'INTEL SUMMARY' : 'LIFETIME STATS', c => {
          const stats = [
            { l: 'MATCHES', v: registeredUserData ? String(registeredUserData.totalMatches || 0) : '—' },
            { l: 'WINS', v: registeredUserData ? String(registeredUserData.totalWins || 0) : '—' },
@@ -766,85 +644,166 @@ function renderRightPanel() {
            const row = document.createElement('div');
            Object.assign(row.style, { display: 'flex', justifyContent: 'space-between', marginBottom: 'clamp(4px, 1vh, 8px)' });
            const lbl = document.createElement('span'); lbl.textContent = s.l;
-           Object.assign(lbl.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', color: '#888888' });
+           Object.assign(lbl.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', color: DS.colors.textMuted });
            const val = document.createElement('span'); val.textContent = s.v;
-           Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#E8E8E8', fontWeight: DS.typography.weightBold });
+           Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: DS.colors.text, fontWeight: DS.typography.weightBold });
            row.appendChild(lbl); row.appendChild(val); c.appendChild(row);
          });
 
-         // DEV DIAGNOSTICS & TESTING PANEL
          if (IS_DEV) {
-         const devBlock = document.createElement('div');
-         Object.assign(devBlock.style, {
-           marginTop: '24px',
-           borderTop: '1px dashed rgba(255,255,255,0.1)',
-           paddingTop: '16px',
-           fontFamily: DS.typography.fontFamily
-         });
-         
-         const devTitle = document.createElement('div');
-         devTitle.textContent = 'DEV DIAGNOSTICS';
-         Object.assign(devTitle.style, {
-           fontSize: '11px',
-           letterSpacing: '3px',
-           color: '#FF0064',
-           marginBottom: '8px'
-         });
-         devBlock.appendChild(devTitle);
-         
-         const devNote = document.createElement('div');
-         devNote.textContent = 'NOTE: Standard 100-credit allotment is arbitrary and subject to game balance review.';
-         Object.assign(devNote.style, {
-           fontSize: '10px',
-           color: '#888888',
-           marginBottom: '12px',
-           textTransform: 'none'
-         });
-         devBlock.appendChild(devNote);
-         
-         const refillBtn = document.createElement('button');
-         refillBtn.textContent = 'REFILL CREDITS & ENERGY [DEV SERVER AUTH]';
-         Object.assign(refillBtn.style, {
-           width: '100%',
-           padding: '8px',
-           background: 'rgba(255,0,100,0.15)',
-           border: '1px solid rgba(255,0,100,0.4)',
-           color: '#FF0064',
-           fontSize: '11px',
-           fontWeight: 'bold',
-           letterSpacing: '2px',
-           cursor: 'pointer'
-         });
-         refillBtn.onclick = () => {
-           const auth = getAuth();
-           import('../main').then(({ getSocketChannel }) => {
-             const chan = getSocketChannel();
-             if (chan && registeredUserData) {
-               chan.emit('refill_credits', { uid: auth.currentUser?.uid });
-               showMenuNotification("CREDITS REFILL REQUEST EMITTED.");
-             } else {
-               showMenuNotification("CHANNEL INACTIVE. OFFLINE FALLBACK EMULATING REFILL.", "warning");
-               const uid = auth.currentUser?.uid;
-               if (uid) {
-                 import('firebase/firestore').then(({ updateDoc }) => {
-                   updateDoc(doc(getFirestore(), 'Users', uid), {
-                     credits: 1000,
-                     energy: 1000
-                   });
-                 });
-               }
-             }
+           const devBlock = document.createElement('div');
+           Object.assign(devBlock.style, {
+             marginTop: '24px',
+             borderTop: '1px dashed rgba(255,255,255,0.1)',
+             paddingTop: '16px',
+             fontFamily: DS.typography.fontFamily
            });
-         };
-         devBlock.appendChild(refillBtn);
-         c.appendChild(devBlock);
+           
+           const devTitle = document.createElement('div');
+           devTitle.textContent = 'DEV DIAGNOSTICS';
+           Object.assign(devTitle.style, {
+             fontSize: '11px',
+             letterSpacing: '3px',
+             color: DS.colors.dev,
+             marginBottom: '8px'
+           });
+           devBlock.appendChild(devTitle);
+           
+           const devNote = document.createElement('div');
+           devNote.textContent = 'NOTE: Standard 100-credit allotment is arbitrary and subject to game balance review.';
+           Object.assign(devNote.style, {
+             fontSize: '10px',
+             color: DS.colors.textMuted,
+             marginBottom: '12px',
+             textTransform: 'none'
+           });
+           devBlock.appendChild(devNote);
+           
+           const refillBtn = document.createElement('button');
+           refillBtn.textContent = 'REFILL CREDITS & ENERGY [DEV SERVER AUTH]';
+           Object.assign(refillBtn.style, {
+             width: '100%',
+             padding: '8px',
+             background: 'rgba(255, 0, 100, 0.15)',
+             border: '1px solid rgba(255, 0, 100, 0.4)',
+             color: DS.colors.dev,
+             fontSize: '11px',
+             fontWeight: 'bold',
+             letterSpacing: '2px',
+             cursor: 'pointer'
+           });
+           refillBtn.onclick = () => {
+             const auth = getAuth();
+             import('../main').then(({ getSocketChannel }) => {
+               const chan = getSocketChannel();
+               if (chan && registeredUserData) {
+                 chan.emit('refill_credits', { uid: auth.currentUser?.uid });
+                 showMenuNotification("CREDITS REFILL REQUEST EMITTED.");
+               } else {
+                 showMenuNotification("CHANNEL INACTIVE. OFFLINE FALLBACK EMULATING REFILL.", "warning");
+                 const uid = auth.currentUser?.uid;
+                 if (uid) {
+                   import('firebase/firestore').then(({ updateDoc }) => {
+                     updateDoc(doc(getFirestore(), 'Users', uid), {
+                       credits: 1000,
+                       energy: 1000
+                     });
+                   });
+                 }
+               }
+             });
+           };
+           devBlock.appendChild(refillBtn);
+           c.appendChild(devBlock);
          }
        }));
        rightPanelContent.appendChild(createPanelBlock('LAST MATCH', c => {
          const lbl = document.createElement('div'); lbl.textContent = 'NO DATA AVAILABLE';
-         Object.assign(lbl.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', color: '#555555' });
+         Object.assign(lbl.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 14px)', color: DS.colors.textMuted });
          c.appendChild(lbl);
        }, true));
+    } 
+    else if (currentRightPanelMode === 'PLAY') {
+      rightPanelContent.appendChild(createPanelBlock('GAME MODE', c => {
+         const opActive = document.createElement('div'); opActive.textContent = 'INFILTRATION';
+         Object.assign(opActive.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: DS.colors.text, borderLeft: '2px solid ' + DS.colors.accent, background: 'rgba(255, 69, 0, 0.08)', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)', marginBottom: 'clamp(2px, 0.5vh, 4px)' });
+         const opFuture = document.createElement('div'); opFuture.innerHTML = 'HARDCORE <span style="font-size:clamp(8px, 1.25vh, 11px); color:' + DS.colors.textMuted + '">COMING SOON</span>';
+         Object.assign(opFuture.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: DS.colors.text, opacity: '0.35', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)' });
+         c.appendChild(opActive); c.appendChild(opFuture);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('MATCH TYPE', c => {
+         const opActive = document.createElement('div'); opActive.textContent = 'OPEN MATCH';
+         Object.assign(opActive.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: DS.colors.text, borderLeft: '2px solid ' + DS.colors.accent, background: 'rgba(255, 69, 0, 0.08)', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)', marginBottom: 'clamp(2px, 0.5vh, 4px)' });
+         const op2 = document.createElement('div'); op2.textContent = 'PRIVATE MATCH';
+         Object.assign(op2.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: DS.colors.text, opacity: '0.6', padding: 'clamp(2px, 0.5vh, 4px) clamp(4px, 1vw, 8px)' });
+         c.appendChild(opActive); c.appendChild(op2);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('CONTRACTORS', c => {
+         const val = document.createElement('div'); val.textContent = '1 / 10';
+         Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: DS.colors.text });
+         c.appendChild(val);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('', c => {
+         const btn = document.createElement('button');
+         btn.textContent = 'DEPLOY';
+         Object.assign(btn.style, {
+           width: '100%', height: 'clamp(32px, 6vh, 48px)', background: DS.colors.accent, color: DS.colors.background, border: 'none',
+           fontFamily: DS.typography.fontFamily, fontSize: 'clamp(16px, 3vh, 24px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase',
+           cursor: 'pointer'
+         });
+         btn.addEventListener('click', () => { 
+             if (registeredUserData && (registeredUserData.energy || 0) < 10) {
+                 showMenuNotification("DEPLOYMENT REJECTED: INSUFFICIENT ENERGY. REFILL DEV CREDITS IN INTEL.", "warning");
+                 return;
+             }
+             ensureAssetsDownloaded(() => screenManager.showLobby(), getDefaultMap().id); 
+         });
+         c.appendChild(btn);
+      }, true));
+    }
+    else if (currentRightPanelMode === 'LOADOUT') {
+        rightPanelContent.appendChild(createPanelBlock('LOADOUT', c => {
+            const val = document.createElement('div'); val.textContent = 'EQUIPMENT SYSTEM OFFLINE';
+            Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: '#888888' });
+            c.appendChild(val);
+        }));
+    }
+    else if (currentRightPanelMode === 'FACTION') {
+      const auth = getAuth();
+      const isGuest = !auth.currentUser || auth.currentUser.isAnonymous;
+      rightPanelContent.appendChild(createPanelBlock('CURRENT FACTION', c => {
+         const val = document.createElement('div'); val.textContent = isGuest ? 'UNAFFILIATED' : (userFaction || 'UNASSIGNED');
+         Object.assign(val.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', color: DS.colors.text });
+         c.appendChild(val);
+      }));
+      rightPanelContent.appendChild(createPanelBlock('ENLIST', c => {
+         ['VIBE CO.', 'SLOP INC.'].forEach((f, i) => {
+            const btn = document.createElement('div'); btn.textContent = f;
+            const isSelected = userFaction === f;
+            Object.assign(btn.style, {
+              fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', padding: 'clamp(6px, 1.5vh, 12px)', marginBottom: 'clamp(4px, 1vh, 8px)', cursor: isGuest ? 'default' : 'pointer',
+              borderLeft: isSelected ? '2px solid ' + DS.colors.accent : '2px solid transparent',
+              background: isSelected ? 'rgba(255, 69, 0, 0.08)' : 'transparent',
+              color: isSelected ? DS.colors.text : DS.colors.textMuted
+            });
+            c.appendChild(btn);
+         });
+      }));
+      rightPanelContent.appendChild(createPanelBlock('', c => {
+         const btn = document.createElement('button');
+         btn.textContent = 'CONFIRM';
+         Object.assign(btn.style, {
+           width: '100%', height: 'clamp(32px, 6vh, 48px)', background: isGuest ? '#333' : DS.colors.accent, color: isGuest ? '#666' : DS.colors.background, border: 'none',
+           fontFamily: DS.typography.fontFamily, fontSize: 'clamp(16px, 3vh, 24px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase', cursor: isGuest ? 'default' : 'pointer'
+         });
+         if (isGuest) btn.disabled = true;
+         c.appendChild(btn);
+         if (isGuest) {
+            const sub = document.createElement('div'); sub.textContent = 'Sign in to save faction.';
+            Object.assign(sub.style, { fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', color: DS.colors.textMuted, textAlign: 'center', marginTop: 'clamp(4px, 1vh, 8px)' });
+            c.appendChild(sub);
+         }
+      }, true));
     }
     else if (currentRightPanelMode === 'FEEDBACK') {
        let sr = 0;
@@ -853,8 +812,8 @@ function renderRightPanel() {
          const row = document.createElement('div'); Object.assign(row.style, { display: 'flex', gap: 'clamp(4px, 1vh, 8px)', marginBottom: 'clamp(8px, 2vh, 16px)' });
          for (let i=1; i<=5; i++) {
            const s = document.createElement('div'); s.innerHTML = '★';
-           Object.assign(s.style, { fontSize: 'clamp(20px, 3.5vh, 32px)', color: '#2A2A2A', cursor: 'pointer', lineHeight: '1' });
-           s.onclick = () => { sr = i; stars.forEach((st, idx) => st.style.color = idx < sr ? DS.colors.accent : '#2A2A2A'); };
+           Object.assign(s.style, { fontSize: 'clamp(20px, 3.5vh, 32px)', color: DS.colors.border, cursor: 'pointer', lineHeight: '1' });
+           s.onclick = () => { sr = i; stars.forEach((st, idx) => st.style.color = idx < sr ? DS.colors.accent : DS.colors.border); };
            stars.push(s); row.appendChild(s);
          }
          c.appendChild(row);
@@ -863,14 +822,14 @@ function renderRightPanel() {
          txt.placeholder = 'Describe your experience.';
          Object.assign(txt.style, {
            width: '100%', height: 'clamp(50px, 10vh, 80px)', background: 'rgba(0,0,0,0.4)', border: DS.glass.border,
-           color: '#E8E8E8', fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', padding: 'clamp(5px, 1vh, 10px)', resize: 'none'
+           color: DS.colors.text, fontFamily: DS.typography.fontFamily, fontSize: 'clamp(10px, 1.5vh, 13px)', padding: 'clamp(5px, 1vh, 10px)', resize: 'none'
          });
          c.appendChild(txt);
        }));
        rightPanelContent.appendChild(createPanelBlock('', c => {
          const btn = document.createElement('button'); btn.textContent = 'SUBMIT';
          Object.assign(btn.style, {
-           width: '100%', height: 'clamp(30px, 4vh, 40px)', background: DS.colors.accent, color: '#0A0A0A', border: 'none',
+           width: '100%', height: 'clamp(30px, 4vh, 40px)', background: DS.colors.accent, color: DS.colors.background, border: 'none',
            fontFamily: DS.typography.fontFamily, fontSize: 'clamp(14px, 2.5vh, 18px)', fontWeight: DS.typography.weightBold, textTransform: 'uppercase', cursor: 'pointer'
          });
          btn.onclick = async () => {
@@ -882,7 +841,7 @@ function renderRightPanel() {
                    rating: sr, text: txt?.value || '', timestamp: serverTimestamp(), userId: uid
                });
                if(txt) txt.value = '';
-               sr = 0; stars.forEach(st => st.style.color = '#2A2A2A');
+               sr = 0; stars.forEach(st => st.style.color = DS.colors.border);
                btn.textContent = 'SENT';
                setTimeout(() => btn.textContent = 'SUBMIT', 2000);
            } catch(e) {}
@@ -907,7 +866,7 @@ function renderRightPanel() {
                     borderLeft: `2px solid ${DS.colors.accent}`,
                     background: 'rgba(255,255,255,0.05)',
                     cursor: 'pointer',
-                    color: '#E8E8E8',
+                    color: DS.colors.text,
                     fontFamily: DS.typography.fontFamily,
                     fontSize: 'clamp(14px, 2.5vh, 18px)'
                 });
@@ -978,7 +937,7 @@ function showMenuNotification(msg: string, type: 'info' | 'warning' = 'info') {
     container.id = 'vex-menu-notification-container';
     Object.assign(container.style, {
       position: 'absolute',
-      top: 'clamp(72px, 10vh, 100px)',
+      top: 'clamp(36px, 5vh, 50px)',
       left: '50%',
       transform: 'translateX(-50%)',
       zIndex: '4500',
@@ -997,8 +956,8 @@ function showMenuNotification(msg: string, type: 'info' | 'warning' = 'info') {
     fontFamily: DS.typography.fontFamily,
     fontSize: '12px',
     letterSpacing: '2px',
-    color: type === 'warning' ? '#FF5555' : DS.colors.accent,
-    borderLeft: `3px solid ${type === 'warning' ? '#FF5555' : DS.colors.accent}`,
+    color: type === 'warning' ? DS.colors.danger : DS.colors.accent,
+    borderLeft: `3px solid ${type === 'warning' ? DS.colors.danger : DS.colors.accent}`,
     boxShadow: DS.glass.glowOuter,
     pointerEvents: 'auto',
     opacity: '0',
@@ -1020,15 +979,15 @@ function showMenuNotification(msg: string, type: 'info' | 'warning' = 'info') {
 }
 
 function enableLeftColumnMenu(enabled: boolean) {
-  if (!leftColumn) return;
-  Array.from(leftColumn.children).forEach(child => {
+  const cards = document.querySelectorAll('.mm-new-card');
+  cards.forEach(child => {
     const c = child as HTMLElement;
     if (enabled) {
       c.style.pointerEvents = 'auto';
-      c.style.opacity = c.classList.contains('mm-card-dimmed') ? '0.3' : '1';
+      c.style.opacity = '1';
     } else {
       c.style.pointerEvents = 'none';
-      c.style.opacity = '0.15';
+      c.style.opacity = '0.3';
     }
   });
 }
@@ -1043,7 +1002,7 @@ function showEnlistmentOverlay(db: any, auth: any) {
     position: 'absolute',
     inset: '0',
     zIndex: '4000',
-    background: 'rgba(5, 5, 5, 0.95)',
+    background: 'rgba(10, 10, 10, 0.95)',
     backdropFilter: 'blur(12px)',
     display: 'flex',
     flexDirection: 'column',
@@ -1081,13 +1040,13 @@ function showEnlistmentOverlay(db: any, auth: any) {
   branding.appendChild(logoStar);
   
   const word = document.createElement('div');
-  word.textContent = 'VEXEA SECURE PORTAL';
+  word.textContent = 'VEXEΛ SECURE PORTAL';
   Object.assign(word.style, {
     fontFamily: DS.typography.fontFamily,
     fontSize: '24px',
     fontWeight: 'bold',
     letterSpacing: '6px',
-    color: '#E8E8E8',
+    color: DS.colors.text,
     marginTop: '8px'
   });
   branding.appendChild(word);
@@ -1098,7 +1057,7 @@ function showEnlistmentOverlay(db: any, auth: any) {
     fontFamily: DS.typography.fontFamily,
     fontSize: '11px',
     letterSpacing: '3px',
-    color: '#888888',
+    color: DS.colors.textMuted,
     marginTop: '4px'
   });
   branding.appendChild(sub);
@@ -1125,7 +1084,7 @@ function showEnlistmentOverlay(db: any, auth: any) {
     padding: '12px',
     background: 'rgba(0, 0, 0, 0.4)',
     border: DS.glass.border,
-    color: '#E8E8E8',
+    color: DS.colors.text,
     fontFamily: DS.typography.fontFamily,
     fontSize: '14px',
     letterSpacing: '2px',
@@ -1143,7 +1102,7 @@ function showEnlistmentOverlay(db: any, auth: any) {
     fontFamily: DS.typography.fontFamily,
     fontSize: '11px',
     letterSpacing: '3px',
-    color: '#888888',
+    color: DS.colors.textMuted,
     marginBottom: '-10px'
   });
   widthContainer.appendChild(factionLabel);
@@ -1169,14 +1128,14 @@ function showEnlistmentOverlay(db: any, auth: any) {
     transition: 'all 250ms ease'
   });
   vibeCard.innerHTML = `
-    <div style="font-family:${DS.typography.fontFamily}; font-size:16px; font-weight:bold; letter-spacing:2px; color:#A855F7;">VIBE CO.</div>
-    <div style="font-family:${DS.typography.fontFamily}; font-size:9px; letter-spacing:1px; color:#c084fc; margin-top:4px;">SILENT & PRECISE</div>
-    <div style="font-family:${DS.typography.fontFamily}; font-size:10px; color:#888888; text-transform:none; margin-top:8px; line-height:1.4;">Corporate infiltrators specialized in speed, stealth, and facility breaches.</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:16px; font-weight:bold; letter-spacing:2px; color:${DS.colors.factions.vibe.primary};">VIBE CO.</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:9px; letter-spacing:1px; color:${DS.colors.factions.vibe.muted}; margin-top:4px;">SILENT & PRECISE</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:10px; color:${DS.colors.textMuted}; text-transform:none; margin-top:8px; line-height:1.4;">Corporate infiltrators specialized in speed, stealth, and facility breaches.</div>
   `;
   vibeCard.onclick = () => {
     selectedFaction = 'VIBE CO.';
-    vibeCard.style.border = '1px solid #A855F7';
-    vibeCard.style.boxShadow = '0 0 15px rgba(168,85,247,0.2)';
+    vibeCard.style.border = `1px solid ${DS.colors.factions.vibe.primary}`;
+    vibeCard.style.boxShadow = `0 0 15px ${DS.colors.factions.vibe.shadow}`;
     slopCard.style.border = DS.glass.border;
     slopCard.style.boxShadow = 'none';
   };
@@ -1194,14 +1153,14 @@ function showEnlistmentOverlay(db: any, auth: any) {
     transition: 'all 250ms ease'
   });
   slopCard.innerHTML = `
-    <div style="font-family:${DS.typography.fontFamily}; font-size:16px; font-weight:bold; letter-spacing:2px; color:#F97316;">SLOP INC.</div>
-    <div style="font-family:${DS.typography.fontFamily}; font-size:9px; letter-spacing:1px; color:#fdba74; margin-top:4px;">BRUTALIST & UTILITY</div>
-    <div style="font-family:${DS.typography.fontFamily}; font-size:10px; color:#888888; text-transform:none; margin-top:8px; line-height:1.4;">Heavy sweeper division specialized in maximum attrition and hardware pacification.</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:16px; font-weight:bold; letter-spacing:2px; color:${DS.colors.factions.slop.primary};">SLOP INC.</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:9px; letter-spacing:1px; color:${DS.colors.factions.slop.muted}; margin-top:4px;">BRUTALIST & UTILITY</div>
+    <div style="font-family:${DS.typography.fontFamily}; font-size:10px; color:${DS.colors.textMuted}; text-transform:none; margin-top:8px; line-height:1.4;">Heavy sweeper division specialized in maximum attrition and hardware pacification.</div>
   `;
   slopCard.onclick = () => {
     selectedFaction = 'SLOP INC.';
-    slopCard.style.border = '1px solid #F97316';
-    slopCard.style.boxShadow = '0 0 15px rgba(249,115,22,0.2)';
+    slopCard.style.border = `1px solid ${DS.colors.factions.slop.primary}`;
+    slopCard.style.boxShadow = `0 0 15px ${DS.colors.factions.slop.shadow}`;
     vibeCard.style.border = DS.glass.border;
     vibeCard.style.boxShadow = 'none';
   };
@@ -1213,7 +1172,7 @@ function showEnlistmentOverlay(db: any, auth: any) {
     fontFamily: DS.typography.fontFamily,
     fontSize: '11px',
     letterSpacing: '1px',
-    color: '#FF5555',
+    color: DS.colors.danger,
     textAlign: 'center',
     height: '14px',
     margin: '-4px 0'
@@ -1226,7 +1185,7 @@ function showEnlistmentOverlay(db: any, auth: any) {
     width: '100%',
     padding: '12px',
     background: DS.colors.accent,
-    color: '#0A0A0A',
+    color: DS.colors.background,
     fontFamily: DS.typography.fontFamily,
     fontSize: '16px',
     fontWeight: 'bold',
@@ -1276,7 +1235,7 @@ function showEnlistmentOverlay(db: any, auth: any) {
         kills: 0,
         battlePass: 1
       });
-      showMenuNotification("ENLISTMENT COMPLETE. WELCOME TO VEXEA, CONTRACTOR.");
+      showMenuNotification("ENLISTMENT COMPLETE. WELCOME TO VEXEΛ, CONTRACTOR.");
     } catch (e: any) {
       console.warn("Enlistment failed:", e);
       enlistBtn.disabled = false;

@@ -145,7 +145,29 @@ export interface DroneConfig {
   detectionRadius?: number;
   fovHalfAngle?: number;
   decelerationRadius?: number;
+  decayRate?: number;
 }
+
+export interface DroneIntelConfig {
+  sightDistance: number;
+  visionConeAngle: number;
+  hearingRadius: number;
+  memoryDecayRate: number;
+  engagementMin: number;
+  engagementMax: number;
+  fireArcTolerance: number;
+}
+
+export const INTEL_CONFIGS: Record<DroneType, DroneIntelConfig> = {
+  [DroneType.ROTARY_SHOOTER]: { sightDistance: 50, visionConeAngle: Math.PI/2, hearingRadius: 60, memoryDecayRate: 0.05, engagementMin: 15, engagementMax: 30, fireArcTolerance: 0.2 },
+  [DroneType.BOMBER]: { sightDistance: 40, visionConeAngle: Math.PI/1.5, hearingRadius: 50, memoryDecayRate: 0.1, engagementMin: 0, engagementMax: 4, fireArcTolerance: 0 },
+  [DroneType.RECON]: { sightDistance: 80, visionConeAngle: Math.PI, hearingRadius: 80, memoryDecayRate: 0.02, engagementMin: 40, engagementMax: 70, fireArcTolerance: 0 },
+  [DroneType.FIXED_WING]: { sightDistance: 100, visionConeAngle: Math.PI/3, hearingRadius: 100, memoryDecayRate: 0.05, engagementMin: 20, engagementMax: 100, fireArcTolerance: 0 },
+  [DroneType.WHEELED]: { sightDistance: 60, visionConeAngle: Math.PI/2, hearingRadius: 60, memoryDecayRate: 0.05, engagementMin: 10, engagementMax: 40, fireArcTolerance: 0 },
+  [DroneType.ROBOT_DOG]: { sightDistance: 70, visionConeAngle: Math.PI/2.5, hearingRadius: 80, memoryDecayRate: 0.03, engagementMin: 15, engagementMax: 50, fireArcTolerance: 0 },
+  [DroneType.HUMANOID]: { sightDistance: 90, visionConeAngle: Math.PI/3, hearingRadius: 70, memoryDecayRate: 0.02, engagementMin: 20, engagementMax: 60, fireArcTolerance: 0 },
+  [DroneType.TEST_ENTITY]: { sightDistance: 90, visionConeAngle: Math.PI/3, hearingRadius: 70, memoryDecayRate: 0.02, engagementMin: 20, engagementMax: 60, fireArcTolerance: 0 },
+};
 
 export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
   [DroneType.ROTARY_SHOOTER]: {
@@ -189,7 +211,7 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     maxRotationSpeed: 1.5,
     maxVerticalSpeed: 2,
     bankingAngle: 0.15,
-    minSpeed: 10,
+    minSpeed: 0,
     maxTurnRate: 1.5,
     pitchAngle: 0.35,
     engagementRange: 40,
@@ -200,7 +222,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     fireCooldown: 10,
     detectionRadius: 30,
     fovHalfAngle: 0.7853981633974483,
-    decelerationRadius: 5
+    decelerationRadius: 5,
+    decayRate: 1.0 / 15.0
   },
   [DroneType.BOMBER]: {
     type: DroneType.BOMBER,
@@ -243,7 +266,7 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     maxRotationSpeed: 1.5,
     maxVerticalSpeed: 2,
     bankingAngle: 0.15,
-    minSpeed: 10,
+    minSpeed: 0,
     maxTurnRate: 1.5,
     pitchAngle: 0.35,
     engagementRange: 40,
@@ -254,7 +277,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     fireCooldown: 10,
     detectionRadius: 30,
     fovHalfAngle: 0.7853981633974483,
-    decelerationRadius: 5
+    decelerationRadius: 5,
+    decayRate: 1.0 / 15.0
   },
   [DroneType.RECON]: {
     type: DroneType.RECON,
@@ -297,7 +321,7 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     maxRotationSpeed: 1.5,
     maxVerticalSpeed: 2,
     bankingAngle: 0.15,
-    minSpeed: 10,
+    minSpeed: 0,
     maxTurnRate: 1.5,
     pitchAngle: 0.35,
     engagementRange: 40,
@@ -308,7 +332,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     fireCooldown: 10,
     detectionRadius: 30,
     fovHalfAngle: 0.7853981633974483,
-    decelerationRadius: 5
+    decelerationRadius: 5,
+    decayRate: 1.0 / 15.0
   },
   [DroneType.FIXED_WING]: {
     type: DroneType.FIXED_WING,
@@ -335,7 +360,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     minSpeed: 10.0,
     maxTurnRate: 1.5,
     pitchAngle: 0.35,
-    engagementRange: 40.0
+    engagementRange: 40.0,
+    decayRate: 1.0 / 15.0
   },
   [DroneType.WHEELED]: {
     type: DroneType.WHEELED,
@@ -372,7 +398,7 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     maxRotationSpeed: 3,
     maxVerticalSpeed: 5,
     bankingAngle: 0.35,
-    minSpeed: 10,
+    minSpeed: 0,
     maxTurnRate: 0.3,
     pitchAngle: 0.35,
     engagementRange: 40,
@@ -383,7 +409,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     fireCooldown: 30,
     detectionRadius: 30,
     fovHalfAngle: 0.7853981633974483,
-    decelerationRadius: 5
+    decelerationRadius: 5,
+    decayRate: 1.0 / 15.0
   },
   [DroneType.ROBOT_DOG]: {
     type: DroneType.ROBOT_DOG,
@@ -404,7 +431,8 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     // Category 4
     maxTurnAngle: 0.6,
     maxTurnSpeed: 2.0,
-    fireCooldown: 20
+    fireCooldown: 20,
+    decayRate: 1.0 / 15.0
   },
   [DroneType.HUMANOID]: {
     type: DroneType.HUMANOID,
@@ -425,9 +453,10 @@ export const DRONE_CONFIGS: Record<DroneType, DroneConfig> = {
     // Category 4
     maxTurnAngle: 0.6,
     maxTurnSpeed: 2.0,
-    fireCooldown: 40
+    fireCooldown: 40,
+    decayRate: 1.0 / 15.0
   },
-  [DroneType.TEST_ENTITY]: { type: DroneType.TEST_ENTITY, hp: 100, maxHp: 100, damage: 0, speed: 10, apCost: 0, isAirUnit: false, groupSizeMin: 1, groupSizeMax: 1, visualRadius: 1.0, orientationOffset: [0, 0, 0], collider: { type: 'ball', radius: 1.5 }, animations: [] }
+  [DroneType.TEST_ENTITY]: { type: DroneType.TEST_ENTITY, hp: 100, maxHp: 100, damage: 0, speed: 10, apCost: 0, isAirUnit: false, groupSizeMin: 1, groupSizeMax: 1, visualRadius: 1.0, orientationOffset: [0, 0, 0], collider: { type: 'ball', radius: 1.5 }, animations: [], decayRate: 1.0 / 15.0 }
 };
 
 export const HEADER_SIZE = 8; // Tick(4), DroneCount(2), CameraCount(2)
@@ -445,6 +474,14 @@ export const PLAYER_TOTAL_HEIGHT = 1.8;
 export const PLAYER_CENTER_OFFSET = PLAYER_TOTAL_HEIGHT / 2; // 0.9m
 export const PLAYER_EYE_LEVEL = 1.6;
 export const PLAYER_EYE_LEVEL_CROUCH = 1.0;
+
+// Player Movement & Physics Constants
+export const PLAYER_BASE_SPEED = 5.5;
+export const PLAYER_CROUCH_SPEED = 2.5;
+export const PLAYER_SPRINT_MULTIPLIER = 1.6;
+export const PLAYER_DASH_MULTIPLIER = 2.5;
+export const PLAYER_JUMP_VELOCITY = 7.0;
+export const PLAYER_GRAVITY = 18.0;
 
 export interface DroneNetworkData {
   id: number;

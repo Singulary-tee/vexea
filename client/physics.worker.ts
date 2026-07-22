@@ -1,6 +1,6 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import mapSpec from "../shared/maps/map_1_facility.spec.json";
-import { PLAYER_RADIUS, PLAYER_CAPSULE_HALF_HEIGHT, PLAYER_CAPSULE_HALF_HEIGHT_CROUCH } from "../shared/constants";
+import { PLAYER_RADIUS, PLAYER_CAPSULE_HALF_HEIGHT, PLAYER_CAPSULE_HALF_HEIGHT_CROUCH, PLAYER_GRAVITY, PLAYER_JUMP_VELOCITY } from "../shared/constants";
 
 let world: RAPIER.World;
 let kcc: RAPIER.KinematicCharacterController;
@@ -288,7 +288,7 @@ self.onmessage = async (e) => {
                 velY = localVelY;
             }
 
-            velY -= 9.81 * 3.0 * FIXED_TIMESTEP;
+            velY -= PLAYER_GRAVITY * FIXED_TIMESTEP;
             
             // Adjust collider height based on crouch
             if (isCrouch !== lastCrouchState) {
@@ -302,7 +302,7 @@ self.onmessage = async (e) => {
             
             const isGrounded = kcc.computedGrounded();
             if (isGrounded && velY < 0) velY = 0;
-            if (isGrounded && isJump) velY = 7.0;
+            if (isGrounded && isJump) velY = PLAYER_JUMP_VELOCITY;
             
             if (sharedData) {
                 sharedData[4] = velY;

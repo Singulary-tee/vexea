@@ -1,6 +1,7 @@
 import * as screenManager from "./screen-manager";
 import { getCachedOrFetchUrl, getAssetUrl, populateBlobUrlMap } from "../asset-cache";
 import { IS_DESKTOP } from "../platform-gate";
+import { DS } from "../design-system";
 
 const SOUNDS_TO_PRELOAD = [
   'click.mp3', 'vexea_theme.mp3'
@@ -18,11 +19,11 @@ const IMAGES_TO_PRELOAD = [
   'store_card.png',
   'feedback_card.png',
   'Blueprint.png',
-  'file_00000000cdd071f48495d22753c89fa1.png'
+  'file_00000000cdd071f48495d22753c89fa1.png',
+  'faction_card.jpg'
 ];
 
-const VIDEOS_TO_PRELOAD = [
-  'Mainvideo1.mp4'
+const VIDEOS_TO_PRELOAD: string[] = [
 ];
 
 // The rest of the game assets
@@ -57,7 +58,7 @@ export function initSplash() {
     zIndex: '1000',
     backgroundSize: 'cover',
     backgroundPosition: 'center center',
-    backgroundColor: '#0A0A0A',
+    backgroundColor: DS.colors.background,
     pointerEvents: 'auto'
   });
 
@@ -124,7 +125,7 @@ export function initSplash() {
 
     const scanline = document.createElement('div');
     Object.assign(scanline.style, {
-       position: 'fixed', width: '100%', height: '3px', background: '#C8882A',
+       position: 'fixed', width: '100%', height: '3px', background: DS.colors.accent,
        top: '0', zIndex: '9999', transition: 'top 320ms linear'
     });
     document.body.appendChild(scanline);
@@ -152,7 +153,7 @@ export function initSplash() {
     const vignette = document.createElement('div');
     Object.assign(vignette.style, {
       position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '1',
-      background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.85) 100%)'
+      background: `radial-gradient(ellipse at center, transparent 30%, ${DS.shadows.overlay} 100%)`
     });
     el.appendChild(vignette);
 
@@ -164,20 +165,20 @@ export function initSplash() {
     
     const loadingBarWrapper = document.createElement('div');
     Object.assign(loadingBarWrapper.style, {
-      width: '120px', height: '2px', background: '#1A1A1A', overflow: 'hidden'
+      width: '120px', height: '2px', background: DS.colors.surface, overflow: 'hidden'
     });
 
     const loadingBarInner = document.createElement('div');
     Object.assign(loadingBarInner.style, {
-      height: '100%', width: '0', background: '#C8882A'
+      height: '100%', width: '0', background: DS.colors.accent
     });
     loadingBarWrapper.appendChild(loadingBarInner);
 
     const initText = document.createElement('div');
     initText.textContent = 'CHARGING SYSTEM CACHE... 0%';
     Object.assign(initText.style, {
-      fontFamily: "'Barlow Condensed', sans-serif", fontSize: '13px', letterSpacing: '4px',
-      color: '#E8E8E8', textTransform: 'uppercase', opacity: '1', marginTop: '0', height: 'auto'
+      fontFamily: DS.typography.fontFamily, fontSize: '13px', letterSpacing: '4px',
+      color: DS.colors.textPrimary, textTransform: 'uppercase', opacity: '1', marginTop: '0', height: 'auto'
     });
 
     contentWrapper.appendChild(loadingBarWrapper);

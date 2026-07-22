@@ -1,4 +1,5 @@
 import { getAssetUrl } from "./asset-cache";
+import { DS } from "./design-system";
 
 export const initUIEditor = () => {
     const settingsModal = document.getElementById("settings-modal");
@@ -44,17 +45,17 @@ export const initUIEditor = () => {
     editorBar.style.top = "50px";
     editorBar.style.left = "50px";
     editorBar.style.width = "320px";
-    editorBar.style.background = "rgba(10, 10, 10, 0.95)";
+    editorBar.style.background = DS.utils.rgba('#0A0A0A', 0.95);
     editorBar.style.color = "white";
     editorBar.style.display = "none";
     editorBar.style.flexDirection = "column";
     editorBar.style.padding = "20px";
     editorBar.style.zIndex = "100000";
-    editorBar.style.border = "2px solid #333";
-    editorBar.style.borderRadius = "8px";
+    editorBar.style.border = `2px solid ${DS.colors.border}`;
+    editorBar.style.borderRadius = DS.borders.radius.md;
     editorBar.style.pointerEvents = "auto";
     editorBar.style.cursor = "move";
-    editorBar.style.boxShadow = "0 8px 32px rgba(0,0,0,0.8)";
+    editorBar.style.boxShadow = `0 8px 32px ${DS.utils.rgba('#000000', 0.8)}`;
 
     const blockEvents = ["pointerdown", "pointerup", "pointermove", "mousedown", "mouseup", "mousemove", "click", "touchstart", "touchend", "touchmove"];
     blockEvents.forEach(evt => {
@@ -214,7 +215,7 @@ export const initUIEditor = () => {
     hudContainer.appendChild(editorBar);
 
     const circularIds = new Set([
-        "joystick-boundary", "btn-sprint", "btn-fire-left", "btn-fire-right", 
+        "btn-match-status", "joystick-boundary", "btn-sprint", "btn-fire-left", "btn-fire-right", 
         "btn-ads", "btn-reload", "btn-jump", "btn-dash", "btn-crouch", 
         "btn-walkie", "btn-helmet", "btn-medkit"
     ]);
@@ -277,8 +278,8 @@ export const initUIEditor = () => {
             gridOverlay.style.display = "block";
             const opacity = gridSnapSize < 10 ? 0.04 : 0.1;
             gridOverlay.style.backgroundImage = `
-                linear-gradient(to right, rgba(255, 255, 255, ${opacity}) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(255, 255, 255, ${opacity}) 1px, transparent 1px)
+                linear-gradient(to right, ${DS.utils.rgba(DS.colors.text, opacity)} 1px, transparent 1px),
+                linear-gradient(to bottom, ${DS.utils.rgba(DS.colors.text, opacity)} 1px, transparent 1px)
             `;
             gridOverlay.style.backgroundSize = `${gridSnapSize}px ${gridSnapSize}px`;
             gridOverlay.style.backgroundPosition = `${gridOffsetX}px ${gridOffsetY}px`;
@@ -294,7 +295,7 @@ export const initUIEditor = () => {
     };
 
     const editableIds = [
-        "squad-container",
+        "btn-match-status",
         "hud-timer-container",
         "minimap-container",
         "minimap-label",
@@ -870,7 +871,7 @@ export const initUIEditor = () => {
             el.addEventListener("pointerdown", onPointerDown as any);
             el.style.setProperty('pointer-events', 'auto', 'important');
             el.style.cursor = "move";
-            el.style.outline = "1px solid rgba(255,255,255,0.3)";
+            el.style.outline = `1px solid ${DS.utils.rgba(DS.colors.text, 0.3)}`;
             if (el.id === "btn-sprint") {
                 el.style.setProperty('display', 'flex', 'important');
             }

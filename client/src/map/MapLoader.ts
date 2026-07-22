@@ -7,6 +7,7 @@ import { MapRegistryEntry } from '../../../shared/maps/map-registry';
 import { getCachedOrFetchUrl, blobUrlMap } from '../../asset-cache';
 import { texture, uv, normalMap, uniform, parallaxUV } from 'three/tsl';
 import { getSettings } from '../../settings';
+import { DS } from '../../design-system';
 
 export interface MapSpec {
   id: string;
@@ -234,7 +235,7 @@ export class MapLoader {
             new THREE.Vector3(cx + halfX, cy + halfY, cz + halfZ)
           );
 
-          const boxHelper = new THREE.Box3Helper(box3, new THREE.Color(0x0000ff));
+          const boxHelper = new THREE.Box3Helper(box3, new THREE.Color(DS.colors.info));
           this.scene.add(boxHelper);
           this.mergedMeshes.push(boxHelper as any);
           (window as any).buildingColliders = (window as any).buildingColliders || [];
@@ -403,7 +404,7 @@ export class MapLoader {
     });
 
     // Ambient + directional light simulating dusk HDR
-    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    const ambient = new THREE.AmbientLight(0xE8E8E8, 0.4);
     this.scene.add(ambient);
     this.mergedMeshes.push(ambient as any);
     const dirLight = new THREE.DirectionalLight(0xffddbb, 0.6);
@@ -419,16 +420,16 @@ export class MapLoader {
     const baseGeom = new THREE.BoxGeometry(80, 24, 80);
     // Move base up so bottom is at y=0 (height is 24, center is y=12)
     baseGeom.translate(0, 12, 0);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9, metalness: 0.1 });
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9, metalness: 0.1 });
     const baseMesh = new THREE.Mesh(baseGeom, baseMat);
     group.add(baseMesh);
 
-    // 3 server tower columns, 8x20x8 #0d0d0d emissive #C8882A
+    // 3 server tower columns, 8x20x8 #0d0d0d emissive #FF4500
     const towerGeom = new THREE.BoxGeometry(8, 20, 8);
     towerGeom.translate(0, 10, 0); // Center above base
     const towerMat = new THREE.MeshStandardMaterial({ 
-        color: 0x0d0d0d, 
-        emissive: 0xC8882A, 
+        color: 0x0A0A0A, 
+        emissive: DS.colors.accent, 
         emissiveIntensity: 0.3,
         roughness: 0.7
     });
@@ -448,8 +449,8 @@ export class MapLoader {
     // Flat disc geometry 6 diameter
     const discGeom = new THREE.CylinderGeometry(3, 3, 0.5, 32);
     const discMat = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        emissive: 0xffffff,
+        color: 0xE8E8E8,
+        emissive: 0xE8E8E8,
         emissiveIntensity: 1.0
     });
     this.centerpieceDisc = new THREE.Mesh(discGeom, discMat);

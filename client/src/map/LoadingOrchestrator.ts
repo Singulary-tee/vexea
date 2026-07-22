@@ -2,7 +2,7 @@ import { MapRegistryEntry } from "../../../shared/maps/map-registry";
 import { LoadingScreen } from "../ui/LoadingScreen";
 import { getMissingFilesForMap, downloadMapAssets } from "../../asset-cache";
 import { MapLoader } from "./MapLoader";
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 
 export async function orchestrateMatchLoad(mapEntry: MapRegistryEntry, channel: any, targetScene: THREE.Scene): Promise<void> {
   (window as any)._serverMatchReady = false; // Reset the server ready flag for the new match load!
@@ -55,19 +55,21 @@ export async function orchestrateMatchLoad(mapEntry: MapRegistryEntry, channel: 
         new THREE.Vector3(384, -500, 10) // Down (Look groundward)
       ];
 
-      for (let i = 0; i < targets.length; i++) {
-        prewarmCam.lookAt(targets[i]);
-        if (typeof renderer.compileAsync === 'function') {
-          await renderer.compileAsync(targetScene, prewarmCam);
-        } else if (typeof renderer.compile === 'function') {
-          renderer.compile(targetScene, prewarmCam);
-        }
-        // Dry run render one frame to make sure all draw state is primed on GPU
-        if (typeof renderer.render === 'function') {
-          renderer.render(targetScene, prewarmCam);
-        }
+      // Only compile once looking forward, as compilation is camera-independent.
+      // Avoid compileAsync on mobile due to infinite driver hangs in fullscreen.
+      prewarmCam.lookAt(targets[0]);
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (!isMobileDevice && typeof renderer.compileAsync === 'function') {
+        await renderer.compileAsync(targetScene, prewarmCam);
+      } else if (typeof renderer.compile === 'function') {
+        renderer.compile(targetScene, prewarmCam);
       }
-      console.log('[VFX:PREWARM] Prewarm panoramic compile and mock renders completed successfully for all 6 directions');
+      
+      // Dry run render one frame to make sure all draw state is primed on GPU
+      if (typeof renderer.render === 'function') {
+        renderer.render(targetScene, prewarmCam);
+      }
+      console.log('[VFX:PREWARM] Prewarm compile and mock render completed successfully');
     } catch (err) {
       console.warn('[VFX:PREWARM] Prewarm compile failed, bypassing:', err);
     }

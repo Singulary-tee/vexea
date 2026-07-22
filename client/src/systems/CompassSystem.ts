@@ -1,6 +1,7 @@
 import * as THREE from "three/webgpu";
 import { MatchController } from "../../MatchController";
 import { WAYPOINTS } from "../../../shared/constants";
+import { DS } from "../../design-system";
 
 export interface CompassTarget {
   id: string;
@@ -8,7 +9,7 @@ export interface CompassTarget {
   worldPos?: THREE.Vector3;
   bearing?: number; // fallback in case of static angular landmarks
   icon?: string; // "eye", "terminal", "target", "star", "warning" etc.
-  color?: string; // Hex code, e.g. "#C8882A"
+  color?: string; // Hex code, e.g. ${DS.colors.accent}
 }
 
 export class CompassSystem {
@@ -52,7 +53,7 @@ export class CompassSystem {
         name: "LLM CORE",
         worldPos: new THREE.Vector3(corePos.x, corePos.y, corePos.z),
         icon: "terminal",
-        color: "#C8882A"
+        color: DS.colors.accent
       });
     }
 
@@ -64,7 +65,7 @@ export class CompassSystem {
         name: "SPAWN BASE",
         worldPos: new THREE.Vector3(spawnPos.x, spawnPos.y, spawnPos.z),
         icon: "star",
-        color: "#22c55e"
+        color: DS.colors.success
       });
     }
   }
@@ -125,7 +126,7 @@ export class CompassSystem {
     const yaw = this.match.playerYaw;
 
     // 1. Draw horizontal line
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.strokeStyle = DS.utils.rgba(DS.colors.text, 0.1);
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -145,7 +146,7 @@ export class CompassSystem {
         const isMedium = angleDeg % 15 === 0 && !isMajor;
         const tickHeight = isMajor ? 10 : (isMedium ? 6 : 3);
 
-        ctx.strokeStyle = isMajor ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 255, 255, 0.2)";
+        ctx.strokeStyle = isMajor ? DS.utils.rgba(DS.colors.text, 0.4) : DS.utils.rgba(DS.colors.text, 0.15);
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(x, 0);
@@ -153,8 +154,8 @@ export class CompassSystem {
         ctx.stroke();
 
         if (isMajor) {
-          ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-          ctx.font = "bold 9px 'Rajdhani', sans-serif";
+          ctx.fillStyle = DS.utils.rgba(DS.colors.text, 0.95);
+          ctx.font = `bold 9px ${DS.typography.fontFamilySecondary}`;
           ctx.textAlign = "center";
           ctx.textBaseline = "top";
           let label = "";
@@ -169,8 +170,8 @@ export class CompassSystem {
 
           ctx.fillText(label, x, tickHeight + 2);
         } else if (isMedium) {
-          ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-          ctx.font = "8px 'Rajdhani', sans-serif";
+          ctx.fillStyle = DS.utils.rgba(DS.colors.text, 0.4);
+          ctx.font = `8px ${DS.typography.fontFamilySecondary}`;
           ctx.textAlign = "center";
           ctx.textBaseline = "top";
           ctx.fillText(String(angleDeg), x, tickHeight + 2);
@@ -179,14 +180,14 @@ export class CompassSystem {
     }
 
     // 3. Draw central heading indicator (triangle & line)
-    ctx.strokeStyle = "#C8882A";
+    ctx.strokeStyle = DS.colors.accent;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(cx, 0);
     ctx.lineTo(cx, 14);
     ctx.stroke();
 
-    ctx.fillStyle = "#C8882A";
+    ctx.fillStyle = DS.colors.accent;
     ctx.beginPath();
     ctx.moveTo(cx - 4, 0);
     ctx.lineTo(cx + 4, 0);
@@ -213,7 +214,7 @@ export class CompassSystem {
 
       if (Math.abs(diff) < fov / 2) {
         const x = cx + (diff / (fov / 2)) * cx;
-        const color = target.color || "#C8882A";
+        const color = target.color || DS.colors.accent;
         
         // Draw icon shape on the canvas tape
         this.drawIcon(ctx, target.icon || "default", x, h - 8, color);
@@ -226,8 +227,8 @@ export class CompassSystem {
         }
 
         if (label) {
-          ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
-          ctx.font = "bold 8px 'Rajdhani', sans-serif";
+          ctx.fillStyle = DS.utils.rgba(DS.colors.text, 0.75);
+          ctx.font = `bold 8px ${DS.typography.fontFamilySecondary}`;
           ctx.textAlign = "center";
           ctx.fillText(label, x, h - 18);
         }

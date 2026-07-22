@@ -9,7 +9,18 @@ import {
   tempInputView, 
   incrementInputSequence 
 } from "../input/InputSynchronizer";
-import { DETAILED_WEAPONS, PLAYER_EYE_LEVEL, PLAYER_CENTER_OFFSET, PLAYER_EYE_LEVEL_CROUCH } from "../../../shared/constants";
+import { 
+  DETAILED_WEAPONS, 
+  PLAYER_EYE_LEVEL, 
+  PLAYER_CENTER_OFFSET, 
+  PLAYER_EYE_LEVEL_CROUCH,
+  PLAYER_BASE_SPEED,
+  PLAYER_CROUCH_SPEED,
+  PLAYER_SPRINT_MULTIPLIER,
+  PLAYER_DASH_MULTIPLIER,
+  PLAYER_JUMP_VELOCITY,
+  PLAYER_GRAVITY
+} from "../../../shared/constants";
 import { 
   switchActiveWeaponModel, 
   isSwitchingWeapon, 
@@ -549,8 +560,8 @@ export class InputSystem {
         curveT = isSprinting ? 1.0 : 0.0;
       }
 
-      const baseWalkSpeed = keys.Crouch ? 2.5 : 5.5;
-      const maxSprintSpeed = 15.0;
+      const baseWalkSpeed = keys.Crouch ? PLAYER_CROUCH_SPEED : PLAYER_BASE_SPEED;
+      const maxSprintSpeed = PLAYER_BASE_SPEED * PLAYER_SPRINT_MULTIPLIER;
       targetSpeed = baseWalkSpeed + (maxSprintSpeed - baseWalkSpeed) * curveT;
       targetSpeed *= (GlobalState.speedMultiplier || 1.0);
 
@@ -558,16 +569,16 @@ export class InputSystem {
       this.match.localCrouchY += (targetCamY - this.match.localCrouchY) * 10.0 * dt;
 
       if (keys.Space && this.match.localGrounded) {
-        this.match.localVy = 6.0;
+        this.match.localVy = PLAYER_JUMP_VELOCITY;
         this.match.localGrounded = false;
       }
 
       if (!this.match.localGrounded) {
-        this.match.localVy -= 20.0 * dt;
+        this.match.localVy -= PLAYER_GRAVITY * dt;
         this.match.playerPos.y += this.match.localVy * dt;
       }
 
-      if (keys.Dash) targetSpeed *= 3.0;
+      if (keys.Dash) targetSpeed = PLAYER_BASE_SPEED * PLAYER_DASH_MULTIPLIER;
 
       if (this.match.physicsData) {
         this.match.physicsData[0] = this.match.tempMoveDir.x;
@@ -607,6 +618,18 @@ export class InputSystem {
       tempInputView.setUint32(14, performance.now() % 0xffffffff, true);
       this.match.transport.rawEmit(tempInputBuffer);
       this.match.pendingFire = false;
+
+      if (this.match.moveHistory.length > 120) {
+        this.match.moveHistory.shift();
+      }
+      this.match.moveHistory.push({
+        seq,
+        time: performance.now(),
+        x: this.match.playerPos.x,
+        y: this.match.playerPos.y,
+        z: this.match.playerPos.z,
+        mask
+      });
     }
 
     const currentSpeed = len > 0 ? targetSpeed : 0;
@@ -640,6 +663,9 @@ export class InputSystem {
     const settings = document.getElementById("vexea-settings-overlay");
     if (settings && settings.style.display !== "none") return true;
 
+    const matchStatus = document.getElementById("match-status-modal");
+    if (matchStatus && matchStatus.style.display !== "none") return true;
+
     const uiEditor = document.getElementById("ui-editor-bar");
     if (uiEditor && uiEditor.style.display !== "none") return true;
     
@@ -658,6 +684,8 @@ export class InputSystem {
         el.id === 'minimap-container' || 
         el.classList?.contains('fullscreen-minimap') || 
         el.id === 'vexea-settings-overlay' ||
+        el.id === 'match-status-modal' ||
+        el.id === 'btn-match-status' ||
         el.id === 'ui-editor-bar' ||
         el.id === 'splash-screen' ||
         el.id === 'portrait-lock' ||

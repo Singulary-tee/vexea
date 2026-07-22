@@ -21,6 +21,7 @@ import { ao } from "three/addons/tsl/display/GTAONode.js";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
 import { chromaticAberration } from "three/addons/tsl/display/ChromaticAberrationNode.js";
 import { MatchController } from "../../MatchController";
+import { DS } from "../../design-system";
 import { 
   initMatchVisuals, 
   updateVFX, 
@@ -61,19 +62,19 @@ export class VisualsSystem {
     const scene = this.match.scene;
     const renderer = (window as any).renderer; // Use global renderer for now, but scene is match-specific
     
-    scene.background = new THREE.Color(0x151b2c);
+    scene.background = new THREE.Color(DS.colors.background);
     
     // Lighting ambient/direct setup
-    const ambientLight = new THREE.AmbientLight(0x2a3048, 2.5);
+    const ambientLight = new THREE.AmbientLight(DS.colors.surface, 2.5);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xa5bcff, 2.0);
+    const dirLight = new THREE.DirectionalLight(DS.colors.textMuted, 2.0);
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
     if (renderer) {
       const envScene = new THREE.Scene();
-      envScene.background = new THREE.Color(0x8292ab);
+      envScene.background = new THREE.Color(DS.colors.background);
       const pmremGenerator = new THREE.PMREMGenerator(renderer);
       scene.environment = pmremGenerator.fromScene(envScene).texture;
     }
@@ -85,9 +86,9 @@ export class VisualsSystem {
       const depthFog = rangeFogFactor(float(70.0), float(250.0));
       const mixedFog = (heightFog as any).max(depthFog);
       // @ts-ignore
-      (scene as any).fogNode = fog(color(0x151b2c), mixedFog);
+      (scene as any).fogNode = fog(color(DS.colors.background), mixedFog);
     } else {
-      scene.fog = new THREE.Fog(0x151b2c, 70, 250);
+      scene.fog = new THREE.Fog(DS.colors.background, 70, 250);
     }
 
     // Initialize VFX
@@ -195,7 +196,7 @@ export class VisualsSystem {
       new THREE.Vector3(4.5, 4, 20),
     ];
     lightPositions.forEach((pos) => {
-      const streetLight = new THREE.PointLight(0xffa95c, 2.5, 15);
+      const streetLight = new THREE.PointLight(DS.colors.accent, 2.5, 15);
       streetLight.position.copy(pos);
       scene.add(streetLight);
     });
@@ -206,9 +207,9 @@ export class VisualsSystem {
     const ctx = canvas.getContext("2d");
     if (ctx) {
       const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      grad.addColorStop(0, "rgba(255, 255, 255, 1)");
-      grad.addColorStop(0.2, "rgba(240, 240, 250, 0.9)");
-      grad.addColorStop(1, "rgba(5, 7, 10, 0)");
+      grad.addColorStop(0, "${DS.utils.rgba(DS.colors.text, 1)}");
+      grad.addColorStop(0.2, "${DS.utils.rgba('#F0F0FA', 0.9)}");
+      grad.addColorStop(1, "${DS.utils.rgba('#05070A', 0)}");
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 128, 128);
       const moonTexture = new THREE.CanvasTexture(canvas);
@@ -224,7 +225,7 @@ export class VisualsSystem {
     const maxLasers = 64;
     const laserGeom = new THREE.BufferGeometry();
     laserGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(maxLasers * 6), 3));
-    const laserMat = new THREE.LineBasicMaterial({ color: 0xff3300, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending });
+    const laserMat = new THREE.LineBasicMaterial({ color: DS.colors.accent, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending });
     const laserLineSegments = new THREE.LineSegments(laserGeom, laserMat);
     scene.add(laserLineSegments);
     (window as any).laserLineSegments = laserLineSegments;
@@ -362,7 +363,7 @@ export class VisualsSystem {
     if (propType === 0) {
       const geom = new THREE.BoxGeometry(1.6, 1.6, 1.6);
       const mat = new THREE.MeshStandardMaterial({
-        color: seed % 2 === 0 ? 0xcc5500 : 0x444e5c, // Industrial Orange or Dark Slate Steel
+        color: seed % 2 === 0 ? DS.colors.accent : DS.colors.surface, // Industrial Orange or Dark Slate Steel
         roughness: 0.6,
         metalness: 0.8,
         name: 'crate_material'
@@ -371,7 +372,7 @@ export class VisualsSystem {
     } else if (propType === 1) {
       const geom = new THREE.CylinderGeometry(0.6, 0.6, 1.8, 12);
       const mat = new THREE.MeshStandardMaterial({
-        color: seed % 2 === 0 ? 0x992222 : 0x226644, // Hazard Red or Acid Green
+        color: seed % 2 === 0 ? DS.colors.danger : DS.colors.success, // Hazard Red or Acid Green
         roughness: 0.5,
         metalness: 0.7,
         name: 'barrel_material'
@@ -380,10 +381,10 @@ export class VisualsSystem {
     } else {
       const geom = new THREE.BoxGeometry(1.4, 2.0, 1.4);
       const mat = new THREE.MeshStandardMaterial({
-        color: 0x20252c,
+        color: DS.colors.background,
         roughness: 0.4,
         metalness: 0.9,
-        emissive: 0x00ffaa,
+        emissive: DS.colors.success,
         emissiveIntensity: seed % 2 === 0 ? 0.6 : 0.2,
         name: 'gen_material'
       });

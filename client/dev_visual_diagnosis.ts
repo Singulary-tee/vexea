@@ -1,9 +1,10 @@
 import { GlobalState } from "./state";
+import { DS } from "./design-system";
 
 export function getVisualDiagnosisHTML(): string {
     return `
-        <div style="display:flex; flex-direction:column; gap:10px; height:100%; overflow-y:auto; padding-right:10px;">
-            <h3>Visual Diagnosis</h3>
+        <div style="display:flex; flex-direction:column; gap:10px; height:100%; overflow-y:auto; padding-right:10px; font-family:${DS.typography.fontFamily};">
+            <h3 style="margin:0; letter-spacing:2px; color:${DS.colors.accent};">${DS.typography.transform} Visual Diagnosis</h3>
             ${createToggleHTML("colliders", "Show Colliders (Buildings, Drones, Players)")}
             ${createToggleHTML("aiSight", "Show AI Sight & Info (Floating text, Rays)")}
             ${createToggleHTML("zoneBorders", "Show Zone Borders")}
@@ -19,9 +20,9 @@ export function getVisualDiagnosisHTML(): string {
 function createToggleHTML(key: string, label: string) {
     const isChecked = (GlobalState as any).visDiag && (GlobalState as any).visDiag[key] ? "checked" : "";
     return `
-        <label style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:8px; border-radius:4px; cursor:pointer;">
-            <input type="checkbox" id="visdiag-${key}" ${isChecked} onchange="window.toggleVisDiag('${key}', this.checked)" />
-            <span>${label}</span>
+        <label style="display:flex; align-items:center; gap:8px; background:${DS.glass.background}; border:${DS.glass.border}; padding:8px; cursor:pointer; color:${DS.colors.text}; font-size:12px; letter-spacing:1px;">
+            <input type="checkbox" id="visdiag-${key}" ${isChecked} onchange="window.toggleVisDiag('${key}', this.checked)" style="accent-color:${DS.colors.accent};" />
+            <span>${label.toUpperCase()}</span>
         </label>
     `;
 }
